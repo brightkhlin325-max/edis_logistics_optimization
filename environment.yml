@@ -1,0 +1,21 @@
+name: Fastapp
+channels:
+  - conda-forge
+  - defaults
+dependencies:
+  - python=3.11
+  - pip
+  # 資料處理
+  - pandas>=2.0
+  - numpy>=1.24
+  - scikit-learn>=1.3
+  # 機器學習
+  - xgboost>=2.0
+  # 最佳化
+  - scipy>=1.11
+  - pip:
+    - pulp>=2.7
+    # API 後端
+    - fastapi>=0.110
+    - uvicorn[standard]>=0.27
+    - pydantic>=2.0
