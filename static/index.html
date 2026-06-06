@@ -774,16 +774,16 @@ const mockOptimize = (budget) => {
 const API_BASE = 'http://localhost:8000';
 
 async function fetchMetrics() {
-  // TODO: return fetch(`${API_BASE}/api/metrics`).then(r => r.json());
+  return fetch(`${API_BASE}/api/metrics`).then(r => r.json());
   return new Promise(r => setTimeout(() => r(MOCK_METRICS), 500));
 }
 async function fetchPredictions() {
-  // TODO: return fetch(`${API_BASE}/api/predict`).then(r => r.json());
+  return fetch(`${API_BASE}/api/predict`).then(r => r.json());
   return new Promise(r => setTimeout(() => r(MOCK_PREDICTIONS), 700));
 }
 async function fetchOptimize(budget, role) {
   if (role !== 'manager') throw new Error('403 Forbidden');
-  // TODO: return fetch(`${API_BASE}/api/optimize`, { method:'POST', headers:{'Content-Type':'application/json','X-Role':role}, body: JSON.stringify({budget}) }).then(r=>r.json());
+  return fetch(\`${API_BASE}/api/optimize?budget=${budget}\`, { method: 'POST', headers: {'X-User-Role': 'manager'} }).then(r => r.json());
   return new Promise(r => setTimeout(() => r(mockOptimize(budget)), 800));
 }
 
