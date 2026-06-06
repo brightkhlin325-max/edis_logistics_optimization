@@ -778,12 +778,31 @@ async function fetchMetrics() {
   return new Promise(r => setTimeout(() => r(MOCK_METRICS), 500));
 }
 async function fetchPredictions() {
-  return fetch(`${API_BASE}/api/predict`).then(r => r.json());
+  const payload = await fetch(`${API_BASE}/api/predict`, {
+    headers: { 'X-Role': currentRole === 'manager' ? 'Logistics_Manager' : 'Viewer' }
+  }).then(r => r.json());
+  return Array.isArray(payload) ? payload : (payload.data || []);
   return new Promise(r => setTimeout(() => r(MOCK_PREDICTIONS), 700));
 }
 async function fetchOptimize(budget, role) {
   if (role !== 'manager') throw new Error('403 Forbidden');
-  return fetch(\`${API_BASE}/api/optimize?budget=${budget}\`, { method: 'POST', headers: {'X-User-Role': 'manager'} }).then(r => r.json());
+  const response = await fetch(`${API_BASE}/api/optimize`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-Role': 'Logistics_Manager'
+    },
+    body: JSON.stringify({
+      budget,
+      upgrade_cost: 80,
+      delay_penalty: 250
+    })
+  });
+  if (!response.ok) {
+    const errorPayload = await response.json().catch(() => ({}));
+    throw new Error(errorPayload.detail?.message || errorPayload.detail || `HTTP ${response.status}`);
+  }
+  return response.json();
   return new Promise(r => setTimeout(() => r(mockOptimize(budget)), 800));
 }
 
@@ -812,8 +831,8 @@ function renderPredictions(data) {
   document.getElementById('riskTableBody').innerHTML = data.map(o => `
     <tr>
       <td><span class="order-id">${o.order_id_hash}</span></td>
-      <td>${o.shipping_mode}</td>
-      <td style="color:var(--muted)">${o.order_region}</td>
+      <td>${o.shipping_mode || 'Unknown'}</td>
+      <td style="color:var(--muted)">${o.order_region || 'Unknown'}</td>
       <td>
         <div class="prob-wrap">
           <div class="prob-bar"><div class="prob-fill ${fillClass(o.risk_bucket)}" style="width:${o.p_late*100}%"></div></div>

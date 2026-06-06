@@ -124,7 +124,13 @@ class ModelPipeline:
 
         # 輸出 predictions.csv
         pred_path = os.path.join(output_dir, "predictions.csv")
-        self._save_predictions(X_test, y_test, pred_path)
+        metadata_path = os.path.join(output_dir, "test_metadata.csv")
+        self._save_predictions(
+            X_test,
+            y_test,
+            pred_path,
+            metadata_path=metadata_path if os.path.exists(metadata_path) else None,
+        )
 
         # 儲存模型
         model_path = os.path.join(model_dir, "xgboost_model.json")
@@ -249,6 +255,7 @@ class ModelPipeline:
         X_test: pd.DataFrame,
         y_test: pd.Series,
         output_path: str,
+        metadata_path: str = None,
     ) -> None:
         """
         輸出 predictions.csv，包含：
@@ -266,9 +273,20 @@ class ModelPipeline:
             "true_label": y_test.values,
         })
 
-        # 加回 order_id_hash（如果存在於 X_test）
-        if "Order Id_hash" in X_test.columns:
+        # 加回 API/Dashboard 需要的去識別化 metadata。
+        if metadata_path:
+            metadata = pd.read_csv(metadata_path)
+            metadata = metadata.reset_index(drop=True).head(len(pred_df))
+            pred_df = pd.concat([metadata, pred_df], axis=1)
+        elif "Order Id_hash" in X_test.columns:
             pred_df.insert(0, "order_id_hash", X_test["Order Id_hash"].values)
+
+        if "order_id_hash" not in pred_df.columns:
+            pred_df.insert(0, "order_id_hash", [f"test_order_{i:05d}" for i in range(len(pred_df))])
+        if "shipping_mode" not in pred_df.columns:
+            pred_df["shipping_mode"] = "Unknown"
+        if "order_region" not in pred_df.columns:
+            pred_df["order_region"] = "Unknown"
 
         # 風險分桶
         pred_df["risk_bucket"] = pd.cut(
