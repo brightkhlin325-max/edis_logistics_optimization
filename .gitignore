@@ -4,6 +4,7 @@ __pycache__/
 dist/
 build/
 .env
+.venv/
 *.csv
 *.pkl
 *.joblib

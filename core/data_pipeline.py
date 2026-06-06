@@ -111,19 +111,30 @@ class DataPipeline:
         # Step 4：移除洩漏欄位，分離標籤
         df, y = self.extract_label_and_drop_leakage(df)
 
-        # Step 5：特徵工程
+        # Step 5：保留展示與 API 需要的去識別化 metadata
+        metadata = self.extract_metadata(df)
+
+        # Step 6：特徵工程
         X = self.engineer_features(df)
 
-        # Step 6：train/test split
-        X_train, X_test, y_train, y_test = train_test_split(
-            X, y,
+        # Step 7：train/test split
+        X_train, X_test, y_train, y_test, meta_train, meta_test = train_test_split(
+            X, y, metadata,
             test_size=0.2,
             random_state=self.random_state,
             stratify=y,
         )
 
-        # Step 7：儲存
-        self._save_processed(X_train, X_test, y_train, y_test, output_dir)
+        # Step 8：儲存
+        self._save_processed(
+            X_train,
+            X_test,
+            y_train,
+            y_test,
+            meta_train,
+            meta_test,
+            output_dir,
+        )
 
         print(f"\n✓ 管線完成。訓練集：{len(X_train)} 筆，測試集：{len(X_test)} 筆")
         print(f"  輸出目錄：{os.path.abspath(output_dir)}")
@@ -134,6 +145,8 @@ class DataPipeline:
             "X_test": X_test,
             "y_train": y_train,
             "y_test": y_test,
+            "meta_train": meta_train,
+            "meta_test": meta_test,
         }
 
     def load(self, filepath: str) -> pd.DataFrame:
@@ -244,6 +257,28 @@ class DataPipeline:
         print(f"  特徵欄位：{list(X.columns)}")
         return X
 
+    def extract_metadata(self, df: pd.DataFrame) -> pd.DataFrame:
+        """
+        保留不進入模型、但 API/Dashboard 需要展示的去識別化欄位。
+
+        這些欄位不放進 XGBoost 特徵矩陣，避免字串 ID 造成訓練錯誤；
+        但會跟 test set 同步切分，供 model_pipeline.py 輸出 predictions.csv。
+        """
+        metadata_cols = [
+            "Order Id_hash",
+            "Shipping Mode",
+            "Order Region",
+        ]
+        existing_cols = [c for c in metadata_cols if c in df.columns]
+        metadata = df[existing_cols].copy() if existing_cols else pd.DataFrame(index=df.index)
+        metadata = metadata.rename(columns={
+            "Order Id_hash": "order_id_hash",
+            "Shipping Mode": "shipping_mode",
+            "Order Region": "order_region",
+        })
+        print(f"\n[Metadata] 保留展示欄位：{list(metadata.columns)}")
+        return metadata.reset_index(drop=True)
+
     def generate_eda_report(self, df: pd.DataFrame) -> None:
         """
         輸出簡易 EDA 摘要至 console（延遲比例、分布統計）。
@@ -272,9 +307,10 @@ class DataPipeline:
     def _save_processed(
         self,
         X_train, X_test, y_train, y_test,
+        meta_train, meta_test,
         output_dir: str,
     ) -> None:
-        """將訓練集與測試集儲存為 CSV。"""
+        """將訓練/測試特徵與展示 metadata 儲存為 CSV。"""
         train_df = X_train.copy()
         train_df[TARGET_COLUMN] = y_train.values
 
@@ -283,13 +319,19 @@ class DataPipeline:
 
         train_path = os.path.join(output_dir, "train_ready.csv")
         test_path = os.path.join(output_dir, "test_ready.csv")
+        train_meta_path = os.path.join(output_dir, "train_metadata.csv")
+        test_meta_path = os.path.join(output_dir, "test_metadata.csv")
 
         train_df.to_csv(train_path, index=False)
         test_df.to_csv(test_path, index=False)
+        meta_train.reset_index(drop=True).to_csv(train_meta_path, index=False)
+        meta_test.reset_index(drop=True).to_csv(test_meta_path, index=False)
 
         print(f"\n[Step 5] 儲存完成")
         print(f"  → {train_path}")
         print(f"  → {test_path}")
+        print(f"  → {train_meta_path}")
+        print(f"  → {test_meta_path}")
 
 
 # ── 直接執行入口 ──────────────────────────────────────────────────────────────

@@ -204,6 +204,8 @@ async def get_predictions(
         sample = [
             {
                 "order_id_hash": "a8f3c2d1e4b5f6a7b8c9d0e1f2a3b4c5" * 2,
+                "shipping_mode": "Standard Class",
+                "order_region": "Western Europe",
                 "p_late": 0.82,
                 "risk_bucket": "High",
                 "upgrade_cost": 80.0,
@@ -211,6 +213,8 @@ async def get_predictions(
             },
             {
                 "order_id_hash": "b9c8d7e6f5a4b3c2d1e0f9a8b7c6d5e4" * 2,
+                "shipping_mode": "First Class",
+                "order_region": "Central America",
                 "p_late": 0.45,
                 "risk_bucket": "Medium",
                 "upgrade_cost": 80.0,
@@ -227,7 +231,18 @@ async def get_predictions(
     df = pd.read_csv(PREDICTIONS_PATH).head(limit)
 
     # 確保只回傳去識別化欄位
-    safe_cols = [c for c in ["order_id_hash", "p_late", "risk_bucket", "upgrade_cost", "expected_penalty"] if c in df.columns]
+    safe_cols = [
+        c for c in [
+            "order_id_hash",
+            "shipping_mode",
+            "order_region",
+            "p_late",
+            "risk_bucket",
+            "upgrade_cost",
+            "expected_penalty",
+        ]
+        if c in df.columns
+    ]
     result = df[safe_cols].to_dict(orient="records")
 
     return {
