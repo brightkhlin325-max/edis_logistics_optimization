@@ -50,6 +50,7 @@ def main():
         )
         expect(status == 200, "GET /api/predict as Viewer returns 200")
         expect("data" in predictions, "predict response includes data")
+        first_prediction = (predictions.get("data") or [{}])[0]
 
         try:
             request_json(
@@ -77,10 +78,24 @@ def main():
         expect(status == 200, "POST /api/optimize as Logistics_Manager returns 200")
         expect("selected_orders" in result, "optimize response includes selected_orders")
         expect("solver" in result, "optimize response includes solver")
+        expect("manager_analysis" in result, "optimize response includes manager_analysis")
+        expect(
+            "sample_order_explanations" in result["manager_analysis"],
+            "manager_analysis includes sample_order_explanations",
+        )
         if result["selected_orders"]:
             first_order = result["selected_orders"][0]
             expect("net_benefit" in first_order, "selected order includes net_benefit")
             expect("reason" in first_order, "selected order includes reason")
+
+        if first_prediction.get("order_id_hash"):
+            status, explanation = request_json(
+                f"/api/explain/{first_prediction['order_id_hash']}",
+                headers={"X-Role": "Viewer"},
+            )
+            expect(status == 200, "GET /api/explain/{order_id_hash} returns 200")
+            expect("top_x_factors" in explanation, "explanation includes top_x_factors")
+            expect("manager_summary" in explanation, "explanation includes manager_summary")
 
     except URLError as exc:
         print(f"ERROR: Cannot reach {BASE_URL}. Start the API server first.")
