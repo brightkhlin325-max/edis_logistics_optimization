@@ -719,6 +719,11 @@ body {
                   </div>
                 </div>
               </div>
+              <div id="managerAnalysisBox" style="padding:14px 16px; background:#f6f9fb; border:1px solid var(--border); border-radius:6px; display:none;">
+                <div style="font-size:11px;color:var(--muted);font-weight:600;margin-bottom:6px;text-transform:uppercase;letter-spacing:0.5px;font-family:'DM Mono',monospace">主管分析摘要</div>
+                <div id="managerAnalysisText" style="font-size:13px;line-height:1.65;color:var(--text);"></div>
+                <div id="managerAnalysisFactors" style="margin-top:10px;display:flex;flex-direction:column;gap:6px;"></div>
+              </div>
               <div>
                 <div style="font-size:11px;color:var(--muted);font-weight:500;margin-bottom:8px;text-transform:uppercase;letter-spacing:0.5px;font-family:'DM Mono',monospace">建議升級訂單</div>
                 <div class="ord-list" id="ordList"></div>
@@ -871,6 +876,12 @@ body {
                 </div>
               </div>
               
+              <div id="optPageManagerAnalysisBox" style="padding:14px 16px; background:#f6f9fb; border:1px solid var(--border); border-radius:6px; display:none;">
+                <div style="font-size:11px;color:var(--muted);font-weight:600;margin-bottom:6px;text-transform:uppercase;letter-spacing:0.5px;font-family:'DM Mono',monospace">主管分析摘要</div>
+                <div id="optPageManagerAnalysisText" style="font-size:13px;line-height:1.65;color:var(--text);"></div>
+                <div id="optPageManagerAnalysisFactors" style="margin-top:10px;display:flex;flex-direction:column;gap:6px;"></div>
+              </div>
+
               <div>
                 <div style="font-size:11px;color:var(--muted);font-weight:500;margin-bottom:8px;text-transform:uppercase;letter-spacing:0.5px;font-family:'DM Mono',monospace">升級訂單明細與預估省下金額</div>
                 <div class="table-scroll" style="max-height: 240px;">
@@ -1006,6 +1017,13 @@ body {
               <td><span class="order-id">/api/predict</span></td>
               <td><span class="tag" style="background:#eaf4ea; color:#27ae60;">GET</span></td>
               <td>獲取去識別化物流延遲風險訂單列表 (支援分頁)</td>
+              <td><span class="risk-pill r-low">✔ 允許存取</span></td>
+              <td><span class="risk-pill r-low">✔ 允許存取</span></td>
+            </tr>
+            <tr>
+              <td><span class="order-id">/api/explain/{order_id_hash}</span></td>
+              <td><span class="tag" style="background:#eaf4ea; color:#27ae60;">GET</span></td>
+              <td>回傳單筆訂單的 LIME-style X 因子與主管版原因摘要</td>
               <td><span class="risk-pill r-low">✔ 允許存取</span></td>
               <td><span class="risk-pill r-low">✔ 允許存取</span></td>
             </tr>
@@ -1195,6 +1213,7 @@ function renderOptResult(d) {
   const pct = ((d.total_cost / d.budget) * 100).toFixed(0);
   document.getElementById('optUsage').textContent = pct + '%';
   document.getElementById('usageFill').style.width = pct + '%';
+  renderManagerAnalysis('managerAnalysisBox', 'managerAnalysisText', 'managerAnalysisFactors', d.manager_analysis);
 
   document.getElementById('ordList').innerHTML = d.selected_orders.map((o, i) => `
     <div class="ord-item" style="animation-delay:${i*0.07}s">
@@ -1203,6 +1222,48 @@ function renderOptResult(d) {
         <div class="ord-sub">升級成本 $${o.upgrade_cost} · 延遲率 ${(o.p_late*100).toFixed(0)}% · ${o.reason || 'positive net benefit'}</div>
       </div>
       <div class="ord-saving">+$${(o.net_benefit ?? o.expected_saving).toLocaleString()}</div>
+    </div>
+  `).join('');
+}
+
+function renderManagerAnalysis(boxId, textId, factorsId, analysis) {
+  const box = document.getElementById(boxId);
+  const text = document.getElementById(textId);
+  const factors = document.getElementById(factorsId);
+  if (!box || !text || !factors) return;
+
+  if (!analysis) {
+    box.style.display = 'none';
+    text.textContent = '';
+    factors.innerHTML = '';
+    return;
+  }
+
+  box.style.display = 'block';
+  text.textContent = analysis.headline || analysis.recommended_policy || '目前沒有可顯示的主管分析摘要。';
+  renderManagerFactors(factorsId, analysis.sample_order_explanations || []);
+}
+
+function renderManagerFactors(containerId, explanations) {
+  const container = document.getElementById(containerId);
+  if (!container) return;
+
+  const factors = explanations
+    .flatMap(e => e.top_x_factors || [])
+    .slice(0, 4);
+
+  if (!factors.length) {
+    container.innerHTML = '<div style="font-size:12px;color:var(--muted);">尚無可顯示的 X 因子。</div>';
+    return;
+  }
+
+  container.innerHTML = factors.map(f => `
+    <div style="padding:9px 10px;border:1px solid var(--border);border-radius:6px;background:white;">
+      <div style="display:flex;justify-content:space-between;gap:10px;align-items:center;">
+        <span style="font-size:12px;font-weight:700;color:var(--text);">${f.label || f.feature}</span>
+        <span style="font-size:11px;color:var(--muted);font-family:'DM Mono',monospace">${f.impact || 'context'}</span>
+      </div>
+      <div style="font-size:12px;color:var(--muted);line-height:1.5;margin-top:4px;">${f.evidence || '模型指出此因子會影響延遲風險。'}</div>
     </div>
   `).join('');
 }
@@ -1227,12 +1288,14 @@ async function setRole(role) {
   document.getElementById('runBtn').classList.toggle('hidden', !isM);
   document.getElementById('lockedBox').classList.toggle('hidden', isM);
   document.getElementById('optResult').classList.add('hidden');
+  renderManagerAnalysis('managerAnalysisBox', 'managerAnalysisText', 'managerAnalysisFactors', null);
   
   // Optimization page buttons
   document.getElementById('optPageRunBtn').classList.toggle('hidden', !isM);
   document.getElementById('optPageLockedBox').classList.toggle('hidden', isM);
   document.getElementById('optPageResult').classList.add('hidden');
   document.getElementById('optPageResultPlaceholder').classList.remove('hidden');
+  renderManagerAnalysis('optPageManagerAnalysisBox', 'optPageManagerAnalysisText', 'optPageManagerAnalysisFactors', null);
 
   // Refresh current view predictions
   currentPage = 1;
@@ -1292,6 +1355,7 @@ async function runPageOptimize() {
     const pct = ((data.total_cost / budget) * 100).toFixed(0);
     document.getElementById('optPageUsage').textContent = pct + '%';
     document.getElementById('optPageUsageFill').style.width = pct + '%';
+    renderManagerAnalysis('optPageManagerAnalysisBox', 'optPageManagerAnalysisText', 'optPageManagerAnalysisFactors', data.manager_analysis);
 
     document.getElementById('optPageOrdList').innerHTML = data.selected_orders.map((o, i) => `
       <div class="ord-item" style="animation-delay:${i*0.03}s">

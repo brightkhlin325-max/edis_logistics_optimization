@@ -6,6 +6,7 @@ EDIS — DataCo 物流延遲預測與最佳化調度系統
 功能：FastAPI 後端服務 + RBAC 角色權限控制
   - GET  /api/metrics    → 公開，回傳模型 KPI
   - GET  /api/predict    → Viewer/Manager，回傳去識別化風險列表
+  - GET  /api/explain    → Viewer/Manager，回傳單筆訂單 X 因子與主管摘要
   - POST /api/optimize   → 僅限 Logistics_Manager，Viewer 呼叫回傳 403
 
 啟動方式：
@@ -47,6 +48,10 @@ try:
     from optimizer import ShippingOptimizer
 except ImportError:
     ShippingOptimizer = None
+try:
+    from explainer import ManagerExplainer
+except ImportError:
+    ManagerExplainer = None
 
 
 # ── 常數與路徑 ────────────────────────────────────────────────────────────────
@@ -93,6 +98,25 @@ class OptimizeRequest(BaseModel):
     max_candidates: int = 500
 
 
+def load_metrics() -> dict:
+    if not METRICS_PATH.exists():
+        return {}
+    with open(METRICS_PATH, "r", encoding="utf-8") as f:
+        return json.load(f)
+
+
+def load_predictions() -> pd.DataFrame:
+    if not PREDICTIONS_PATH.exists():
+        return pd.DataFrame()
+    return pd.read_csv(PREDICTIONS_PATH)
+
+
+def build_explainer() -> Optional["ManagerExplainer"]:
+    if ManagerExplainer is None:
+        return None
+    return ManagerExplainer(predictions=load_predictions(), metrics=load_metrics())
+
+
 # ── RBAC 工具函數 ─────────────────────────────────────────────────────────────
 
 def get_role(x_role: Optional[str]) -> str:
@@ -130,7 +154,7 @@ async def root():
         "system": "EDIS — DataCo 物流延遲預測與最佳化調度系統",
         "version": "1.0.0",
         "docs": "/docs",
-        "endpoints": ["/api/metrics", "/api/predict", "/api/optimize"],
+        "endpoints": ["/api/metrics", "/api/predict", "/api/explain/{order_id_hash}", "/api/optimize"],
     }
 
 
@@ -162,8 +186,7 @@ async def get_metrics():
             "note": "示範資料（模型尚未訓練，請先執行 model_pipeline.py）",
         }
 
-    with open(METRICS_PATH, "r", encoding="utf-8") as f:
-        metrics = json.load(f)
+    metrics = load_metrics()
 
     # 只回傳摘要指標（不包含 confusion_matrix 細節）
     return {
@@ -236,7 +259,7 @@ async def get_predictions(
             "note": "示範資料（請先執行 model_pipeline.py）",
         }
 
-    df = pd.read_csv(PREDICTIONS_PATH)
+    df = load_predictions()
     
     # 應用過濾器
     if search:
@@ -314,6 +337,19 @@ async def run_optimization(
 
     if not PREDICTIONS_PATH.exists():
         # 示範回傳
+        demo_selected_orders = [
+            {
+                "order_id_hash": "a8f3c2d1" * 8,
+                "p_late": 0.88,
+                "upgrade_cost": 80.0,
+                "expected_penalty": 220.0,
+                "net_benefit": 140.0,
+                "expected_saving": 140.0,
+                "risk_bucket": "High",
+                "decision": "Upgrade",
+                "reason": "High risk, p_late=0.88, net benefit NT$ 140, within budget",
+            }
+        ]
         return {
             "role": role,
             "budget": request.budget,
@@ -322,19 +358,32 @@ async def run_optimization(
             "expected_total_saving": 1890.0,
             "expected_total_penalty_avoided": 2850.0,
             "solver": "demo response",
-            "selected_orders": [
-                {
-                    "order_id_hash": "a8f3c2d1" * 8,
-                    "p_late": 0.88,
-                    "upgrade_cost": 80.0,
-                    "expected_penalty": 220.0,
-                    "net_benefit": 140.0,
-                    "expected_saving": 140.0,
-                    "risk_bucket": "High",
-                    "decision": "Upgrade",
-                    "reason": "High risk, p_late=0.88, net benefit NT$ 140, within budget",
-                }
-            ],
+            "selected_orders": demo_selected_orders,
+            "manager_analysis": {
+                "headline": "示範分析：高風險訂單應優先升級，主要原因是延遲機率高且升級後仍有正淨效益。",
+                "recommended_policy": "優先升級 High risk 且淨效益為正的訂單。",
+                "solver": "demo response",
+                "budget_usage_pct": round(960.0 / request.budget * 100.0, 2) if request.budget else 0.0,
+                "sample_order_explanations": [
+                    {
+                        "order_id_hash": demo_selected_orders[0]["order_id_hash"],
+                        "risk_bucket": "High",
+                        "p_late": 0.88,
+                        "recommended_action": "升級運送並列入優先調度",
+                        "top_x_factors": [
+                            {
+                                "feature": "Shipping Mode_Standard Class",
+                                "label": "運送模式",
+                                "impact": "raises risk",
+                                "evidence": "示範資料顯示 Standard Class 會提高延遲風險",
+                                "weight": 0.0,
+                            }
+                        ],
+                        "manager_summary": "此訂單延遲風險高，升級運送後預期仍有正淨效益，建議優先處理。",
+                    }
+                ],
+                "llm_ready_prompt": "請根據示範最佳化結果產出主管版物流調整建議。",
+            },
             "note": "示範資料（請先執行 model_pipeline.py）",
         }
 
@@ -354,10 +403,48 @@ async def run_optimization(
         predictions_path=str(PREDICTIONS_PATH),
         output_dir=str(DATA_DIR),
     )
+    result_dict = result.to_dict()
+
+    explainer = build_explainer()
+    manager_analysis = explainer.summarize_optimization(result_dict) if explainer else {
+        "headline": "Explainer module unavailable.",
+        "recommended_policy": "請確認 core/explainer.py 可載入。",
+        "sample_order_explanations": [],
+    }
 
     return {
         "role": role,
-        **result.to_dict(),
+        **result_dict,
+        "manager_analysis": manager_analysis,
+    }
+
+
+@app.get("/api/explain/{order_id_hash}")
+async def explain_order(
+    order_id_hash: str,
+    x_role: Optional[str] = Header(default=None),
+):
+    """
+    [Viewer / Manager] 回傳單筆訂單的 LIME-style X 因子與主管版分析。
+
+    目前使用 model_metrics.json 的 feature importance 加上 predictions.csv
+    可見欄位產生 local attribution；未來可替換為真正 LIME 模型。
+    """
+    role = get_role(x_role)
+    if not PREDICTIONS_PATH.exists():
+        raise HTTPException(status_code=404, detail="predictions.csv 不存在，請先產生模型預測。")
+    if ManagerExplainer is None:
+        raise HTTPException(status_code=500, detail="explainer.py 載入失敗。")
+
+    df = load_predictions()
+    rows = df[df["order_id_hash"].astype(str) == str(order_id_hash)]
+    if rows.empty:
+        raise HTTPException(status_code=404, detail="找不到此 order_id_hash。")
+
+    explainer = build_explainer()
+    return {
+        "role": role,
+        **explainer.explain_order(rows.iloc[0].to_dict()),
     }
 
 

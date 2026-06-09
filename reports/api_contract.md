@@ -108,6 +108,30 @@ Response:
   "expected_total_saving": 2850,
   "expected_total_penalty_avoided": 3810,
   "solver": "PuLP MILP",
+  "manager_analysis": {
+    "headline": "建議主管核准本批調度...",
+    "recommended_policy": "優先升級高風險且淨效益為正的訂單...",
+    "budget_usage_pct": 19.2,
+    "sample_order_explanations": [
+      {
+        "order_id_hash": "a8f3...",
+        "risk_bucket": "High",
+        "p_late": 0.88,
+        "recommended_action": "升級運送並列入優先調度",
+        "top_x_factors": [
+          {
+            "feature": "Shipping Mode_Standard Class",
+            "label": "運送模式",
+            "impact": "raises risk",
+            "evidence": "此訂單使用 Standard Class，模型將運送模式列為主要 X 因子",
+            "weight": 0.34
+          }
+        ],
+        "manager_summary": "此訂單延遲風險為 High..."
+      }
+    ],
+    "llm_ready_prompt": "請用物流主管能理解的語氣..."
+  },
   "selected_orders": [
     {
       "order_id_hash": "a8f3...",
@@ -124,7 +148,48 @@ Response:
 }
 ```
 
-Viewer must receive HTTP 403 when calling this endpoint.
+## GET `/api/explain/{order_id_hash}`
+
+Returns the top X factors and manager-facing explanation for a single de-identified order.
+
+Current implementation uses LIME-style local attribution from `model_metrics.json`
+feature importance plus the visible order fields in `predictions.csv`. When the
+project exports the original test feature matrix, this endpoint can swap in true
+LIME without changing the response shape.
+
+Request:
+
+```text
+X-Role: Viewer | Logistics_Manager
+```
+
+Response:
+
+```json
+{
+  "role": "Viewer",
+  "order_id_hash": "a8f3...",
+  "risk_bucket": "High",
+  "p_late": 0.88,
+  "recommended_action": "升級運送並列入優先調度",
+  "expected_penalty": 220,
+  "upgrade_cost": 80,
+  "net_benefit": 140,
+  "top_x_factors": [
+    {
+      "feature": "Shipping Mode_Standard Class",
+      "label": "運送模式",
+      "impact": "raises risk",
+      "evidence": "此訂單使用 Standard Class，模型將運送模式列為主要 X 因子",
+      "weight": 0.34
+    }
+  ],
+  "manager_summary": "此訂單延遲風險為 High...",
+  "explanation_method": "LIME-style local attribution using feature importance..."
+}
+```
+
+Viewer must receive HTTP 403 when calling `POST /api/optimize`.
 
 Notes:
 
