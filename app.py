@@ -90,6 +90,7 @@ class OptimizeRequest(BaseModel):
     budget: float = 5000.0
     upgrade_cost: float = 80.0
     delay_penalty: float = 250.0
+    max_candidates: int = 500
 
 
 # ── RBAC 工具函數 ─────────────────────────────────────────────────────────────
@@ -318,15 +319,20 @@ async def run_optimization(
             "budget": request.budget,
             "selected_count": 12,
             "total_cost": 960.0,
-            "expected_total_saving": 2850.0,
+            "expected_total_saving": 1890.0,
+            "expected_total_penalty_avoided": 2850.0,
+            "solver": "demo response",
             "selected_orders": [
                 {
                     "order_id_hash": "a8f3c2d1" * 8,
                     "p_late": 0.88,
                     "upgrade_cost": 80.0,
-                    "expected_saving": 220.0,
+                    "expected_penalty": 220.0,
+                    "net_benefit": 140.0,
+                    "expected_saving": 140.0,
                     "risk_bucket": "High",
                     "decision": "Upgrade",
+                    "reason": "High risk, p_late=0.88, net benefit NT$ 140, within budget",
                 }
             ],
             "note": "示範資料（請先執行 model_pipeline.py）",
@@ -342,6 +348,7 @@ async def run_optimization(
         budget=request.budget,
         upgrade_cost=request.upgrade_cost,
         delay_penalty=request.delay_penalty,
+        max_candidates=request.max_candidates,
     )
     result = optimizer.run(
         predictions_path=str(PREDICTIONS_PATH),

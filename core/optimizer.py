@@ -22,12 +22,6 @@ from dataclasses import dataclass, field
 from typing import Optional
 
 try:
-    from scipy.optimize import linprog
-    SCIPY_AVAILABLE = True
-except ImportError:
-    SCIPY_AVAILABLE = False
-
-try:
     import pulp
     PULP_AVAILABLE = True
 except ImportError:
@@ -40,6 +34,7 @@ DEFAULT_BUDGET = 5_000.0
 DEFAULT_UPGRADE_COST = 80.0
 DEFAULT_DELAY_PENALTY = 250.0
 DEFAULT_RISK_THRESHOLD = 0.3   # 只考慮延遲機率 ≥ 此值的訂單
+DEFAULT_MAX_CANDIDATES = 500   # PuLP demo 保持互動速度的候選上限
 
 
 # ── 結果資料結構 ───────────────────────────────────────────────────────────────
@@ -51,6 +46,8 @@ class OptimizationResult:
     total_orders_considered: int
     selected_count: int
     expected_total_saving: float
+    expected_total_penalty_avoided: float = 0.0
+    solver: str = "PuLP MILP"
     selected_orders: list = field(default_factory=list)
 
     def to_dict(self) -> dict:
@@ -60,6 +57,8 @@ class OptimizationResult:
             "total_orders_considered": self.total_orders_considered,
             "selected_count": self.selected_count,
             "expected_total_saving": round(self.expected_total_saving, 2),
+            "expected_total_penalty_avoided": round(self.expected_total_penalty_avoided, 2),
+            "solver": self.solver,
             "selected_orders": self.selected_orders,
         }
 
@@ -85,6 +84,7 @@ class ShippingOptimizer:
         upgrade_cost: float = DEFAULT_UPGRADE_COST,
         delay_penalty: float = DEFAULT_DELAY_PENALTY,
         risk_threshold: float = DEFAULT_RISK_THRESHOLD,
+        max_candidates: int = DEFAULT_MAX_CANDIDATES,
     ):
         """
         Parameters
@@ -97,11 +97,14 @@ class ShippingOptimizer:
             每筆訂單延遲罰款估計（元）
         risk_threshold : float
             只對延遲機率高於此值的訂單進行最佳化決策
+        max_candidates : int
+            進入 PuLP MILP 求解器的候選訂單上限，避免 demo API 長時間卡住
         """
         self.budget = budget
         self.upgrade_cost = upgrade_cost
         self.delay_penalty = delay_penalty
         self.risk_threshold = risk_threshold
+        self.max_candidates = max_candidates
 
     # ── 公開方法 ───────────────────────────────────────────────────────────
 
@@ -145,7 +148,7 @@ class ShippingOptimizer:
 
         print(f"\n✓ 最佳化完成：選出 {result.selected_count} 筆訂單升級")
         print(f"  總升級成本：NT$ {result.total_cost:,.0f}（預算：{self.budget:,.0f}）")
-        print(f"  預期節省罰款：NT$ {result.expected_total_saving:,.0f}")
+        print(f"  預期淨效益：NT$ {result.expected_total_saving:,.0f}")
         print("=" * 60)
 
         return result
@@ -155,8 +158,7 @@ class ShippingOptimizer:
         核心最佳化求解器。
 
         求解策略：
-        1. 優先使用 PuLP（精確 0/1 整數規劃）
-        2. PuLP 不可用時，使用 Greedy 貪婪演算法（按 ROI 排序）
+        使用 PuLP 求解 0/1 MILP。PuLP 未安裝時直接報錯。
 
         Parameters
         ----------
@@ -175,16 +177,18 @@ class ShippingOptimizer:
                 total_orders_considered=0,
                 selected_count=0,
                 expected_total_saving=0.0,
+                expected_total_penalty_avoided=0.0,
+                solver="none",
             )
 
-        if PULP_AVAILABLE:
-            print("  求解器：PuLP 整數規劃")
-            selected_indices = self._solve_with_pulp(candidates)
-        else:
-            print("  求解器：Greedy（PuLP 未安裝，使用貪婪演算法）")
-            selected_indices = self._solve_greedy(candidates)
+        if not PULP_AVAILABLE:
+            raise RuntimeError("PuLP 未安裝，無法執行 MILP。請先執行：pip install pulp")
 
-        return self._build_result(candidates, selected_indices)
+        print("  求解器：PuLP MILP（0/1 整數規劃）")
+        selected_indices = self._solve_with_pulp(candidates)
+        solver = "PuLP MILP"
+
+        return self._build_result(candidates, selected_indices, solver)
 
     # ── 私有方法 ───────────────────────────────────────────────────────────
 
@@ -199,6 +203,16 @@ class ShippingOptimizer:
             df["upgrade_cost"] = self.upgrade_cost
         if "expected_penalty" not in df.columns:
             df["expected_penalty"] = df["p_late"] * self.delay_penalty
+        if "order_id_hash" in df.columns:
+            before = len(df)
+            df = (
+                df.sort_values("p_late", ascending=False)
+                .drop_duplicates(subset=["order_id_hash"], keep="first")
+                .reset_index(drop=True)
+            )
+            removed = before - len(df)
+            if removed:
+                print(f"  已移除重複訂單：{removed:,} 筆")
 
         return df
 
@@ -207,15 +221,21 @@ class ShippingOptimizer:
         candidates = df[df["p_late"] >= self.risk_threshold].copy()
         print(f"\n[Step 2] 篩選候選訂單（p_late ≥ {self.risk_threshold}）：{len(candidates):,} 筆")
 
-        # 計算 ROI（每元升級成本的預期節省）
-        candidates["roi"] = (
-            (candidates["expected_penalty"] - candidates["upgrade_cost"])
-            / candidates["upgrade_cost"]
-        )
+        candidates["net_benefit"] = candidates["expected_penalty"] - candidates["upgrade_cost"]
+        candidates["roi"] = candidates["net_benefit"] / candidates["upgrade_cost"]
 
         # 只保留 ROI > 0 的訂單（升級才划算）
-        candidates = candidates[candidates["roi"] > 0].reset_index(drop=True)
+        candidates = candidates[candidates["net_benefit"] > 0].reset_index(drop=True)
         print(f"  ROI > 0 的候選訂單：{len(candidates):,} 筆")
+
+        if self.max_candidates and len(candidates) > self.max_candidates:
+            candidates = (
+                candidates
+                .sort_values("net_benefit", ascending=False)
+                .head(self.max_candidates)
+                .reset_index(drop=True)
+            )
+            print(f"  進入求解器候選上限：{self.max_candidates:,} 筆（依 net_benefit 排序）")
         return candidates
 
     def _solve_with_pulp(self, candidates: pd.DataFrame) -> list:
@@ -244,47 +264,36 @@ class ShippingOptimizer:
         print(f"  PuLP 求解狀態：{pulp.LpStatus[prob.status]}")
         return selected
 
-    def _solve_greedy(self, candidates: pd.DataFrame) -> list:
-        """
-        貪婪演算法：按 ROI 降序排列，在預算內逐筆選入。
-        （當 PuLP 不可用時的備用方案）
-        """
-        sorted_df = candidates.sort_values("roi", ascending=False)
-        selected = []
-        remaining_budget = self.budget
-
-        for idx, row in sorted_df.iterrows():
-            cost = row["upgrade_cost"]
-            if cost <= remaining_budget:
-                selected.append(idx)
-                remaining_budget -= cost
-
-        return selected
-
     def _build_result(
         self,
         candidates: pd.DataFrame,
         selected_indices: list,
+        solver: str,
     ) -> OptimizationResult:
         """將求解結果轉換為 OptimizationResult。"""
         selected_df = candidates.iloc[selected_indices] if selected_indices else pd.DataFrame()
 
         total_cost = selected_df["upgrade_cost"].sum() if len(selected_df) > 0 else 0.0
-        total_saving = selected_df["expected_penalty"].sum() if len(selected_df) > 0 else 0.0
+        total_penalty_avoided = selected_df["expected_penalty"].sum() if len(selected_df) > 0 else 0.0
+        total_saving = selected_df["net_benefit"].sum() if len(selected_df) > 0 else 0.0
 
         # 建立訂單清單
         orders = []
         for _, row in selected_df.iterrows():
+            risk_bucket = str(row["risk_bucket"]) if "risk_bucket" in row else "Unknown"
             order = {
                 "p_late": round(float(row["p_late"]), 4),
                 "upgrade_cost": round(float(row["upgrade_cost"]), 2),
-                "expected_saving": round(float(row["expected_penalty"]), 2),
+                "expected_penalty": round(float(row["expected_penalty"]), 2),
+                "net_benefit": round(float(row["net_benefit"]), 2),
+                "expected_saving": round(float(row["net_benefit"]), 2),
                 "decision": "Upgrade",
+                "reason": self._build_reason(row, risk_bucket),
             }
             if "order_id_hash" in row:
                 order["order_id_hash"] = str(row["order_id_hash"])
             if "risk_bucket" in row:
-                order["risk_bucket"] = str(row["risk_bucket"])
+                order["risk_bucket"] = risk_bucket
             orders.append(order)
 
         return OptimizationResult(
@@ -293,7 +302,18 @@ class ShippingOptimizer:
             total_orders_considered=len(candidates),
             selected_count=len(selected_df),
             expected_total_saving=total_saving,
+            expected_total_penalty_avoided=total_penalty_avoided,
+            solver=solver,
             selected_orders=orders,
+        )
+
+    def _build_reason(self, row: pd.Series, risk_bucket: str) -> str:
+        """產生可供 demo 說明的推薦原因。"""
+        return (
+            f"{risk_bucket} risk, "
+            f"p_late={float(row['p_late']):.2f}, "
+            f"net benefit NT$ {float(row['net_benefit']):.0f}, "
+            "within budget"
         )
 
     def _save_results(self, result: OptimizationResult, output_dir: str) -> None:
@@ -324,12 +344,14 @@ if __name__ == "__main__":
     parser.add_argument("--budget", type=float, default=DEFAULT_BUDGET)
     parser.add_argument("--upgrade-cost", type=float, default=DEFAULT_UPGRADE_COST)
     parser.add_argument("--penalty", type=float, default=DEFAULT_DELAY_PENALTY)
+    parser.add_argument("--max-candidates", type=int, default=DEFAULT_MAX_CANDIDATES)
     args = parser.parse_args()
 
     optimizer = ShippingOptimizer(
         budget=args.budget,
         upgrade_cost=args.upgrade_cost,
         delay_penalty=args.penalty,
+        max_candidates=args.max_candidates,
     )
     result = optimizer.run(
         predictions_path=args.predictions,

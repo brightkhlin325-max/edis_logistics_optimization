@@ -92,7 +92,8 @@ Content-Type: application/json
 {
   "budget": 5000,
   "upgrade_cost": 80,
-  "delay_penalty": 250
+  "delay_penalty": 250,
+  "max_candidates": 500
 }
 ```
 
@@ -105,17 +106,29 @@ Response:
   "selected_count": 12,
   "total_cost": 960,
   "expected_total_saving": 2850,
+  "expected_total_penalty_avoided": 3810,
+  "solver": "PuLP MILP",
   "selected_orders": [
     {
       "order_id_hash": "a8f3...",
       "p_late": 0.88,
       "upgrade_cost": 80,
-      "expected_saving": 220,
+      "expected_penalty": 220,
+      "net_benefit": 140,
+      "expected_saving": 140,
       "risk_bucket": "High",
-      "decision": "Upgrade"
+      "decision": "Upgrade",
+      "reason": "High risk, p_late=0.88, net benefit NT$ 140, within budget"
     }
   ]
 }
 ```
 
 Viewer must receive HTTP 403 when calling this endpoint.
+
+Notes:
+
+- `expected_penalty` is the expected avoided delay penalty before upgrade cost.
+- `net_benefit = expected_penalty - upgrade_cost`.
+- `expected_saving` is kept for dashboard compatibility and should match `net_benefit`.
+- `max_candidates` limits the highest net-benefit orders entering the solver so the demo remains responsive.

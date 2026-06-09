@@ -59,7 +59,7 @@ def main():
                     "Content-Type": "application/json",
                     "X-Role": "Viewer",
                 },
-                body={"budget": 5000, "upgrade_cost": 80, "delay_penalty": 250},
+                body={"budget": 5000, "upgrade_cost": 80, "delay_penalty": 250, "max_candidates": 500},
             )
             raise AssertionError("Viewer optimize request should have failed")
         except HTTPError as exc:
@@ -72,10 +72,15 @@ def main():
                 "Content-Type": "application/json",
                 "X-Role": "Logistics_Manager",
             },
-            body={"budget": 5000, "upgrade_cost": 80, "delay_penalty": 250},
+            body={"budget": 5000, "upgrade_cost": 80, "delay_penalty": 250, "max_candidates": 500},
         )
         expect(status == 200, "POST /api/optimize as Logistics_Manager returns 200")
         expect("selected_orders" in result, "optimize response includes selected_orders")
+        expect("solver" in result, "optimize response includes solver")
+        if result["selected_orders"]:
+            first_order = result["selected_orders"][0]
+            expect("net_benefit" in first_order, "selected order includes net_benefit")
+            expect("reason" in first_order, "selected order includes reason")
 
     except URLError as exc:
         print(f"ERROR: Cannot reach {BASE_URL}. Start the API server first.")

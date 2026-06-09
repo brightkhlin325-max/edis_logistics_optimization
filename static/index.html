@@ -1106,7 +1106,8 @@ async function fetchOptimize(budget, upgradeCost, delayPenalty) {
     body: JSON.stringify({
       budget,
       upgrade_cost: upgradeCost,
-      delay_penalty: delayPenalty
+      delay_penalty: delayPenalty,
+      max_candidates: 500
     })
   });
   if (!response.ok) {
@@ -1199,9 +1200,9 @@ function renderOptResult(d) {
     <div class="ord-item" style="animation-delay:${i*0.07}s">
       <div>
         <div class="ord-id">${o.order_id_hash}</div>
-        <div class="ord-sub">升級成本 $${o.upgrade_cost} · 延遲率 ${(o.p_late*100).toFixed(0)}%</div>
+        <div class="ord-sub">升級成本 $${o.upgrade_cost} · 延遲率 ${(o.p_late*100).toFixed(0)}% · ${o.reason || 'positive net benefit'}</div>
       </div>
-      <div class="ord-saving">+$${o.expected_saving}</div>
+      <div class="ord-saving">+$${(o.net_benefit ?? o.expected_saving).toLocaleString()}</div>
     </div>
   `).join('');
 }
@@ -1296,9 +1297,9 @@ async function runPageOptimize() {
       <div class="ord-item" style="animation-delay:${i*0.03}s">
         <div>
           <div class="ord-id">${o.order_id_hash}</div>
-          <div class="ord-sub">升級成本 $${o.upgrade_cost} · 延遲機率 ${(o.p_late*100).toFixed(0)}%</div>
+          <div class="ord-sub">升級成本 $${o.upgrade_cost} · 延遲機率 ${(o.p_late*100).toFixed(0)}% · ${o.reason || 'positive net benefit'}</div>
         </div>
-        <div class="ord-saving">+$${o.expected_saving}</div>
+        <div class="ord-saving">+$${(o.net_benefit ?? o.expected_saving).toLocaleString()}</div>
       </div>
     `).join('');
     
