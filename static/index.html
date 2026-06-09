@@ -550,24 +550,24 @@ body {
 
   <nav class="sidebar-nav">
     <div class="nav-section">主選單</div>
-    <a class="nav-item active" href="#">
+    <a class="nav-item active" id="nav-dashboard" onclick="showPage('dashboard')">
       <i class="nav-icon">▪</i> Dashboard
     </a>
-    <a class="nav-item" href="#">
+    <a class="nav-item" id="nav-risk-list" onclick="showPage('risk-list')">
       <i class="nav-icon">◈</i> 風險訂單列表
     </a>
-    <a class="nav-item" href="#">
+    <a class="nav-item" id="nav-optimization" onclick="showPage('optimization')">
       <i class="nav-icon">◉</i> 最佳化調度
     </a>
     <div class="nav-section">分析</div>
-    <a class="nav-item" href="#">
+    <a class="nav-item" id="nav-model-perf" onclick="showPage('model-perf')">
       <i class="nav-icon">◇</i> 模型效能
     </a>
-    <a class="nav-item" href="#">
+    <a class="nav-item" id="nav-region-map" onclick="showPage('region-map')">
       <i class="nav-icon">◆</i> 區域風險地圖
     </a>
     <div class="nav-section">系統</div>
-    <a class="nav-item" href="#">
+    <a class="nav-item" id="nav-rbac" onclick="showPage('rbac')">
       <i class="nav-icon">○</i> RBAC 權限
     </a>
   </nav>
@@ -604,52 +604,178 @@ body {
   <!-- Content -->
   <div class="content">
 
-    <div class="page-header fade-in">
-      <div class="page-title">物流延遲預測與最佳化調度</div>
-      <div class="page-sub">DataCo Supply Chain Dataset · XGBoost + PuLP 最佳化引擎</div>
-    </div>
-
-    <!-- KPI -->
-    <div class="kpi-row fade-in">
-      <div class="kpi-card">
-        <div class="kpi-icon-wrap icon-warm">📦</div>
-        <div class="kpi-info">
-          <div class="kpi-label">整體延遲率</div>
-          <div class="kpi-value warm" id="kpiLateRate">—</div>
-          <div class="kpi-change" id="kpiLateDesc">載入中...</div>
-        </div>
+    <!-- A. DASHBOARD PANEL -->
+    <div class="page-section" id="page-dashboard">
+      <div class="page-header fade-in">
+        <div class="page-title">物流延遲預測與最佳化調度</div>
+        <div class="page-sub">DataCo Supply Chain Dataset · XGBoost + PuLP 最佳化引擎</div>
       </div>
-      <div class="kpi-card">
-        <div class="kpi-icon-wrap icon-navy">🧠</div>
-        <div class="kpi-info">
-          <div class="kpi-label">模型 ROC-AUC</div>
-          <div class="kpi-value navy" id="kpiAuc">—</div>
-          <div class="kpi-change" id="kpiAucDesc">載入中...</div>
-        </div>
-      </div>
-      <div class="kpi-card">
-        <div class="kpi-icon-wrap icon-steel">⚠️</div>
-        <div class="kpi-info">
-          <div class="kpi-label">高風險訂單數</div>
-          <div class="kpi-value steel" id="kpiHighRisk">—</div>
-          <div class="kpi-change" id="kpiHighDesc">載入中...</div>
-        </div>
-      </div>
-    </div>
 
-    <!-- Two-col -->
-    <div class="grid-2 fade-in">
-
-      <!-- Risk table -->
-      <div class="panel">
-        <div class="panel-head">
-          <div>
-            <div class="panel-title">延遲風險訂單列表</div>
-            <div class="panel-subtitle">p_late > 0.3 的訂單</div>
+      <!-- KPI -->
+      <div class="kpi-row fade-in">
+        <div class="kpi-card">
+          <div class="kpi-icon-wrap icon-warm">📦</div>
+          <div class="kpi-info">
+            <div class="kpi-label">整體延遲率</div>
+            <div class="kpi-value warm" id="kpiLateRate">—</div>
+            <div class="kpi-change" id="kpiLateDesc">載入中...</div>
           </div>
-          <span class="tag tag-count" id="orderCount">載入中</span>
         </div>
-        <div class="table-scroll">
+        <div class="kpi-card">
+          <div class="kpi-icon-wrap icon-navy">🧠</div>
+          <div class="kpi-info">
+            <div class="kpi-label">模型 ROC-AUC</div>
+            <div class="kpi-value navy" id="kpiAuc">—</div>
+            <div class="kpi-change" id="kpiAucDesc">載入中...</div>
+          </div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-icon-wrap icon-steel">⚠️</div>
+          <div class="kpi-info">
+            <div class="kpi-label">高風險訂單數</div>
+            <div class="kpi-value steel" id="kpiHighRisk">—</div>
+            <div class="kpi-change" id="kpiHighDesc">載入中...</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Two-col -->
+      <div class="grid-2 fade-in">
+        <!-- Risk table -->
+        <div class="panel">
+          <div class="panel-head">
+            <div>
+              <div class="panel-title">延遲風險訂單列表</div>
+              <div class="panel-subtitle">p_late > 0.3 的訂單</div>
+            </div>
+            <span class="tag tag-count" id="orderCount">載入中</span>
+          </div>
+          <div class="table-scroll">
+            <table class="risk-table">
+              <thead>
+                <tr>
+                  <th>訂單 ID</th>
+                  <th>運送模式</th>
+                  <th>地區</th>
+                  <th>延遲機率</th>
+                  <th>風險等級</th>
+                </tr>
+              </thead>
+              <tbody id="riskTableBody">
+                <tr><td colspan="5" style="text-align:center;padding:32px;color:var(--muted);font-size:13px">
+                  載入中...
+                </td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="panel-footer" style="padding: 12px 20px; border-top: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; background: #fafbfa;">
+            <button id="prevBtn" onclick="changePage(-1)" style="padding: 5px 12px; font-size: 11px; border: 1px solid var(--border); border-radius: 4px; background: white; cursor: pointer; color: var(--text); font-weight: 500;">上一頁</button>
+            <span id="pageIndicator" style="font-size: 11px; color: var(--muted); font-family: 'DM Mono', monospace; font-weight: 500;">第 1 頁</span>
+            <button id="nextBtn" onclick="changePage(1)" style="padding: 5px 12px; font-size: 11px; border: 1px solid var(--border); border-radius: 4px; background: white; cursor: pointer; color: var(--text); font-weight: 500;">下一頁</button>
+          </div>
+        </div>
+
+        <!-- Optimize panel -->
+        <div class="panel">
+          <div class="panel-head">
+            <div>
+              <div class="panel-title">最佳化調度</div>
+              <div class="panel-subtitle">預算限制下選出最值得升級的訂單</div>
+            </div>
+            <span class="role-badge badge-viewer" id="optRoleBadge">Viewer</span>
+          </div>
+          <div class="opt-body">
+            <div>
+              <label class="field-label">物流預算上限 Budget (USD)</label>
+              <input type="number" class="budget-input" id="budgetInput" placeholder="5000" value="5000" min="0">
+            </div>
+            <button class="run-btn hidden" id="runBtn" onclick="runOptimize()">
+              執行最佳化調度
+            </button>
+            <div class="locked-box" id="lockedBox">
+              🔒 需要 Manager 權限才能執行最佳化
+            </div>
+            <!-- Results -->
+            <div id="optResult" class="hidden" style="display:flex;flex-direction:column;gap:14px">
+              <div class="opt-divider"></div>
+              <div class="stat-grid">
+                <div class="stat-box">
+                  <div class="stat-label">已選訂單</div>
+                  <div class="stat-value" id="optSelected">—</div>
+                </div>
+                <div class="stat-box">
+                  <div class="stat-label">預期節省</div>
+                  <div class="stat-value green" id="optSaving">—</div>
+                </div>
+                <div class="stat-box">
+                  <div class="stat-label">升級成本</div>
+                  <div class="stat-value warm" id="optCost">—</div>
+                </div>
+                <div class="stat-box">
+                  <div class="stat-label">預算使用率</div>
+                  <div class="stat-value" id="optUsage">—</div>
+                  <div class="usage-bar-wrap">
+                    <div class="usage-bar"><div class="usage-fill" id="usageFill" style="width:0%"></div></div>
+                  </div>
+                </div>
+              </div>
+              <div>
+                <div style="font-size:11px;color:var(--muted);font-weight:500;margin-bottom:8px;text-transform:uppercase;letter-spacing:0.5px;font-family:'DM Mono',monospace">建議升級訂單</div>
+                <div class="ord-list" id="ordList"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- B. RISK ORDER LIST PANEL -->
+    <div class="page-section hidden" id="page-risk-list">
+      <div class="page-header fade-in">
+        <div class="page-title">風險訂單列表</div>
+        <div class="page-sub">精確查詢與篩選所有延遲機率大於 0.3 的訂單</div>
+      </div>
+      
+      <!-- Filter controls -->
+      <div class="panel fade-in" style="margin-bottom: 16px; padding: 16px; display: flex; flex-wrap: wrap; gap: 12px; align-items: center; background: var(--card);">
+        <div style="flex: 1; min-width: 200px;">
+          <label class="field-label">搜尋訂單 ID (Hash)</label>
+          <input type="text" id="riskSearchInput" oninput="applyFilters()" placeholder="輸入關鍵字搜尋..." style="width:100%; padding:8px 12px; border:1px solid var(--border); border-radius:6px; font-size:12px; outline:none; background:var(--bg); color:var(--text);">
+        </div>
+        <div>
+          <label class="field-label">風險等級</label>
+          <select id="filterRisk" onchange="applyFilters()" style="padding:8px 12px; border:1px solid var(--border); border-radius:6px; font-size:12px; background:var(--card); color:var(--text); outline:none;">
+            <option value="">全部風險</option>
+            <option value="High">High (>= 70%)</option>
+            <option value="Medium">Medium (40% - 70%)</option>
+            <option value="Low">Low (< 40%)</option>
+          </select>
+        </div>
+        <div>
+          <label class="field-label">運送模式</label>
+          <select id="filterShipping" onchange="applyFilters()" style="padding:8px 12px; border:1px solid var(--border); border-radius:6px; font-size:12px; background:var(--card); color:var(--text); outline:none;">
+            <option value="">全部模式</option>
+            <option value="Standard Class">Standard Class</option>
+            <option value="Second Class">Second Class</option>
+            <option value="First Class">First Class</option>
+            <option value="Same Day">Same Day</option>
+          </select>
+        </div>
+        <div>
+          <label class="field-label">目的地區域</label>
+          <select id="filterRegion" onchange="applyFilters()" style="padding:8px 12px; border:1px solid var(--border); border-radius:6px; font-size:12px; background:var(--card); color:var(--text); max-width:200px; outline:none;">
+            <option value="">全部區域</option>
+          </select>
+        </div>
+      </div>
+      
+      <!-- Standalone Risk Table -->
+      <div class="panel fade-in">
+        <div class="panel-head">
+          <div class="panel-title">篩選結果</div>
+          <span class="tag tag-count" id="riskListCount">共 0 筆</span>
+        </div>
+        <div class="table-scroll" style="max-height: 480px;">
           <table class="risk-table">
             <thead>
               <tr>
@@ -660,143 +786,317 @@ body {
                 <th>風險等級</th>
               </tr>
             </thead>
-            <tbody id="riskTableBody">
-              <tr><td colspan="5" style="text-align:center;padding:32px;color:var(--muted);font-size:13px">
-                載入中...
-              </td></tr>
+            <tbody id="riskListTableBody">
+              <tr><td colspan="5" style="text-align:center;padding:32px;color:var(--muted);font-size:13px">載入中...</td></tr>
             </tbody>
           </table>
         </div>
         <div class="panel-footer" style="padding: 12px 20px; border-top: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; background: #fafbfa;">
-          <button id="prevBtn" onclick="changePage(-1)" style="padding: 5px 12px; font-size: 11px; border: 1px solid var(--border); border-radius: 4px; background: white; cursor: pointer; color: var(--text); font-weight: 500;">上一頁</button>
-          <span id="pageIndicator" style="font-size: 11px; color: var(--muted); font-family: 'DM Mono', monospace; font-weight: 500;">第 1 頁</span>
-          <button id="nextBtn" onclick="changePage(1)" style="padding: 5px 12px; font-size: 11px; border: 1px solid var(--border); border-radius: 4px; background: white; cursor: pointer; color: var(--text); font-weight: 500;">下一頁</button>
+          <button id="riskListPrevBtn" onclick="changeRiskListPage(-1)" style="padding: 5px 12px; font-size: 11px; border: 1px solid var(--border); border-radius: 4px; background: white; cursor: pointer; color: var(--text); font-weight: 500;">上一頁</button>
+          <span id="riskListPageIndicator" style="font-size: 11px; color: var(--muted); font-family: 'DM Mono', monospace; font-weight: 500;">第 1 頁</span>
+          <button id="riskListNextBtn" onclick="changeRiskListPage(1)" style="padding: 5px 12px; font-size: 11px; border: 1px solid var(--border); border-radius: 4px; background: white; cursor: pointer; color: var(--text); font-weight: 500;">下一頁</button>
         </div>
       </div>
+    </div>
 
-      <!-- Optimize panel -->
-      <div class="panel">
-        <div class="panel-head">
-          <div>
-            <div class="panel-title">最佳化調度</div>
-            <div class="panel-subtitle">預算限制下選出最值得升級的訂單</div>
+    <!-- C. OPTIMIZATION PANEL -->
+    <div class="page-section hidden" id="page-optimization">
+      <div class="page-header fade-in">
+        <div class="page-title">最佳化調度</div>
+        <div class="page-sub">在給定的物流預算限制下，使用整數規劃模型計算產出最佳調度方案</div>
+      </div>
+      
+      <div class="grid-2 fade-in">
+        <!-- Input controls -->
+        <div class="panel" style="height: fit-content;">
+          <div class="panel-head">
+            <div class="panel-title">調度參數量化調整</div>
           </div>
-          <span class="role-badge badge-viewer" id="optRoleBadge">Viewer</span>
+          <div class="opt-body">
+            <div>
+              <label class="field-label">物流預算上限 Budget (USD)</label>
+              <input type="number" class="budget-input" id="optPageBudgetInput" placeholder="5000" value="5000" min="0">
+            </div>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+              <div>
+                <label class="field-label">單筆升級成本 Upgrade Cost ($)</label>
+                <input type="number" class="budget-input" id="optPageUpgradeCost" placeholder="80" value="80" min="0">
+              </div>
+              <div>
+                <label class="field-label">單筆延遲罰金 Delay Penalty ($)</label>
+                <input type="number" class="budget-input" id="optPageDelayPenalty" placeholder="250" value="250" min="0">
+              </div>
+            </div>
+            
+            <button class="run-btn hidden" id="optPageRunBtn" onclick="runPageOptimize()">
+              開始計算最佳化調度方案
+            </button>
+            <div class="locked-box" id="optPageLockedBox">
+              🔒 需要 Manager 權限才能執行最佳化調度
+            </div>
+          </div>
         </div>
-        <div class="opt-body">
-
-          <div>
-            <label class="field-label">物流預算上限 Budget (USD)</label>
-            <input type="number" class="budget-input" id="budgetInput"
-                   placeholder="5000" value="5000" min="0">
+        
+        <!-- Results visualizer -->
+        <div class="panel">
+          <div class="panel-head">
+            <div class="panel-title">調度預估成效分析</div>
+            <span class="role-badge badge-viewer" id="optPageRoleBadge">Viewer</span>
           </div>
-
-          <button class="run-btn hidden" id="runBtn" onclick="runOptimize()">
-            執行最佳化調度
-          </button>
-
-          <div class="locked-box" id="lockedBox">
-            🔒 需要 Manager 權限才能執行最佳化
-          </div>
-
-          <!-- Results -->
-          <div id="optResult" class="hidden" style="display:flex;flex-direction:column;gap:14px">
-            <div class="opt-divider"></div>
-            <div class="stat-grid">
-              <div class="stat-box">
-                <div class="stat-label">已選訂單</div>
-                <div class="stat-value" id="optSelected">—</div>
+          <div class="opt-body">
+            <div id="optPageResultPlaceholder" style="text-align:center; padding:64px 20px; color:var(--muted); font-size:13px;">
+              請設定左側參數並點擊執行，以生成調度分析成果。
+            </div>
+            
+            <div id="optPageResult" class="hidden" style="display:flex; flex-direction:column; gap:16px;">
+              <div class="stat-grid">
+                <div class="stat-box">
+                  <div class="stat-label">建議升級訂單數</div>
+                  <div class="stat-value" id="optPageSelected">—</div>
+                </div>
+                <div class="stat-box">
+                  <div class="stat-label">預期省下罰金</div>
+                  <div class="stat-value green" id="optPageSaving">—</div>
+                </div>
+                <div class="stat-box">
+                  <div class="stat-label">實際升級花費</div>
+                  <div class="stat-value warm" id="optPageCost">—</div>
+                </div>
+                <div class="stat-box">
+                  <div class="stat-label">預算使用比例</div>
+                  <div class="stat-value" id="optPageUsage">—</div>
+                  <div class="usage-bar-wrap">
+                    <div class="usage-bar"><div class="usage-fill" id="optPageUsageFill" style="width:0%"></div></div>
+                  </div>
+                </div>
               </div>
-              <div class="stat-box">
-                <div class="stat-label">預期節省</div>
-                <div class="stat-value green" id="optSaving">—</div>
-              </div>
-              <div class="stat-box">
-                <div class="stat-label">升級成本</div>
-                <div class="stat-value warm" id="optCost">—</div>
-              </div>
-              <div class="stat-box">
-                <div class="stat-label">預算使用率</div>
-                <div class="stat-value" id="optUsage">—</div>
-                <div class="usage-bar-wrap">
-                  <div class="usage-bar"><div class="usage-fill" id="usageFill" style="width:0%"></div></div>
+              
+              <div>
+                <div style="font-size:11px;color:var(--muted);font-weight:500;margin-bottom:8px;text-transform:uppercase;letter-spacing:0.5px;font-family:'DM Mono',monospace">升級訂單明細與預估省下金額</div>
+                <div class="table-scroll" style="max-height: 240px;">
+                  <div class="ord-list" id="optPageOrdList"></div>
                 </div>
               </div>
             </div>
-
-            <div>
-              <div style="font-size:11px;color:var(--muted);font-weight:500;margin-bottom:8px;text-transform:uppercase;letter-spacing:0.5px;font-family:'DM Mono',monospace">建議升級訂單</div>
-              <div class="ord-list" id="ordList"></div>
-            </div>
           </div>
-
         </div>
       </div>
-
     </div>
+
+    <!-- D. MODEL PERFORMANCE PANEL -->
+    <div class="page-section hidden" id="page-model-perf">
+      <div class="page-header fade-in">
+        <div class="page-title">模型效能與重要特徵分析</div>
+        <div class="page-sub">XGBoost 分類器評估成果與可解釋性模型特徵重要度排行</div>
+      </div>
+      
+      <div class="grid-2 fade-in">
+        <!-- Metrics Matrix -->
+        <div style="display:flex; flex-direction:column; gap:16px;">
+          <div class="panel">
+            <div class="panel-head"><div class="panel-title">評估指標細節</div></div>
+            <div style="padding:20px; display:grid; grid-template-columns:1fr 1fr; gap:16px;">
+              <div class="stat-box">
+                <div class="stat-label">ROC-AUC</div>
+                <div class="stat-value" id="perfAuc">—</div>
+              </div>
+              <div class="stat-box">
+                <div class="stat-label">Precision (精準率)</div>
+                <div class="stat-value green" id="perfPrecision">—</div>
+              </div>
+              <div class="stat-box">
+                <div class="stat-label">Recall (召回率)</div>
+                <div class="stat-value warm" id="perfRecall">—</div>
+              </div>
+              <div class="stat-box">
+                <div class="stat-label">F1-Score</div>
+                <div class="stat-value" id="perfF1">—</div>
+              </div>
+            </div>
+          </div>
+          
+          <!-- Confusion Matrix -->
+          <div class="panel">
+            <div class="panel-head"><div class="panel-title">混淆矩陣 Confusion Matrix</div></div>
+            <div style="padding:20px; display:flex; justify-content:center; align-items:center; background: var(--bg); min-height: 180px;">
+              <table style="border-collapse: collapse; font-size:12px; text-align:center; font-family:'DM Mono',monospace; color:var(--text);">
+                <tr>
+                  <td></td>
+                  <td colspan="2" style="font-weight:600; padding-bottom:8px;">預測值 (Predicted)</td>
+                </tr>
+                <tr>
+                  <td></td>
+                  <td style="padding:6px 12px; background:var(--card); border:1px solid var(--border); font-weight:500;">準時 (0)</td>
+                  <td style="padding:6px 12px; background:var(--card); border:1px solid var(--border); font-weight:500;">延遲 (1)</td>
+                </tr>
+                <tr>
+                  <td rowspan="2" style="font-weight:600; padding-right:8px; writing-mode: vertical-lr; transform: rotate(180deg);">真實值 (Actual)</td>
+                  <td style="padding:16px; background:#eaf4ea; border:1px solid var(--border); color:#27ae60; font-weight:600;" id="cm-tn">0</td>
+                  <td style="padding:16px; background:#fdecea; border:1px solid var(--border); color:#c0392b;" id="cm-fp">0</td>
+                </tr>
+                <tr>
+                  <td style="padding:16px; background:#fef6e4; border:1px solid var(--border); color:#d68910;" id="cm-fn">0</td>
+                  <td style="padding:16px; background:#eaf4ea; border:1px solid var(--border); color:#27ae60; font-weight:600;" id="cm-tp">0</td>
+                </tr>
+              </table>
+            </div>
+          </div>
+        </div>
+        
+        <!-- Top 10 Features chart -->
+        <div class="panel">
+          <div class="panel-head">
+            <div class="panel-title">Top 10 重要特徵影響權重</div>
+          </div>
+          <div style="padding:20px; display:flex; flex-direction:column; gap:14px;" id="featureImportanceList">
+            載入中...
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- E. REGIONAL RISK MAP PANEL -->
+    <div class="page-section hidden" id="page-region-map">
+      <div class="page-header fade-in">
+        <div class="page-title">區域物流延遲風險排行</div>
+        <div class="page-sub">動態計算統計各個目的地區域 (Order Region) 的平均延遲機率</div>
+      </div>
+      
+      <div class="panel fade-in">
+        <div class="panel-head">
+          <div class="panel-title">地區物流風險分級排行</div>
+          <span class="tag tag-count">23 個地區</span>
+        </div>
+        <div style="padding:20px; max-height:480px; overflow-y:auto; display:flex; flex-direction:column; gap:16px;" id="regionRiskRankList">
+          載入中...
+        </div>
+      </div>
+    </div>
+
+    <!-- F. RBAC PERMISSIONS PANEL -->
+    <div class="page-section hidden" id="page-rbac">
+      <div class="page-header fade-in">
+        <div class="page-title">RBAC 角色存取權限矩陣</div>
+        <div class="page-sub">基於後端身分驗證控制 (Role-Based Access Control) 的系統安全設計</div>
+      </div>
+      
+      <div class="panel fade-in">
+        <div class="panel-head">
+          <div class="panel-title">端點存取控制矩陣 (API Access Matrix)</div>
+        </div>
+        <table class="risk-table">
+          <thead>
+            <tr>
+              <th>API 端點 (Endpoint)</th>
+              <th>請求類型</th>
+              <th>功能說明</th>
+              <th>Viewer 權限</th>
+              <th>Logistics_Manager 權限</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><span class="order-id">/api/metrics</span></td>
+              <td><span class="tag" style="background:#eaf4ea; color:#27ae60;">GET</span></td>
+              <td>獲取機器學習模型評估 KPI 與特徵權重</td>
+              <td><span class="risk-pill r-low">✔ 允許存取</span></td>
+              <td><span class="risk-pill r-low">✔ 允許存取</span></td>
+            </tr>
+            <tr>
+              <td><span class="order-id">/api/predict</span></td>
+              <td><span class="tag" style="background:#eaf4ea; color:#27ae60;">GET</span></td>
+              <td>獲取去識別化物流延遲風險訂單列表 (支援分頁)</td>
+              <td><span class="risk-pill r-low">✔ 允許存取</span></td>
+              <td><span class="risk-pill r-low">✔ 允許存取</span></td>
+            </tr>
+            <tr>
+              <td><span class="order-id">/api/optimize</span></td>
+              <td><span class="tag" style="background:#fdecea; color:#c0392b;">POST</span></td>
+              <td>傳入預算執行調度最佳化求解器 (PuLP / SciPy)</td>
+              <td><span class="risk-pill r-high">❌ 拒絕 (403)</span></td>
+              <td><span class="risk-pill r-low">✔ 允許存取</span></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
   </div>
 </div>
 
 <script>
-// ══ MOCK DATA ══
-const MOCK_METRICS = {
-  roc_auc: 0.91, f1: 0.84, recall: 0.86, precision: 0.82,
-  late_rate: 0.54, high_risk_orders: 128
-};
-
-const MOCK_PREDICTIONS = [
-  { order_id_hash: "a8f3b2c1", shipping_mode: "Standard Class", order_region: "Western Europe",  p_late: 0.92, risk_bucket: "High" },
-  { order_id_hash: "d4e7f9a2", shipping_mode: "Second Class",   order_region: "Southeast Asia",  p_late: 0.87, risk_bucket: "High" },
-  { order_id_hash: "c1b5a3e8", shipping_mode: "Standard Class", order_region: "Central America", p_late: 0.83, risk_bucket: "High" },
-  { order_id_hash: "f2d8c4b1", shipping_mode: "Standard Class", order_region: "South America",   p_late: 0.78, risk_bucket: "High" },
-  { order_id_hash: "e9a1f3d7", shipping_mode: "Second Class",   order_region: "Eastern Asia",    p_late: 0.71, risk_bucket: "High" },
-  { order_id_hash: "b3c6e2a9", shipping_mode: "First Class",    order_region: "Western Europe",  p_late: 0.58, risk_bucket: "Medium" },
-  { order_id_hash: "a7d4b8f1", shipping_mode: "Standard Class", order_region: "North America",   p_late: 0.52, risk_bucket: "Medium" },
-  { order_id_hash: "c9e2a5d3", shipping_mode: "Second Class",   order_region: "Western Africa",  p_late: 0.47, risk_bucket: "Medium" },
-  { order_id_hash: "f1b7c3e6", shipping_mode: "First Class",    order_region: "Central Asia",    p_late: 0.31, risk_bucket: "Low" },
-  { order_id_hash: "d5a9f2b4", shipping_mode: "Same Day",       order_region: "Western Europe",  p_late: 0.18, risk_bucket: "Low" },
-];
-
-const mockOptimize = (budget) => {
-  const pool = [
-    { order_id_hash: "a8f3b2c1", p_late: 0.92, upgrade_cost: 380, expected_saving: 1150 },
-    { order_id_hash: "d4e7f9a2", p_late: 0.87, upgrade_cost: 290, expected_saving: 870 },
-    { order_id_hash: "c1b5a3e8", p_late: 0.83, upgrade_cost: 340, expected_saving: 820 },
-    { order_id_hash: "f2d8c4b1", p_late: 0.78, upgrade_cost: 260, expected_saving: 710 },
-    { order_id_hash: "e9a1f3d7", p_late: 0.71, upgrade_cost: 310, expected_saving: 640 },
-  ];
-  let rem = budget, sel = [];
-  for (const o of pool) { if (rem >= o.upgrade_cost) { sel.push(o); rem -= o.upgrade_cost; } }
-  return {
-    budget,
-    selected_orders: sel,
-    total_cost: sel.reduce((s,o) => s + o.upgrade_cost, 0),
-    expected_total_saving: sel.reduce((s,o) => s + o.expected_saving, 0)
-  };
-};
-
-// ══ API BASE (換成真實 API 時修改這裡) ══
+// ══ API BASE ══
 const API_BASE = 'http://localhost:8000';
 
-async function fetchMetrics() {
-  return fetch(`${API_BASE}/api/metrics`).then(r => r.json());
-}
 // ══ State ══
 let currentRole = 'viewer';
 let currentPage = 1;
 const limit = 50;
 let totalPredictionsCount = 0;
-async function fetchPredictions() {
-  const payload = await fetch(`${API_BASE}/api/predict?page=${currentPage}&limit=${limit}`, {
+
+// Risk List page state
+let currentRiskListPage = 1;
+let totalRiskListCount = 0;
+
+// Cache for metrics & region risk
+let cachedMetrics = null;
+let cachedRegions = null;
+
+// ══ Navigation (SPA) ══
+function showPage(pageId) {
+  // Update nav item active states
+  document.querySelectorAll('.sidebar-nav .nav-item').forEach(el => {
+    el.classList.remove('active');
+  });
+  const activeNav = document.getElementById(`nav-${pageId}`);
+  if (activeNav) activeNav.classList.add('active');
+
+  // Show corresponding section
+  document.querySelectorAll('.page-section').forEach(el => {
+    el.classList.add('hidden');
+  });
+  const targetPage = document.getElementById(`page-${pageId}`);
+  if (targetPage) targetPage.classList.remove('hidden');
+
+  // Trigger page-specific loads
+  if (pageId === 'risk-list') {
+    populateRegionDropdown();
+    applyFilters();
+  } else if (pageId === 'model-perf') {
+    loadModelPerformance();
+  } else if (pageId === 'region-map') {
+    loadRegionalRisk();
+  }
+}
+
+// ══ API Calls ══
+async function fetchMetrics() {
+  if (cachedMetrics) return cachedMetrics;
+  cachedMetrics = await fetch(`${API_BASE}/api/metrics`).then(r => r.json());
+  return cachedMetrics;
+}
+
+async function fetchRegions() {
+  if (cachedRegions) return cachedRegions;
+  cachedRegions = await fetch(`${API_BASE}/api/regions`).then(r => r.json());
+  return cachedRegions;
+}
+
+async function fetchPredictions(page = 1, search = '', risk = '', shipping = '', region = '') {
+  let url = `${API_BASE}/api/predict?page=${page}&limit=${limit}`;
+  if (search) url += `&search=${encodeURIComponent(search)}`;
+  if (risk) url += `&risk=${encodeURIComponent(risk)}`;
+  if (shipping) url += `&shipping=${encodeURIComponent(shipping)}`;
+  if (region) url += `&region=${encodeURIComponent(region)}`;
+
+  const payload = await fetch(url, {
     headers: { 'X-Role': currentRole === 'manager' ? 'Logistics_Manager' : 'Viewer' }
   }).then(r => r.json());
-  if (payload && payload.count !== undefined) {
-    totalPredictionsCount = payload.count;
-  }
-  return (payload && payload.data) ? payload.data : (Array.isArray(payload) ? payload : []);
+  
+  return payload;
 }
-async function fetchOptimize(budget, role) {
-  if (role !== 'manager') throw new Error('403 Forbidden');
+
+async function fetchOptimize(budget, upgradeCost, delayPenalty) {
   const response = await fetch(`${API_BASE}/api/optimize`, {
     method: 'POST',
     headers: {
@@ -805,8 +1105,8 @@ async function fetchOptimize(budget, role) {
     },
     body: JSON.stringify({
       budget,
-      upgrade_cost: 80,
-      delay_penalty: 250
+      upgrade_cost: upgradeCost,
+      delay_penalty: delayPenalty
     })
   });
   if (!response.ok) {
@@ -816,13 +1116,34 @@ async function fetchOptimize(budget, role) {
   return response.json();
 }
 
-// ══ Render ══
+// ══ Populate Region Filter Options ══
+async function populateRegionDropdown() {
+  const dropdown = document.getElementById('filterRegion');
+  // Avoid repopulating if it has options already
+  if (dropdown.options.length > 1) return;
+
+  try {
+    const regionsData = await fetchRegions();
+    regionsData.forEach(r => {
+      if (r.order_region) {
+        const opt = document.createElement('option');
+        opt.value = r.order_region;
+        opt.textContent = r.order_region;
+        dropdown.appendChild(opt);
+      }
+    });
+  } catch (e) {
+    console.error('Failed to load regions filter', e);
+  }
+}
+
+// ══ Render KPI & Dashboard ══
 function renderMetrics(d) {
   document.getElementById('kpiLateRate').textContent = (d.late_rate * 100).toFixed(0) + '%';
   document.getElementById('kpiLateDesc').textContent = `F1 ${d.f1} · Recall ${d.recall}`;
   document.getElementById('kpiAuc').textContent = d.roc_auc.toFixed(2);
   document.getElementById('kpiAucDesc').textContent = `Precision ${d.precision} · F1 ${d.f1}`;
-  document.getElementById('kpiHighRisk').textContent = d.high_risk_orders;
+  document.getElementById('kpiHighRisk').textContent = d.high_risk_orders.toLocaleString();
   document.getElementById('kpiHighDesc').textContent = `p_late ≥ 0.7 的訂單`;
 }
 
@@ -885,36 +1206,57 @@ function renderOptResult(d) {
   `).join('');
 }
 
-// ══ Role ══
+// ══ Role Switcher ══
 async function setRole(role) {
   currentRole = role;
   document.querySelectorAll('.role-btn').forEach(b =>
     b.classList.toggle('active', b.textContent.toLowerCase() === role));
 
   const isM = role === 'manager';
+  
+  // Header badges
   document.getElementById('roleBadge').className = isM ? 'role-badge badge-manager' : 'role-badge badge-viewer';
   document.getElementById('roleBadge').textContent = isM ? '● Manager' : '● Viewer';
   document.getElementById('optRoleBadge').className = isM ? 'role-badge badge-manager' : 'role-badge badge-viewer';
   document.getElementById('optRoleBadge').textContent = isM ? 'Manager' : 'Viewer';
+  document.getElementById('optPageRoleBadge').className = isM ? 'role-badge badge-manager' : 'role-badge badge-viewer';
+  document.getElementById('optPageRoleBadge').textContent = isM ? 'Manager' : 'Viewer';
 
+  // Dashboard buttons
   document.getElementById('runBtn').classList.toggle('hidden', !isM);
   document.getElementById('lockedBox').classList.toggle('hidden', isM);
   document.getElementById('optResult').classList.add('hidden');
   
-  // Refresh predictions for the current role
+  // Optimization page buttons
+  document.getElementById('optPageRunBtn').classList.toggle('hidden', !isM);
+  document.getElementById('optPageLockedBox').classList.toggle('hidden', isM);
+  document.getElementById('optPageResult').classList.add('hidden');
+  document.getElementById('optPageResultPlaceholder').classList.remove('hidden');
+
+  // Refresh current view predictions
   currentPage = 1;
-  const p = await fetchPredictions();
-  renderPredictions(p);
+  currentRiskListPage = 1;
+  
+  const p = await fetchPredictions(currentPage);
+  if (p) {
+    totalPredictionsCount = p.count || 0;
+    renderPredictions(p.data || []);
+  }
+  
+  // Refresh Risk list table if it's active
+  if (!document.getElementById('page-risk-list').classList.contains('hidden')) {
+    applyFilters();
+  }
 }
 
-// ══ Optimize ══
+// ══ Optimize (Dashboard Panel) ══
 async function runOptimize() {
   const btn = document.getElementById('runBtn');
   const budget = parseFloat(document.getElementById('budgetInput').value) || 5000;
   btn.innerHTML = '<span class="spinner"></span>計算中...';
   btn.disabled = true;
   try {
-    const data = await fetchOptimize(budget, currentRole);
+    const data = await fetchOptimize(budget, 80, 250);
     renderOptResult(data);
   } catch(e) { alert(e.message); }
   finally {
@@ -923,27 +1265,257 @@ async function runOptimize() {
   }
 }
 
-// ══ Pagination Handler ══
+// ══ Optimize (Full Screen Optimization Page) ══
+async function runPageOptimize() {
+  const btn = document.getElementById('optPageRunBtn');
+  const placeholder = document.getElementById('optPageResultPlaceholder');
+  const resultPanel = document.getElementById('optPageResult');
+  
+  const budget = parseFloat(document.getElementById('optPageBudgetInput').value) || 5000;
+  const upgradeCost = parseFloat(document.getElementById('optPageUpgradeCost').value) || 80;
+  const delayPenalty = parseFloat(document.getElementById('optPageDelayPenalty').value) || 250;
+  
+  btn.innerHTML = '<span class="spinner"></span>計算中...';
+  btn.disabled = true;
+  
+  try {
+    const data = await fetchOptimize(budget, upgradeCost, delayPenalty);
+    
+    placeholder.classList.add('hidden');
+    resultPanel.classList.remove('hidden');
+    
+    document.getElementById('optPageSelected').textContent = data.selected_orders.length;
+    document.getElementById('optPageSaving').textContent = '$' + data.expected_total_saving.toLocaleString();
+    document.getElementById('optPageCost').textContent = '$' + data.total_cost.toLocaleString();
+    
+    const pct = ((data.total_cost / budget) * 100).toFixed(0);
+    document.getElementById('optPageUsage').textContent = pct + '%';
+    document.getElementById('optPageUsageFill').style.width = pct + '%';
+
+    document.getElementById('optPageOrdList').innerHTML = data.selected_orders.map((o, i) => `
+      <div class="ord-item" style="animation-delay:${i*0.03}s">
+        <div>
+          <div class="ord-id">${o.order_id_hash}</div>
+          <div class="ord-sub">升級成本 $${o.upgrade_cost} · 延遲機率 ${(o.p_late*100).toFixed(0)}%</div>
+        </div>
+        <div class="ord-saving">+$${o.expected_saving}</div>
+      </div>
+    `).join('');
+    
+  } catch (e) {
+    alert(e.message);
+  } finally {
+    btn.innerHTML = '開始計算最佳化調度方案';
+    btn.disabled = false;
+  }
+}
+
+// ══ Dashboard Pagination ══
 async function changePage(delta) {
   const totalPages = Math.ceil(totalPredictionsCount / limit) || 1;
   const newPage = currentPage + delta;
   if (newPage >= 1 && newPage <= totalPages) {
     currentPage = newPage;
     document.getElementById('riskTableBody').innerHTML = `
-      <tr><td colspan="5" style="text-align:center;padding:32px;color:var(--muted);font-size:13px">
-        載入中...
-      </td></tr>
+      <tr><td colspan="5" style="text-align:center;padding:32px;color:var(--muted);font-size:13px">載入中...</td></tr>
     `;
-    const p = await fetchPredictions();
-    renderPredictions(p);
+    const p = await fetchPredictions(currentPage);
+    if (p) {
+      totalPredictionsCount = p.count || 0;
+      renderPredictions(p.data || []);
+    }
+  }
+}
+
+// ══ Risk List Page Logic (Search + Filters + Pagination) ══
+async function applyFilters() {
+  currentRiskListPage = 1;
+  loadFilteredRiskList();
+}
+
+async function loadFilteredRiskList() {
+  const search = document.getElementById('riskSearchInput').value.trim();
+  const risk = document.getElementById('filterRisk').value;
+  const shipping = document.getElementById('filterShipping').value;
+  const region = document.getElementById('filterRegion').value;
+  
+  const tbody = document.getElementById('riskListTableBody');
+  tbody.innerHTML = `
+    <tr><td colspan="5" style="text-align:center;padding:32px;color:var(--muted);font-size:13px">載入中...</td></tr>
+  `;
+
+  try {
+    const payload = await fetchPredictions(currentRiskListPage, search, risk, shipping, region);
+    if (!payload) return;
+    
+    totalRiskListCount = payload.count || 0;
+    document.getElementById('riskListCount').textContent = `共 ${totalRiskListCount} 筆`;
+    
+    const totalPages = Math.ceil(totalRiskListCount / limit) || 1;
+    document.getElementById('riskListPageIndicator').textContent = `第 ${currentRiskListPage} / ${totalPages} 頁`;
+    
+    const prevBtn = document.getElementById('riskListPrevBtn');
+    const nextBtn = document.getElementById('riskListNextBtn');
+    
+    prevBtn.disabled = currentRiskListPage <= 1;
+    nextBtn.disabled = currentRiskListPage >= totalPages;
+    prevBtn.style.opacity = currentRiskListPage <= 1 ? 0.5 : 1;
+    nextBtn.style.opacity = currentRiskListPage >= totalPages ? 0.5 : 1;
+
+    const data = payload.data || [];
+    if (data.length === 0) {
+      tbody.innerHTML = `
+        <tr><td colspan="5" style="text-align:center;padding:32px;color:var(--muted);font-size:13px">無符合篩選條件的訂單</td></tr>
+      `;
+      return;
+    }
+
+    tbody.innerHTML = data.map(o => `
+      <tr>
+        <td><span class="order-id">${o.order_id_hash}</span></td>
+        <td>${o.shipping_mode || 'Unknown'}</td>
+        <td style="color:var(--muted)">${o.order_region || 'Unknown'}</td>
+        <td>
+          <div class="prob-wrap">
+            <div class="prob-bar"><div class="prob-fill ${fillClass(o.risk_bucket)}" style="width:${o.p_late*100}%"></div></div>
+            <span class="prob-val">${(o.p_late*100).toFixed(0)}%</span>
+          </div>
+        </td>
+        <td><span class="risk-pill ${pillClass(o.risk_bucket)}">${o.risk_bucket}</span></td>
+      </tr>
+    `).join('');
+
+  } catch (e) {
+    tbody.innerHTML = `
+      <tr><td colspan="5" style="text-align:center;padding:32px;color:red;font-size:13px">資料載入失敗: ${e.message}</td></tr>
+    `;
+  }
+}
+
+async function changeRiskListPage(delta) {
+  const totalPages = Math.ceil(totalRiskListCount / limit) || 1;
+  const newPage = currentRiskListPage + delta;
+  if (newPage >= 1 && newPage <= totalPages) {
+    currentRiskListPage = newPage;
+    loadFilteredRiskList();
+  }
+}
+
+// ══ Model Performance Page (Feature Importance & Confusion Matrix) ══
+async function loadModelPerformance() {
+  const featList = document.getElementById('featureImportanceList');
+  featList.innerHTML = '載入中...';
+  
+  try {
+    const d = await fetchMetrics();
+    
+    // Fill metrics matrix cards
+    document.getElementById('perfAuc').textContent = d.roc_auc.toFixed(4);
+    document.getElementById('perfPrecision').textContent = (d.precision * 100).toFixed(2) + '%';
+    document.getElementById('perfRecall').textContent = (d.recall * 100).toFixed(2) + '%';
+    document.getElementById('perfF1').textContent = d.f1.toFixed(4);
+    
+    // Fill Confusion Matrix
+    if (d.confusion_matrix) {
+      const tn = d.confusion_matrix[0][0];
+      const fp = d.confusion_matrix[0][1];
+      const fn = d.confusion_matrix[1][0];
+      const tp = d.confusion_matrix[1][1];
+      
+      document.getElementById('cm-tn').innerHTML = `${tn.toLocaleString()}<br><span style="font-size:9px;color:var(--muted);font-weight:400;">True Negatives</span>`;
+      document.getElementById('cm-fp').innerHTML = `${fp.toLocaleString()}<br><span style="font-size:9px;color:var(--muted);font-weight:400;">False Positives</span>`;
+      document.getElementById('cm-fn').innerHTML = `${fn.toLocaleString()}<br><span style="font-size:9px;color:var(--muted);font-weight:400;">False Negatives</span>`;
+      document.getElementById('cm-tp').innerHTML = `${tp.toLocaleString()}<br><span style="font-size:9px;color:var(--muted);font-weight:400;">True Positives</span>`;
+    }
+    
+    // Render Feature Importance Horizontal Bar Chart
+    if (d.feature_importance) {
+      const items = Object.entries(d.feature_importance).sort((a,b) => b[1] - a[1]);
+      const maxVal = Math.max(...items.map(i => i[1])) || 1.0;
+      
+      featList.innerHTML = items.map(([feat, val]) => {
+        const pct = (val * 100).toFixed(1);
+        const barWidth = (val / maxVal * 100).toFixed(0);
+        return `
+          <div>
+            <div style="display:flex; justify-content:space-between; font-size:11.5px; margin-bottom:4px; font-family:'DM Mono',monospace;">
+              <span>${feat}</span>
+              <span style="font-weight:600; color:var(--navy);">${pct}%</span>
+            </div>
+            <div style="height:12px; width:100%; background:var(--bg); border-radius:6px; overflow:hidden;">
+              <div style="height:100%; width:${barWidth}%; background:linear-gradient(90deg, var(--steel), var(--navy)); border-radius:6px; transition: width 1s ease;"></div>
+            </div>
+          </div>
+        `;
+      }).join('');
+    } else {
+      featList.innerHTML = '<div style="color:var(--muted); font-size:12px;">無特徵重要性數據</div>';
+    }
+
+  } catch(e) {
+    featList.innerHTML = `<div style="color:red; font-size:12px;">載入失敗: ${e.message}</div>`;
+  }
+}
+
+// ══ Regional Risk Rank Page ══
+async function loadRegionalRisk() {
+  const container = document.getElementById('regionRiskRankList');
+  container.innerHTML = '載入中...';
+  
+  try {
+    const data = await fetchRegions();
+    if (!data || data.length === 0) {
+      container.innerHTML = '<div style="color:var(--muted); font-size:12px;">無區域延遲數據</div>';
+      return;
+    }
+    
+    container.innerHTML = data.map((r, i) => {
+      const pct = (r.p_late * 100).toFixed(1);
+      const isHigh = r.p_late >= 0.6;
+      const isMed = r.p_late >= 0.3 && r.p_late < 0.6;
+      const statusClass = isHigh ? 'r-high' : isMed ? 'r-med' : 'r-low';
+      const statusText = isHigh ? 'High Risk' : isMed ? 'Medium Risk' : 'Low Risk';
+      const fillTheme = isHigh ? 'fill-high' : isMed ? 'fill-med' : 'fill-low';
+      
+      return `
+        <div style="display: flex; align-items: center; gap: 16px; padding: 12px; background:var(--card); border: 1px solid var(--border); border-radius: 8px;">
+          <div style="font-family:'DM Mono',monospace; font-size:14px; font-weight:600; width:30px; text-align:center; color:var(--muted);">#${i+1}</div>
+          <div style="flex: 1;">
+            <div style="display:flex; justify-content:space-between; margin-bottom:4px; font-size:12.5px; font-weight:500;">
+              <span>${r.order_region}</span>
+              <span style="font-family:'DM Mono',monospace; font-weight:600;">${pct}% 平均延遲率</span>
+            </div>
+            <div style="height:8px; background:var(--bg); border-radius:4px; overflow:hidden; width:100%;">
+              <div class="prob-fill ${fillTheme}" style="height:100%; width:${pct}%;"></div>
+            </div>
+            <div style="font-size:10px; color:var(--muted); margin-top:4px;">統計訂單數: ${r.count.toLocaleString()} 筆</div>
+          </div>
+          <div>
+            <span class="risk-pill ${statusClass}">${statusText}</span>
+          </div>
+        </div>
+      `;
+    }).join('');
+
+  } catch (e) {
+    container.innerHTML = `<div style="color:red; font-size:12px;">載入失敗: ${e.message}</div>`;
   }
 }
 
 // ══ Init ══
 async function init() {
-  const [m, p] = await Promise.all([fetchMetrics(), fetchPredictions()]);
-  renderMetrics(m);
-  renderPredictions(p);
+  try {
+    const [m, p] = await Promise.all([fetchMetrics(), fetchPredictions(currentPage)]);
+    if (m) renderMetrics(m);
+    if (p) {
+      totalPredictionsCount = p.count || 0;
+      renderPredictions(p.data || []);
+    }
+    document.getElementById('statusText').textContent = 'Live API Connection';
+  } catch (e) {
+    console.error('Initialization failed', e);
+    document.getElementById('statusText').textContent = 'API Connection Error';
+  }
 }
 init();
 </script>

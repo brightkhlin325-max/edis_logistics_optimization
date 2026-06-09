@@ -180,6 +180,10 @@ async def get_predictions(
     x_role: Optional[str] = Header(default=None),
     limit: int = 50,
     page: int = 1,
+    search: Optional[str] = None,
+    risk: Optional[str] = None,
+    shipping: Optional[str] = None,
+    region: Optional[str] = None,
 ):
     """
     [Viewer / Manager] 回傳去識別化的訂單延遲風險列表。
@@ -232,6 +236,17 @@ async def get_predictions(
         }
 
     df = pd.read_csv(PREDICTIONS_PATH)
+    
+    # 應用過濾器
+    if search:
+        df = df[df['order_id_hash'].astype(str).str.contains(search, case=False, na=False)]
+    if risk:
+        df = df[df['risk_bucket'] == risk]
+    if shipping:
+        df = df[df['shipping_mode'] == shipping]
+    if region:
+        df = df[df['order_region'] == region]
+
     total_count = len(df)
     
     start_idx = (page - 1) * limit
@@ -337,6 +352,30 @@ async def run_optimization(
         "role": role,
         **result.to_dict(),
     }
+
+
+@app.get("/api/regions")
+async def get_region_risk():
+    """計算並回傳各區域的平均延遲率排行。"""
+    if not PREDICTIONS_PATH.exists():
+        return [
+            {"order_region": "Western Europe", "p_late": 0.82, "count": 2},
+            {"order_region": "Central America", "p_late": 0.45, "count": 1},
+        ]
+    df = pd.read_csv(PREDICTIONS_PATH)
+    if 'order_region' not in df.columns:
+        return []
+    
+    # 分群計算平均延遲率與訂單數
+    grouped = df.groupby('order_region').agg(
+        p_late=('p_late', 'mean'),
+        count=('p_late', 'count')
+    ).reset_index()
+    
+    grouped['p_late'] = grouped['p_late'].round(4)
+    # 依延遲率降冪排序
+    grouped = grouped.sort_values(by='p_late', ascending=False)
+    return grouped.to_dict(orient="records")
 
 
 # ── 全域錯誤處理 ──────────────────────────────────────────────────────────────
