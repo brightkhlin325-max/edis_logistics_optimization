@@ -639,6 +639,25 @@ body {
         </div>
       </div>
 
+
+      <!-- 功能3：月份延遲趨勢圖 -->
+      <div id="monthlyChartPanel" class="card fade-in" style="display:none;margin-bottom:24px;padding:28px 28px 20px;">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;flex-wrap:wrap;gap:10px;">
+          <div style="display:flex;align-items:center;gap:10px;">
+            <span style="font-size:16px;">📈</span>
+            <div>
+              <div style="font-size:14px;font-weight:600;color:var(--text);">月份延遲趨勢</div>
+              <div style="font-size:12px;color:var(--muted);margin-top:2px;">預測延遲率 Ŷ vs 實際延遲率 Y（每月平均）</div>
+            </div>
+          </div>
+          <div style="display:flex;gap:6px;">
+            <button id="btnLine" onclick="switchChartType('line')" style="padding:5px 14px;border-radius:20px;border:1.5px solid var(--navy);background:var(--navy);color:#fff;font-size:12px;font-weight:600;cursor:pointer;">折線圖</button>
+            <button id="btnBar"  onclick="switchChartType('bar')"  style="padding:5px 14px;border-radius:20px;border:1.5px solid var(--border);background:transparent;color:var(--muted);font-size:12px;font-weight:600;cursor:pointer;">長條圖</button>
+          </div>
+        </div>
+        <div style="position:relative;height:340px;width:100%;"><canvas id="monthlyChartCanvas"></canvas></div>
+      </div>
+
       <!-- Two-col -->
       <div class="grid-2 fade-in">
         <!-- Risk table -->
@@ -659,10 +678,12 @@ body {
                   <th>地區</th>
                   <th>延遲機率</th>
                   <th>風險等級</th>
+                  <th>實際結果</th>
+                  <th>預測正確？</th>
                 </tr>
               </thead>
               <tbody id="riskTableBody">
-                <tr><td colspan="5" style="text-align:center;padding:32px;color:var(--muted);font-size:13px">
+                <tr><td colspan="7" style="text-align:center;padding:32px;color:var(--muted);font-size:13px">
                   載入中...
                 </td></tr>
               </tbody>
@@ -1042,6 +1063,7 @@ body {
   </div>
 </div>
 
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
 <script>
 // ══ API BASE ══
 const API_BASE = 'http://localhost:8000';
@@ -1199,6 +1221,8 @@ function renderPredictions(data) {
         </div>
       </td>
       <td><span class="risk-pill ${pillClass(o.risk_bucket)}">${o.risk_bucket}</span></td>
+      <td>${o.actual_late===1||o.actual_late===true?'<span style="padding:2px 8px;background:#fee2e2;color:#b91c1c;border-radius:12px;font-size:10px;font-weight:600;">延遲</span>':o.actual_late===0||o.actual_late===false?'<span style="padding:2px 8px;background:#dcfce7;color:#15803d;border-radius:12px;font-size:10px;font-weight:600;">準時</span>':'<span style="color:var(--muted);font-size:12px;">—</span>'}</td>
+      <td>${o.is_correct===true?'<span style="padding:2px 8px;background:#dcfce7;color:#15803d;border-radius:12px;font-size:10px;font-weight:600;">✓ 正確</span>':o.is_correct===false?'<span style="padding:2px 8px;background:#fee2e2;color:#b91c1c;border-radius:12px;font-size:10px;font-weight:600;">✗ 錯誤</span>':'<span style="color:var(--muted);font-size:12px;">—</span>'}</td>
     </tr>
   `).join('');
 }
@@ -1207,7 +1231,8 @@ function renderOptResult(d) {
   const el = document.getElementById('optResult');
   el.classList.remove('hidden');
   el.style.display = 'flex';
-  document.getElementById('optSelected').textContent = d.selected_orders.length;
+  const _sel = Array.isArray(d.selected_orders) ? d.selected_orders : [];
+  document.getElementById('optSelected').textContent = _sel.length;
   document.getElementById('optSaving').textContent = '$' + d.expected_total_saving.toLocaleString();
   document.getElementById('optCost').textContent = '$' + d.total_cost.toLocaleString();
   const pct = ((d.total_cost / d.budget) * 100).toFixed(0);
@@ -1215,7 +1240,7 @@ function renderOptResult(d) {
   document.getElementById('usageFill').style.width = pct + '%';
   renderManagerAnalysis('managerAnalysisBox', 'managerAnalysisText', 'managerAnalysisFactors', d.manager_analysis);
 
-  document.getElementById('ordList').innerHTML = d.selected_orders.map((o, i) => `
+  document.getElementById('ordList').innerHTML = _sel.map((o, i) => `
     <div class="ord-item" style="animation-delay:${i*0.07}s">
       <div>
         <div class="ord-id">${o.order_id_hash}</div>
@@ -1570,7 +1595,7 @@ async function loadRegionalRisk() {
 // ══ Init ══
 async function init() {
   try {
-    const [m, p] = await Promise.all([fetchMetrics(), fetchPredictions(currentPage)]);
+    const [m, p] = await Promise.all([fetchMetrics(), fetchPredictions(currentPage), loadMonthlyChart()]);
     if (m) renderMetrics(m);
     if (p) {
       totalPredictionsCount = p.count || 0;
@@ -1583,6 +1608,64 @@ async function init() {
   }
 }
 init();
+// ══ Feature 3：月份延遲趨勢圖 ══
+let monthlyChart = null;
+let monthlyData = { labels: [], yhat: [], yact: [] };
+let currentChartType = 'line';
+
+function buildMonthlyChart(type) {
+  const ctx = document.getElementById('monthlyChartCanvas');
+  if (!ctx) return;
+  if (monthlyChart) { monthlyChart.destroy(); monthlyChart = null; }
+  const { labels, yhat, yact } = monthlyData;
+  monthlyChart = new Chart(ctx, {
+    type: type === 'bar' ? 'bar' : 'line',
+    data: {
+      labels,
+      datasets: [
+        { label: '預測延遲率 Ŷ (%)', data: yhat, borderColor: '#437096', backgroundColor: type==='bar'?'rgba(67,112,150,0.7)':'rgba(67,112,150,0.15)', fill: type!=='bar', tension: 0.35, pointRadius: 3, borderWidth: 2 },
+        { label: '實際延遲率 Y (%)',  data: yact, borderColor: '#e07b54', backgroundColor: type==='bar'?'rgba(224,123,84,0.7)':'rgba(224,123,84,0.15)',  fill: type!=='bar', tension: 0.35, borderDash: type==='bar'?[]:[5,4], pointRadius: 4, borderWidth: 2 }
+      ]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: { position: 'top', labels: { font: { size: 12 }, color: '#2d3340' } },
+        tooltip: { callbacks: { label: c => `${c.dataset.label}: ${c.parsed.y}%` } }
+      },
+      scales: {
+        x: { grid: { color: 'rgba(0,0,0,0.05)' }, ticks: { font: { size: 10 }, color: '#8a939e', maxTicksLimit: 8, maxRotation: 45, autoSkip: true } },
+        y: { min: 0, max: 100, grid: { color: 'rgba(0,0,0,0.05)' }, ticks: { font: { size: 11 }, color: '#8a939e', callback: v => v + '%' } }
+      }
+    }
+  });
+}
+
+function switchChartType(type) {
+  if (type === currentChartType) return;
+  currentChartType = type;
+  const bl = document.getElementById('btnLine'), bb = document.getElementById('btnBar');
+  if (bl) { bl.style.background = type==='line'?'var(--navy)':'transparent'; bl.style.color = type==='line'?'#fff':'var(--muted)'; bl.style.border = '1.5px solid '+(type==='line'?'var(--navy)':'var(--border)'); }
+  if (bb) { bb.style.background = type==='bar' ?'var(--navy)':'transparent'; bb.style.color = type==='bar' ?'#fff':'var(--muted)'; bb.style.border = '1.5px solid '+(type==='bar' ?'var(--navy)':'var(--border)'); }
+  buildMonthlyChart(type);
+}
+
+async function loadMonthlyChart() {
+  try {
+    const res = await fetch(`${API_BASE}/api/chart/monthly`);
+    if (!res.ok) return;
+    const json = await res.json();
+    const data = Array.isArray(json) ? json : (json.data || []);
+    monthlyData.labels = data.map(d => d.month);
+    monthlyData.yhat   = data.map(d => d.avg_p_late        != null ? +(d.avg_p_late * 100).toFixed(1)        : null);
+    monthlyData.yact   = data.map(d => d.actual_late_rate  != null ? +(d.actual_late_rate * 100).toFixed(1)  : null);
+    document.getElementById('monthlyChartPanel').style.display = 'block';
+    buildMonthlyChart(currentChartType);
+  } catch(e) { console.warn('Monthly chart failed:', e); }
+}
+
+
 </script>
 </body>
 </html>
