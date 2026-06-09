@@ -667,6 +667,11 @@ body {
             </tbody>
           </table>
         </div>
+        <div class="panel-footer" style="padding: 12px 20px; border-top: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; background: #fafbfa;">
+          <button id="prevBtn" onclick="changePage(-1)" style="padding: 5px 12px; font-size: 11px; border: 1px solid var(--border); border-radius: 4px; background: white; cursor: pointer; color: var(--text); font-weight: 500;">上一頁</button>
+          <span id="pageIndicator" style="font-size: 11px; color: var(--muted); font-family: 'DM Mono', monospace; font-weight: 500;">第 1 頁</span>
+          <button id="nextBtn" onclick="changePage(1)" style="padding: 5px 12px; font-size: 11px; border: 1px solid var(--border); border-radius: 4px; background: white; cursor: pointer; color: var(--text); font-weight: 500;">下一頁</button>
+        </div>
       </div>
 
       <!-- Optimize panel -->
@@ -776,11 +781,19 @@ const API_BASE = 'http://localhost:8000';
 async function fetchMetrics() {
   return fetch(`${API_BASE}/api/metrics`).then(r => r.json());
 }
+// ══ State ══
+let currentRole = 'viewer';
+let currentPage = 1;
+const limit = 50;
+let totalPredictionsCount = 0;
 async function fetchPredictions() {
-  const payload = await fetch(`${API_BASE}/api/predict`, {
+  const payload = await fetch(`${API_BASE}/api/predict?page=${currentPage}&limit=${limit}`, {
     headers: { 'X-Role': currentRole === 'manager' ? 'Logistics_Manager' : 'Viewer' }
   }).then(r => r.json());
-  return Array.isArray(payload) ? payload : (payload.data || []);
+  if (payload && payload.count !== undefined) {
+    totalPredictionsCount = payload.count;
+  }
+  return (payload && payload.data) ? payload.data : (Array.isArray(payload) ? payload : []);
 }
 async function fetchOptimize(budget, role) {
   if (role !== 'manager') throw new Error('403 Forbidden');
@@ -803,9 +816,6 @@ async function fetchOptimize(budget, role) {
   return response.json();
 }
 
-// ══ State ══
-let currentRole = 'viewer';
-
 // ══ Render ══
 function renderMetrics(d) {
   document.getElementById('kpiLateRate').textContent = (d.late_rate * 100).toFixed(0) + '%';
@@ -824,7 +834,19 @@ function pillClass(bucket) {
 }
 
 function renderPredictions(data) {
-  document.getElementById('orderCount').textContent = `共 ${data.length} 筆`;
+  document.getElementById('orderCount').textContent = `共 ${totalPredictionsCount} 筆`;
+  
+  const totalPages = Math.ceil(totalPredictionsCount / limit) || 1;
+  document.getElementById('pageIndicator').textContent = `第 ${currentPage} / ${totalPages} 頁`;
+  
+  const prevBtn = document.getElementById('prevBtn');
+  const nextBtn = document.getElementById('nextBtn');
+  
+  prevBtn.disabled = currentPage <= 1;
+  nextBtn.disabled = currentPage >= totalPages;
+  prevBtn.style.opacity = currentPage <= 1 ? 0.5 : 1;
+  nextBtn.style.opacity = currentPage >= totalPages ? 0.5 : 1;
+
   document.getElementById('riskTableBody').innerHTML = data.map(o => `
     <tr>
       <td><span class="order-id">${o.order_id_hash}</span></td>
@@ -864,7 +886,7 @@ function renderOptResult(d) {
 }
 
 // ══ Role ══
-function setRole(role) {
+async function setRole(role) {
   currentRole = role;
   document.querySelectorAll('.role-btn').forEach(b =>
     b.classList.toggle('active', b.textContent.toLowerCase() === role));
@@ -878,6 +900,11 @@ function setRole(role) {
   document.getElementById('runBtn').classList.toggle('hidden', !isM);
   document.getElementById('lockedBox').classList.toggle('hidden', isM);
   document.getElementById('optResult').classList.add('hidden');
+  
+  // Refresh predictions for the current role
+  currentPage = 1;
+  const p = await fetchPredictions();
+  renderPredictions(p);
 }
 
 // ══ Optimize ══
@@ -893,6 +920,22 @@ async function runOptimize() {
   finally {
     btn.innerHTML = '執行最佳化調度';
     btn.disabled = false;
+  }
+}
+
+// ══ Pagination Handler ══
+async function changePage(delta) {
+  const totalPages = Math.ceil(totalPredictionsCount / limit) || 1;
+  const newPage = currentPage + delta;
+  if (newPage >= 1 && newPage <= totalPages) {
+    currentPage = newPage;
+    document.getElementById('riskTableBody').innerHTML = `
+      <tr><td colspan="5" style="text-align:center;padding:32px;color:var(--muted);font-size:13px">
+        載入中...
+      </td></tr>
+    `;
+    const p = await fetchPredictions();
+    renderPredictions(p);
   }
 }
 

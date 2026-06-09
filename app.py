@@ -179,6 +179,7 @@ async def get_metrics():
 async def get_predictions(
     x_role: Optional[str] = Header(default=None),
     limit: int = 50,
+    page: int = 1,
 ):
     """
     [Viewer / Manager] 回傳去識別化的訂單延遲風險列表。
@@ -224,11 +225,18 @@ async def get_predictions(
         return {
             "role": role,
             "count": len(sample),
+            "page": page,
+            "limit": limit,
             "data": sample,
             "note": "示範資料（請先執行 model_pipeline.py）",
         }
 
-    df = pd.read_csv(PREDICTIONS_PATH).head(limit)
+    df = pd.read_csv(PREDICTIONS_PATH)
+    total_count = len(df)
+    
+    start_idx = (page - 1) * limit
+    end_idx = start_idx + limit
+    df_page = df.iloc[start_idx:end_idx]
 
     # 確保只回傳去識別化欄位
     safe_cols = [
@@ -241,13 +249,15 @@ async def get_predictions(
             "upgrade_cost",
             "expected_penalty",
         ]
-        if c in df.columns
+        if c in df_page.columns
     ]
-    result = df[safe_cols].to_dict(orient="records")
+    result = df_page[safe_cols].to_dict(orient="records")
 
     return {
         "role": role,
-        "count": len(result),
+        "count": total_count,
+        "page": page,
+        "limit": limit,
         "data": result,
     }
 
