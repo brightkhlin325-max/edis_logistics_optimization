@@ -1,0 +1,30 @@
+{
+  "roc_auc": 0.803,
+  "f1": 0.7095,
+  "precision": 0.8392,
+  "recall": 0.6145,
+  "late_rate": 0.5483,
+  "high_risk_orders": 11363,
+  "confusion_matrix": [
+    [
+      13977,
+      2331
+    ],
+    [
+      7632,
+      12164
+    ]
+  ],
+  "feature_importance": {
+    "Shipping Mode_Standard Class": 0.34716060757637024,
+    "Shipping Mode_Same Day": 0.19735576212406158,
+    "Shipping Mode_First Class": 0.16928726434707642,
+    "Days for shipment (scheduled)": 0.14999395608901978,
+    "Type_TRANSFER": 0.018505200743675232,
+    "Shipping Mode_Second Class": 0.012409196235239506,
+    "order_hour": 0.007632768247276545,
+    "Type_CASH": 0.0042998893186450005,
+    "Type_PAYMENT": 0.00425810506567359,
+    "Type_DEBIT": 0.003909601829946041
+  }
+}

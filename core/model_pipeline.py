@@ -41,9 +41,9 @@ DEFAULT_MODEL_PATH = "models/xgboost_model.json"
 XGBOOST_PARAMS = {
     "objective": "binary:logistic",
     "eval_metric": "logloss",
-    "n_estimators": 300,
-    "max_depth": 6,
-    "learning_rate": 0.05,
+    "n_estimators": 400,
+    "max_depth": 8,
+    "learning_rate": 0.08,
     "subsample": 0.8,
     "colsample_bytree": 0.8,
     "min_child_weight": 5,
@@ -51,6 +51,7 @@ XGBOOST_PARAMS = {
     "reg_lambda": 1.0,
     "random_state": 42,
     "n_jobs": -1,
+    "early_stopping_rounds": 20,
 }
 
 # 延遲風險分桶閾值

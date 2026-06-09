@@ -27,7 +27,7 @@ from security_utils import DeIdentifier, get_leakage_columns
 
 # ── 常數 ──────────────────────────────────────────────────────────────────────
 
-DEFAULT_SAMPLE_SIZE = 30_000     # 本地開發預設抽樣量
+DEFAULT_SAMPLE_SIZE = None     # 預設不進行抽樣，使用完整資料集
 RANDOM_STATE = 42
 TARGET_COLUMN = "Late_delivery_risk"
 
@@ -36,15 +36,23 @@ NUMERICAL_FEATURES = [
     "Days for shipment (scheduled)",
     "Product Price",
     "Order Item Quantity",
+    "Order Item Discount Rate",
+    "Order Item Profit Ratio",
+    "Order Profit Per Order",
 ]
 
 ONE_HOT_FEATURES = [
     "Shipping Mode",
     "Customer Segment",
+    "Type",
+    "Department Name",
+    "Market",
 ]
 
 LABEL_ENCODE_FEATURES = [
     "Order Region",
+    "Category Name",
+    "Order Country",
 ]
 
 DATE_COLUMN = "order date (DateOrders)"
@@ -245,8 +253,10 @@ class DataPipeline:
             feature_frames.append(pd.DataFrame({
                 "order_dayofweek": date_series.dt.dayofweek.fillna(-1).astype(int),
                 "order_month": date_series.dt.month.fillna(-1).astype(int),
+                "order_hour": date_series.dt.hour.fillna(-1).astype(int),
+                "order_is_weekend": (date_series.dt.dayofweek >= 5).fillna(0).astype(int),
             }))
-            print(f"  日期提取：order_dayofweek、order_month")
+            print(f"  日期提取：order_dayofweek、order_month、order_hour、order_is_weekend")
 
         X = pd.concat(feature_frames, axis=1)
 
