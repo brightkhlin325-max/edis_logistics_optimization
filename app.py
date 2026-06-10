@@ -260,7 +260,15 @@ async def get_predictions(
         }
 
     df = load_predictions()
-    
+
+    # 功能1：相容 true_label → actual_late，並計算 is_correct
+    if "true_label" in df.columns and "actual_late" not in df.columns:
+        df["actual_late"] = df["true_label"]
+    if "actual_late" in df.columns and "p_late" in df.columns:
+        df["predicted_late"] = (df["p_late"] >= 0.5).astype(int)
+        df["is_correct"] = (df["predicted_late"] == df["actual_late"].astype(int))
+        df["is_correct"] = df["is_correct"].apply(lambda x: bool(x))
+
     # 應用過濾器
     if search:
         df = df[df['order_id_hash'].astype(str).str.contains(search, case=False, na=False)]
@@ -287,6 +295,8 @@ async def get_predictions(
             "risk_bucket",
             "upgrade_cost",
             "expected_penalty",
+            "actual_late",
+            "is_correct",
         ]
         if c in df_page.columns
     ]
@@ -473,6 +483,42 @@ async def get_region_risk():
 
 
 # ── 全域錯誤處理 ──────────────────────────────────────────────────────────────
+
+
+@app.get("/api/chart/monthly")
+async def get_monthly_chart():
+    """[公開] 功能3：月份維度 Y_hat vs Y 趨勢。"""
+    if not PREDICTIONS_PATH.exists():
+        demo = [
+            {"month": f"2016-{str(m).zfill(2)}",
+             "avg_p_late": round(0.5 + (m % 3) * 0.05, 3),
+             "actual_late_rate": round(0.48 + (m % 4) * 0.04, 3)}
+            for m in range(1, 13)
+        ]
+        return {"data": demo, "note": "示範資料"}
+
+    df = load_predictions()
+
+    # 相容 true_label
+    if "true_label" in df.columns and "actual_late" not in df.columns:
+        df["actual_late"] = df["true_label"]
+
+    date_col = next((c for c in ["order_date", "Order Date", "date"] if c in df.columns), None)
+    if date_col is None:
+        return {"data": [], "note": "找不到日期欄位"}
+
+    df["_month"] = pd.to_datetime(df[date_col], errors="coerce").dt.to_period("M").astype(str)
+    df = df.dropna(subset=["_month"])
+
+    agg_dict = {"avg_p_late": ("p_late", "mean")}
+    if "actual_late" in df.columns:
+        agg_dict["actual_late_rate"] = ("actual_late", "mean")
+
+    agg = df.groupby("_month").agg(**agg_dict).reset_index().rename(columns={"_month": "month"})
+    if "actual_late_rate" not in agg.columns:
+        agg["actual_late_rate"] = None
+
+    return {"data": agg.to_dict(orient="records")}
 
 @app.exception_handler(HTTPException)
 async def http_exception_handler(request: Request, exc: HTTPException):
