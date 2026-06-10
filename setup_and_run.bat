@@ -100,7 +100,21 @@ if not exist "data\processed\predictions.csv" (
     echo [INFO] predictions.csv exists. Skipping training.
 )
 
-:: 6. Run Web Server
+:: 6. Install additional packages
+echo [INFO] Installing required packages...
+"%ENV_PYTHON%" -m pip install passlib bcrypt python-multipart --quiet
+if %errorlevel% neq 0 (
+    echo [WARNING] Some packages may have failed to install, continuing...
+)
+
+:: 7. Initialize auth database
+echo [INFO] Initializing authentication database...
+"%ENV_PYTHON%" core/auth.py
+if %errorlevel% neq 0 (
+    echo [WARNING] Auth database initialization failed, continuing...
+)
+
+:: 8. Run Web Server
 echo [INFO] Starting API Server...
 echo Open http://localhost:8000/static/index.html in your browser (opening automatically)...
 echo Press Ctrl + C to stop the server.
