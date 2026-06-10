@@ -1715,9 +1715,41 @@ async function loadModelPerformance() {
 }
 
 // ══ Regional Risk Rank Page ══
+// ══ Region coordinates mapping for SVG World Map ══
+const REGION_COORDS = {
+  "Canada": { x: 190, y: 110 },
+  "West of USA ": { x: 140, y: 160 },
+  "US Center ": { x: 180, y: 160 },
+  "East of USA": { x: 220, y: 160 },
+  "South of  USA ": { x: 180, y: 185 },
+  "Central America": { x: 190, y: 225 },
+  "Caribbean": { x: 245, y: 225 },
+  "South America": { x: 280, y: 360 },
+  "Northern Europe": { x: 490, y: 110 },
+  "Western Europe": { x: 470, y: 160 },
+  "Southern Europe": { x: 500, y: 190 },
+  "Eastern Europe": { x: 570, y: 140 },
+  "North Africa": { x: 480, y: 250 },
+  "West Africa": { x: 450, y: 300 },
+  "Central Africa": { x: 510, y: 330 },
+  "East Africa": { x: 555, y: 320 },
+  "Southern Africa": { x: 525, y: 390 },
+  "West Asia": { x: 580, y: 220 },
+  "Central Asia": { x: 660, y: 160 },
+  "South Asia": { x: 710, y: 230 },
+  "Eastern Asia": { x: 790, y: 180 },
+  "Southeast Asia": { x: 795, y: 280 },
+  "Oceania": { x: 830, y: 390 }
+};
+
+// ══ Regional Risk Rank & Map Page ══
 async function loadRegionalRisk() {
   const container = document.getElementById('regionRiskRankList');
+  const nodesGroup = document.getElementById('mapNodesGroup');
+  const tooltip = document.getElementById('mapTooltip');
+  
   container.innerHTML = '載入中...';
+  if (nodesGroup) nodesGroup.innerHTML = '';
   
   try {
     const data = await fetchRegions();
@@ -1726,20 +1758,22 @@ async function loadRegionalRisk() {
       return;
     }
     
+    // 1. Render ranking list
     container.innerHTML = data.map((r, i) => {
       const pct = (r.p_late * 100).toFixed(1);
-      const isHigh = r.p_late >= 0.6;
-      const isMed = r.p_late >= 0.3 && r.p_late < 0.6;
+      const isHigh = r.p_late >= 0.5;
+      const isMed = r.p_late >= 0.35 && r.p_late < 0.5;
       const statusClass = isHigh ? 'r-high' : isMed ? 'r-med' : 'r-low';
       const statusText = isHigh ? 'High Risk' : isMed ? 'Medium Risk' : 'Low Risk';
       const fillTheme = isHigh ? 'fill-high' : isMed ? 'fill-med' : 'fill-low';
+      const safeId = `rank-item-${r.order_region.replace(/\s+/g, '-')}`;
       
       return `
-        <div style="display: flex; align-items: center; gap: 16px; padding: 12px; background:var(--card); border: 1px solid var(--border); border-radius: 8px;">
+        <div id="${safeId}" style="display: flex; align-items: center; gap: 16px; padding: 12px; background:var(--card); border: 1px solid var(--border); border-radius: 8px; transition: all 0.3s;" class="rank-card-item">
           <div style="font-family:'DM Mono',monospace; font-size:14px; font-weight:600; width:30px; text-align:center; color:var(--muted);">#${i+1}</div>
           <div style="flex: 1;">
             <div style="display:flex; justify-content:space-between; margin-bottom:4px; font-size:12.5px; font-weight:500;">
-              <span>${r.order_region}</span>
+              <span style="font-weight:600;">${r.order_region}</span>
               <span style="font-family:'DM Mono',monospace; font-weight:600;">${pct}% 平均延遲率</span>
             </div>
             <div style="height:8px; background:var(--bg); border-radius:4px; overflow:hidden; width:100%;">
@@ -1753,7 +1787,116 @@ async function loadRegionalRisk() {
         </div>
       `;
     }).join('');
-
+    
+    // 2. Render SVG map hot-spots
+    if (nodesGroup) {
+      data.forEach(r => {
+        const coords = REGION_COORDS[r.order_region];
+        if (!coords) return;
+        
+        const isHigh = r.p_late >= 0.5;
+        const isMed = r.p_late >= 0.35 && r.p_late < 0.5;
+        const color = isHigh ? '#c0392b' : isMed ? '#e67e22' : '#27ae60';
+        const statusText = isHigh ? '高風險' : isMed ? '中風險' : '低風險';
+        const textClass = isHigh ? 'r-high' : isMed ? 'r-med' : 'r-low';
+        
+        // Create SVG Group element for node
+        const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+        g.setAttribute('class', 'map-node');
+        
+        // Pulsing radar ring
+        const pulse = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+        pulse.setAttribute('cx', coords.x);
+        pulse.setAttribute('cy', coords.y);
+        pulse.setAttribute('r', '8');
+        pulse.setAttribute('class', 'pulse-circle');
+        pulse.setAttribute('fill', 'none');
+        pulse.setAttribute('stroke', color);
+        pulse.setAttribute('stroke-width', '1.5');
+        
+        // Inner solid dot
+        const dot = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+        dot.setAttribute('cx', coords.x);
+        dot.setAttribute('cy', coords.y);
+        dot.setAttribute('r', '6');
+        dot.setAttribute('fill', color);
+        
+        // Invisible hover trigger area (larger radius for easy hovering)
+        const trigger = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+        trigger.setAttribute('cx', coords.x);
+        trigger.setAttribute('cy', coords.y);
+        trigger.setAttribute('r', '15');
+        trigger.setAttribute('fill', 'transparent');
+        
+        g.appendChild(pulse);
+        g.appendChild(dot);
+        g.appendChild(trigger);
+        
+        // Tooltip hover actions
+        trigger.addEventListener('mouseenter', (e) => {
+          tooltip.style.display = 'block';
+          tooltip.innerHTML = `
+            <div style="font-weight: 700; color: var(--navy); font-size: 13px; margin-bottom: 2px;">${r.order_region}</div>
+            <div style="font-size: 11px; color: var(--muted); margin-bottom: 8px;">地區物流指標</div>
+            <div style="display: flex; justify-content: space-between; font-size: 12px; margin-bottom: 4px; gap: 12px;">
+              <span>風險狀態:</span>
+              <span class="risk-pill ${textClass}" style="padding: 1px 6px; font-size: 10px; font-weight:600;">${statusText}</span>
+            </div>
+            <div style="display: flex; justify-content: space-between; font-size: 12px; margin-bottom: 4px;">
+              <span>平均延遲率:</span>
+              <span style="font-weight: 700; color: ${color}; font-family:'DM Mono',monospace;">${(r.p_late * 100).toFixed(1)}%</span>
+            </div>
+            <div style="display: flex; justify-content: space-between; font-size: 12px;">
+              <span>統計訂單量:</span>
+              <span style="font-weight: 600; font-family:'DM Mono',monospace;">${r.count.toLocaleString()} 筆</span>
+            </div>
+          `;
+        });
+        
+        trigger.addEventListener('mousemove', (e) => {
+          // Position relative to map container
+          const mapContainer = nodesGroup.closest('svg').parentElement;
+          const rect = mapContainer.getBoundingClientRect();
+          const tooltipWidth = tooltip.offsetWidth || 180;
+          const tooltipHeight = tooltip.offsetHeight || 100;
+          
+          let x = e.clientX - rect.left + 15;
+          let y = e.clientY - rect.top + 15;
+          
+          // boundary checks
+          if (x + tooltipWidth > rect.width) x = e.clientX - rect.left - tooltipWidth - 15;
+          if (y + tooltipHeight > rect.height) y = e.clientY - rect.top - tooltipHeight - 15;
+          
+          tooltip.style.left = `${x}px`;
+          tooltip.style.top = `${y}px`;
+        });
+        
+        trigger.addEventListener('mouseleave', () => {
+          tooltip.style.display = 'none';
+        });
+        
+        // Click action: Link to ranking item on the right
+        trigger.addEventListener('click', () => {
+          const safeId = `rank-item-${r.order_region.replace(/\s+/g, '-')}`;
+          const rankEl = document.getElementById(safeId);
+          if (rankEl) {
+            // Remove highlight from all items
+            document.querySelectorAll('.rank-card-item').forEach(el => {
+              el.style.borderColor = 'var(--border)';
+              el.style.background = 'var(--card)';
+            });
+            // Highlight selected item
+            rankEl.style.borderColor = color;
+            rankEl.style.background = isHigh ? '#fdf2f2' : isMed ? '#fffaf4' : '#f4fbf7';
+            // Scroll into view
+            rankEl.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+          }
+        });
+        
+        nodesGroup.appendChild(g);
+      });
+    }
+    
   } catch (e) {
     container.innerHTML = `<div style="color:red; font-size:12px;">載入失敗: ${e.message}</div>`;
   }
