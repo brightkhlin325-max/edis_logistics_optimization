@@ -146,7 +146,7 @@ class ShippingOptimizer:
         # 儲存結果
         self._save_results(result, output_dir)
 
-        print(f"\n✓ 最佳化完成：選出 {result.selected_count} 筆訂單升級")
+        print(f"\n[Done] 最佳化完成：選出 {result.selected_count} 筆訂單升級")
         print(f"  總升級成本：NT$ {result.total_cost:,.0f}（預算：{self.budget:,.0f}）")
         print(f"  預期淨效益：NT$ {result.expected_total_saving:,.0f}")
         print("=" * 60)
