@@ -2430,6 +2430,12 @@ function openDiagnoseModal(month) {
   document.getElementById('diagStep1').style.display = 'block';
   document.getElementById('diagStep2').style.display = 'none';
 
+  // 重置重訓按鈕與狀態（避免第二次開啟時按鈕被隱藏）
+  const _retrainBtn = document.getElementById('diagStartRetrainBtn');
+  const _retrainStatus = document.getElementById('diagRetrainStatus');
+  if (_retrainBtn) { _retrainBtn.style.display = 'block'; _retrainBtn.disabled = false; }
+  if (_retrainStatus) { _retrainStatus.style.display = 'none'; _retrainStatus.style.color = ''; }
+
   const isManager = currentRole === 'manager';
   document.getElementById('diagManagerActions').style.display = isManager ? 'flex' : 'none';
   document.getElementById('diagViewerNote').style.display    = isManager ? 'none' : 'block';
