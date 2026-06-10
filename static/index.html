@@ -536,6 +536,29 @@ body {
 .usage-bar-wrap { margin-top: 4px; }
 .usage-bar { height: 4px; background: var(--border); border-radius: 2px; margin-top: 6px; overflow: hidden; }
 .usage-fill { height: 100%; background: var(--navy); border-radius: 2px; transition: width 0.6s ease; }
+
+/* Pulsing Map Markers */
+.map-node {
+  cursor: pointer;
+  transition: transform 0.2s ease;
+}
+.map-node:hover {
+  transform: scale(1.3);
+}
+.pulse-circle {
+  animation: mapPulse 2s infinite ease-out;
+  transform-origin: center;
+}
+@keyframes mapPulse {
+  0% {
+    r: 6px;
+    opacity: 0.8;
+  }
+  100% {
+    r: 20px;
+    opacity: 0;
+  }
+}
 </style>
 </head>
 <body>
@@ -987,17 +1010,70 @@ body {
     <!-- E. REGIONAL RISK MAP PANEL -->
     <div class="page-section hidden" id="page-region-map">
       <div class="page-header fade-in">
-        <div class="page-title">區域物流延遲風險排行</div>
-        <div class="page-sub">動態計算統計各個目的地區域 (Order Region) 的平均延遲機率</div>
+        <div class="page-title">區域物流延遲風險地圖</div>
+        <div class="page-sub">動態計算與視覺化統計各個目的地區域 (Order Region) 的平均延遲機率與訂單量</div>
       </div>
       
-      <div class="panel fade-in">
-        <div class="panel-head">
-          <div class="panel-title">地區物流風險分級排行</div>
-          <span class="tag tag-count">23 個地區</span>
+      <div style="display: grid; grid-template-columns: 2.2fr 1fr; gap: 24px; align-items: start;" class="fade-in">
+        <!-- Map Panel -->
+        <div class="panel" style="padding: 20px; position: relative; overflow: hidden; min-height: 520px; display: flex; flex-direction: column;">
+          <div class="panel-head" style="margin-bottom: 16px;">
+            <div>
+              <div class="panel-title">互動式全球風險地圖</div>
+              <div class="panel-subtitle">懸停標記可檢視該物流區域之詳細指標，點擊可連動右側排行清單</div>
+            </div>
+            <div style="display:flex; gap:12px; font-size:11px;">
+              <span style="display:flex; align-items:center; gap:4px;"><span style="width:8px; height:8px; background:#27ae60; border-radius:50%;"></span>低風險 (&lt;35%)</span>
+              <span style="display:flex; align-items:center; gap:4px;"><span style="width:8px; height:8px; background:#e67e22; border-radius:50%;"></span>中風險 (35-50%)</span>
+              <span style="display:flex; align-items:center; gap:4px;"><span style="width:8px; height:8px; background:#c0392b; border-radius:50%;"></span>高風險 (&ge;50%)</span>
+            </div>
+          </div>
+          
+          <div style="position: relative; flex: 1; background: #0c1a30; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; display: flex; align-items: center; justify-content: center; padding: 10px;">
+            <!-- Grid Background -->
+            <svg id="worldMapSvg" viewBox="0 0 1000 500" style="width: 100%; height: auto; display: block;">
+              <!-- Patterns / Grids -->
+              <defs>
+                <pattern id="mapGrid" width="20" height="20" patternUnits="userSpaceOnUse">
+                  <path d="M 20 0 L 0 0 0 20" fill="none" stroke="rgba(255,255,255,0.03)" stroke-width="1"/>
+                </pattern>
+              </defs>
+              <rect width="1000" height="500" fill="url(#mapGrid)" />
+              
+              <!-- Stylized Continents -->
+              <g fill="rgba(255,255,255,0.06)" stroke="rgba(255,255,255,0.12)" stroke-width="1.5">
+                <!-- North America -->
+                <path d="M 80,100 L 260,100 L 280,120 L 300,160 L 280,200 L 240,220 L 230,240 L 200,240 L 190,260 L 160,250 L 140,210 L 120,180 Z" />
+                <!-- South America -->
+                <path d="M 250,280 L 290,280 L 320,330 L 300,420 L 270,460 L 260,460 L 250,380 L 230,320 Z" />
+                <!-- Europe & Asia -->
+                <path d="M 420,130 L 480,100 L 520,80 L 600,80 L 700,90 L 800,100 L 880,100 L 900,120 L 920,160 L 920,220 L 860,260 L 840,300 L 780,310 L 760,280 L 720,280 L 680,240 L 640,220 L 580,240 L 520,240 L 460,200 L 420,200 Z" />
+                <!-- Africa -->
+                <path d="M 450,220 L 520,220 L 560,260 L 580,300 L 580,350 L 540,420 L 520,420 L 480,340 L 440,280 Z" />
+                <!-- Australia -->
+                <path d="M 780,360 L 840,360 L 860,390 L 840,420 L 790,410 Z" />
+              </g>
+              
+              <!-- Region Nodes Group -->
+              <g id="mapNodesGroup"></g>
+            </svg>
+            
+            <!-- Map Tooltip (Floating card) -->
+            <div id="mapTooltip" style="position: absolute; display: none; pointer-events: none; background: rgba(255, 255, 255, 0.98); border: 1px solid var(--border); border-radius: 8px; padding: 12px 16px; box-shadow: 0 8px 30px rgba(0,0,0,0.25); z-index: 100; min-width: 180px; transition: opacity 0.15s; font-family: 'DM Sans', sans-serif;">
+              <!-- Filled by JS -->
+            </div>
+          </div>
         </div>
-        <div style="padding:20px; max-height:480px; overflow-y:auto; display:flex; flex-direction:column; gap:16px;" id="regionRiskRankList">
-          載入中...
+        
+        <!-- Rank List Panel -->
+        <div class="panel" style="display: flex; flex-direction: column; height: 520px;">
+          <div class="panel-head" style="margin-bottom: 12px; flex-shrink: 0; padding: 20px 20px 0 20px;">
+            <div class="panel-title">風險分級排行</div>
+            <span class="tag tag-count">23 個地區</span>
+          </div>
+          <div style="flex: 1; overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 10px;" id="regionRiskRankList">
+            載入中...
+          </div>
         </div>
       </div>
     </div>
