@@ -198,11 +198,9 @@ class ShippingOptimizer:
         df = pd.read_csv(path)
         print(f"  共 {len(df):,} 筆預測")
 
-        # 補全必要欄位
-        if "upgrade_cost" not in df.columns:
-            df["upgrade_cost"] = self.upgrade_cost
-        if "expected_penalty" not in df.columns:
-            df["expected_penalty"] = df["p_late"] * self.delay_penalty
+        # 每次都用當前參數覆寫（CSV 裡的舊值不可信）
+        df["upgrade_cost"] = self.upgrade_cost
+        df["expected_penalty"] = df["p_late"] * self.delay_penalty
         if "order_id_hash" in df.columns:
             before = len(df)
             df = (
