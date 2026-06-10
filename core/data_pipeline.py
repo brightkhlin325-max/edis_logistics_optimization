@@ -327,6 +327,11 @@ class DataPipeline:
         test_df = X_test.copy()
         test_df[TARGET_COLUMN] = y_test.values
 
+        # 限制測試集數量至最大 1,000 筆訂單以加速運算
+        if len(test_df) > 1000:
+            test_df = test_df.head(1000)
+            meta_test = meta_test.head(1000)
+
         train_path = os.path.join(output_dir, "train_ready.csv")
         test_path = os.path.join(output_dir, "test_ready.csv")
         train_meta_path = os.path.join(output_dir, "train_metadata.csv")

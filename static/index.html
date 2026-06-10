@@ -5,6 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>EDIS Dashboard</title>
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&family=DM+Mono:wght@400;500&family=Noto+Sans+TC:wght@300;400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <style>
 :root {
   --white:   #F4F5F2;
@@ -536,6 +538,28 @@ body {
 .usage-bar-wrap { margin-top: 4px; }
 .usage-bar { height: 4px; background: var(--border); border-radius: 2px; margin-top: 6px; overflow: hidden; }
 .usage-fill { height: 100%; background: var(--navy); border-radius: 2px; transition: width 0.6s ease; }
+
+/* ── Leaflet Map ── */
+#regionMapContainer { border-radius: 0 0 10px 10px; }
+.region-tooltip {
+  background: white !important;
+  border: 1px solid var(--border) !important;
+  border-radius: 8px !important;
+  padding: 10px 14px !important;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.12) !important;
+  font-family: 'DM Sans', 'Noto Sans TC', sans-serif !important;
+}
+.region-tooltip::before { display: none !important; }
+.leaflet-tooltip-top:before, .leaflet-tooltip-bottom:before,
+.leaflet-tooltip-left:before, .leaflet-tooltip-right:before {
+  border: none !important;
+}
+.region-rank-item:hover {
+  border-color: var(--navy) !important;
+  box-shadow: 0 2px 8px rgba(67,112,150,0.15);
+  transform: translateX(3px);
+}
+.leaflet-control-attribution { font-size: 9px !important; opacity: 0.6; }
 </style>
 </head>
 <body>
@@ -622,6 +646,9 @@ body {
         </div>
         <div style="display: flex; gap: 12px; align-items: center;">
           <input type="file" id="csvFileInput" accept=".csv" style="display:none;" onchange="uploadCSV(this)">
+          <a href="/static/template.csv" download="template.csv" class="run-btn" id="downloadTemplateBtn" style="width:auto; padding: 8px 16px; background: var(--steel); border-radius: 6px; font-size:12px; display:flex; align-items:center; gap:6px; text-decoration:none; color:white;">
+            📥 下載範本 CSV
+          </a>
           <button class="run-btn" id="uploadCsvBtn" onclick="document.getElementById('csvFileInput').click()" style="width:auto; padding: 8px 16px; background: var(--navy); border-radius: 6px; font-size:12px; display:flex; align-items:center; gap:6px;">
             📤 匯入待調度訂單 (CSV)
           </button>
@@ -1039,16 +1066,35 @@ body {
     <!-- E. REGIONAL RISK MAP PANEL -->
     <div class="page-section hidden" id="page-region-map">
       <div class="page-header fade-in">
-        <div class="page-title">區域物流延遲風險排行</div>
-        <div class="page-sub">動態計算統計各個目的地區域 (Order Region) 的平均延遲機率</div>
+        <div class="page-title">區域物流延遲風險地圖</div>
+        <div class="page-sub">互動式世界地圖 — 依各目的地區域 (Order Region) 的平均延遲機率著色</div>
       </div>
-      
+
+      <!-- Interactive World Map -->
+      <div class="panel fade-in" style="margin-bottom: 20px;">
+        <div class="panel-head">
+          <div>
+            <div class="panel-title">🌍 全球物流延遲風險熱力圖</div>
+            <div class="panel-subtitle">滑鼠懸停可查看區域詳情，點擊區域可聚焦</div>
+          </div>
+          <div style="display:flex; align-items:center; gap:16px; font-size:11px;">
+            <span style="display:flex; align-items:center; gap:4px;"><span style="width:12px;height:12px;border-radius:3px;background:#c0392b;display:inline-block;"></span> 高風險 ≥56%</span>
+            <span style="display:flex; align-items:center; gap:4px;"><span style="width:12px;height:12px;border-radius:3px;background:#e67e22;display:inline-block;"></span> 中風險 52-56%</span>
+            <span style="display:flex; align-items:center; gap:4px;"><span style="width:12px;height:12px;border-radius:3px;background:#f1c40f;display:inline-block;"></span> 低風險 48-52%</span>
+            <span style="display:flex; align-items:center; gap:4px;"><span style="width:12px;height:12px;border-radius:3px;background:#27ae60;display:inline-block;"></span> 安全 <48%</span>
+            <span style="display:flex; align-items:center; gap:4px;"><span style="width:12px;height:12px;border-radius:3px;background:#d5dbdb;display:inline-block;"></span> 無資料</span>
+          </div>
+        </div>
+        <div id="regionMapContainer" style="height: 520px; width: 100%; background: #aad3df;"></div>
+      </div>
+
+      <!-- Risk Ranking List -->
       <div class="panel fade-in">
         <div class="panel-head">
           <div class="panel-title">地區物流風險分級排行</div>
-          <span class="tag tag-count">23 個地區</span>
+          <span class="tag tag-count" id="regionCountTag">23 個地區</span>
         </div>
-        <div style="padding:20px; max-height:480px; overflow-y:auto; display:flex; flex-direction:column; gap:16px;" id="regionRiskRankList">
+        <div style="padding:20px; max-height:420px; overflow-y:auto; display:flex; flex-direction:column; gap:12px;" id="regionRiskRankList">
           載入中...
         </div>
       </div>
@@ -1246,9 +1292,8 @@ async function uploadCSV(input) {
   formData.append('file', file);
   
   try {
-    const res = await fetch(`${API_BASE}/api/upload-orders`, {
+    const res = await fetch(`${API_BASE}/api/upload`, {
       method: 'POST',
-      headers: { 'X-Role': 'Logistics_Manager' },
       body: formData
     });
     
@@ -1715,49 +1760,10 @@ async function loadModelPerformance() {
 }
 
 // ══ Regional Risk Rank Page ══
-async function loadRegionalRisk() {
-  const container = document.getElementById('regionRiskRankList');
-  container.innerHTML = '載入中...';
-  
-  try {
-    const data = await fetchRegions();
-    if (!data || data.length === 0) {
-      container.innerHTML = '<div style="color:var(--muted); font-size:12px;">無區域延遲數據</div>';
-      return;
-    }
-    
-    container.innerHTML = data.map((r, i) => {
-      const pct = (r.p_late * 100).toFixed(1);
-      const isHigh = r.p_late >= 0.6;
-      const isMed = r.p_late >= 0.3 && r.p_late < 0.6;
-      const statusClass = isHigh ? 'r-high' : isMed ? 'r-med' : 'r-low';
-      const statusText = isHigh ? 'High Risk' : isMed ? 'Medium Risk' : 'Low Risk';
-      const fillTheme = isHigh ? 'fill-high' : isMed ? 'fill-med' : 'fill-low';
-      
-      return `
-        <div style="display: flex; align-items: center; gap: 16px; padding: 12px; background:var(--card); border: 1px solid var(--border); border-radius: 8px;">
-          <div style="font-family:'DM Mono',monospace; font-size:14px; font-weight:600; width:30px; text-align:center; color:var(--muted);">#${i+1}</div>
-          <div style="flex: 1;">
-            <div style="display:flex; justify-content:space-between; margin-bottom:4px; font-size:12.5px; font-weight:500;">
-              <span>${r.order_region}</span>
-              <span style="font-family:'DM Mono',monospace; font-weight:600;">${pct}% 平均延遲率</span>
-            </div>
-            <div style="height:8px; background:var(--bg); border-radius:4px; overflow:hidden; width:100%;">
-              <div class="prob-fill ${fillTheme}" style="height:100%; width:${pct}%;"></div>
-            </div>
-            <div style="font-size:10px; color:var(--muted); margin-top:4px;">統計訂單數: ${r.count.toLocaleString()} 筆</div>
-          </div>
-          <div>
-            <span class="risk-pill ${statusClass}">${statusText}</span>
-          </div>
-        </div>
-      `;
-    }).join('');
-
-  } catch (e) {
-    container.innerHTML = `<div style="color:red; font-size:12px;">載入失敗: ${e.message}</div>`;
-  }
-}
+// (loaded from external module)
+</script>
+<script src="/static/region_map.js"></script>
+<script>
 
 // ══ Explain Modal (LIME Local Attribution) ══
 async function openExplainModal(orderId) {

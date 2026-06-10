@@ -219,7 +219,7 @@ class ShippingOptimizer:
     def _filter_candidates(self, df: pd.DataFrame) -> pd.DataFrame:
         """只保留延遲機率超過門檻的訂單作為候選。"""
         candidates = df[df["p_late"] >= self.risk_threshold].copy()
-        print(f"\n[Step 2] 篩選候選訂單（p_late ≥ {self.risk_threshold}）：{len(candidates):,} 筆")
+        print(f"\n[Step 2] 篩選候選訂單（p_late >= {self.risk_threshold}）：{len(candidates):,} 筆")
 
         candidates["net_benefit"] = candidates["expected_penalty"] - candidates["upgrade_cost"]
         candidates["roi"] = candidates["net_benefit"] / candidates["upgrade_cost"]
