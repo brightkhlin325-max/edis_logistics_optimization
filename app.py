@@ -315,11 +315,12 @@ async def get_predictions(
 
     df = pd.read_csv(PREDICTIONS_PATH)
 
-    # 動態計算 predicted_late 和 is_correct
+    # 動態計算 predicted_late、actual_late 和 is_correct
     if "p_late" in df.columns:
         df["predicted_late"] = (df["p_late"] >= threshold_val).astype(int)
         if "true_label" in df.columns:
-            df["is_correct"] = (df["true_label"].astype(int) == df["predicted_late"])
+            df["actual_late"] = df["true_label"].astype(int)
+            df["is_correct"] = (df["actual_late"] == df["predicted_late"])
         else:
             df["is_correct"] = True
 
@@ -381,6 +382,7 @@ async def get_predictions(
             "risk_bucket": rec.get("risk_bucket"),
             "upgrade_cost": rec.get("upgrade_cost"),
             "expected_penalty": rec.get("expected_penalty"),
+            "actual_late": rec.get("actual_late"),
             "predicted_late": rec.get("predicted_late"),
             "is_correct": rec.get("is_correct"),
             "top_factor": top_factor,
