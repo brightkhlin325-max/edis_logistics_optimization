@@ -56,8 +56,8 @@ XGBOOST_PARAMS = {
 
 # 延遲風險分桶閾值
 RISK_THRESHOLDS = {
-    "High": 0.7,
-    "Medium": 0.4,
+    "High": 0.5,
+    "Medium": 0.3,
     "Low": 0.0,
 }
 
