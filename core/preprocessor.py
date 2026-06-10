@@ -1,7 +1,6 @@
 import pandas as pd
 import numpy as np
 import json
-import xgboost as xgb
 from pathlib import Path
 import hashlib
 
@@ -11,6 +10,14 @@ def predict_uploaded_csv(file_path_or_buffer, mapping_path: Path, model_path: Pa
     feature_mapping.json, aligns features with train_ready.csv column order, 
     and predicts delay probabilities using xgboost_model.json.
     """
+    try:
+        import xgboost as xgb
+    except Exception as exc:
+        raise RuntimeError(
+            "xgboost/OpenMP runtime is unavailable. On macOS, install libomp "
+            "before using CSV upload prediction."
+        ) from exc
+
     # Load mappings
     with open(mapping_path, "r", encoding="utf-8") as f:
         mappings = json.load(f)
