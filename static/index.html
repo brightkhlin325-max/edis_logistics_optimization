@@ -5,6 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>EDIS Dashboard</title>
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&family=DM+Mono:wght@400;500&family=Noto+Sans+TC:wght@300;400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <style>
 :root {
   --white:   #F4F5F2;
@@ -537,25 +539,69 @@ body {
 .usage-bar { height: 4px; background: var(--border); border-radius: 2px; margin-top: 6px; overflow: hidden; }
 .usage-fill { height: 100%; background: var(--navy); border-radius: 2px; transition: width 0.6s ease; }
 
-/* Pulsing Map Markers */
-.map-node {
-  cursor: pointer;
-  transition: transform 0.2s ease;
+/* Leaflet map customization */
+#leafletMap {
+  border-radius: 8px;
+  background-color: #f8f9fa;
+  font-family: 'DM Sans', sans-serif;
+  z-index: 1;
 }
-.map-node:hover {
-  transform: scale(1.3);
+.leaflet-popup-content-wrapper {
+  background: rgba(255, 255, 255, 0.98);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: 0 8px 30px rgba(0,0,0,0.15);
 }
-.pulse-circle {
-  animation: mapPulse 2s infinite ease-out;
+.leaflet-popup-tip {
+  background: rgba(255, 255, 255, 0.98);
+}
+.custom-leaflet-tooltip {
+  background: rgba(255, 255, 255, 0.98) !important;
+  border: 1px solid var(--border) !important;
+  border-radius: 8px !important;
+  box-shadow: 0 8px 25px rgba(0,0,0,0.15) !important;
+  padding: 12px 16px !important;
+  font-family: 'DM Sans', sans-serif !important;
+  color: var(--text) !important;
+  font-size: 12px !important;
+}
+.custom-leaflet-tooltip::before {
+  border-right-color: rgba(255, 255, 255, 0.98) !important;
+}
+/* Leaflet custom div icon marker styles */
+.map-pulse-marker {
+  position: relative;
+  width: 20px;
+  height: 20px;
+}
+.map-pulse-dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  position: absolute;
+  top: 4px;
+  left: 4px;
+  box-shadow: 0 0 8px rgba(0,0,0,0.2);
+}
+.map-pulse-ring {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  border: 2px solid;
+  position: absolute;
+  top: 0;
+  left: 0;
+  animation: leafletPulse 2s infinite ease-out;
   transform-origin: center;
+  box-sizing: border-box;
 }
-@keyframes mapPulse {
+@keyframes leafletPulse {
   0% {
-    r: 6px;
-    opacity: 0.8;
+    transform: scale(0.6);
+    opacity: 1;
   }
   100% {
-    r: 20px;
+    transform: scale(2.0);
     opacity: 0;
   }
 }
@@ -1081,39 +1127,9 @@ body {
             </div>
           </div>
           
-          <div style="position: relative; flex: 1; background: #0c1a30; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; display: flex; align-items: center; justify-content: center; padding: 10px;">
-            <!-- Grid Background -->
-            <svg id="worldMapSvg" viewBox="0 0 1000 500" style="width: 100%; height: auto; display: block;">
-              <!-- Patterns / Grids -->
-              <defs>
-                <pattern id="mapGrid" width="20" height="20" patternUnits="userSpaceOnUse">
-                  <path d="M 20 0 L 0 0 0 20" fill="none" stroke="rgba(255,255,255,0.03)" stroke-width="1"/>
-                </pattern>
-              </defs>
-              <rect width="1000" height="500" fill="url(#mapGrid)" />
-              
-              <!-- Stylized Continents -->
-              <g fill="rgba(255,255,255,0.06)" stroke="rgba(255,255,255,0.12)" stroke-width="1.5">
-                <!-- North America -->
-                <path d="M 80,100 L 260,100 L 280,120 L 300,160 L 280,200 L 240,220 L 230,240 L 200,240 L 190,260 L 160,250 L 140,210 L 120,180 Z" />
-                <!-- South America -->
-                <path d="M 250,280 L 290,280 L 320,330 L 300,420 L 270,460 L 260,460 L 250,380 L 230,320 Z" />
-                <!-- Europe & Asia -->
-                <path d="M 420,130 L 480,100 L 520,80 L 600,80 L 700,90 L 800,100 L 880,100 L 900,120 L 920,160 L 920,220 L 860,260 L 840,300 L 780,310 L 760,280 L 720,280 L 680,240 L 640,220 L 580,240 L 520,240 L 460,200 L 420,200 Z" />
-                <!-- Africa -->
-                <path d="M 450,220 L 520,220 L 560,260 L 580,300 L 580,350 L 540,420 L 520,420 L 480,340 L 440,280 Z" />
-                <!-- Australia -->
-                <path d="M 780,360 L 840,360 L 860,390 L 840,420 L 790,410 Z" />
-              </g>
-              
-              <!-- Region Nodes Group -->
-              <g id="mapNodesGroup"></g>
-            </svg>
-            
-            <!-- Map Tooltip (Floating card) -->
-            <div id="mapTooltip" style="position: absolute; display: none; pointer-events: none; background: rgba(255, 255, 255, 0.98); border: 1px solid var(--border); border-radius: 8px; padding: 12px 16px; box-shadow: 0 8px 30px rgba(0,0,0,0.25); z-index: 100; min-width: 180px; transition: opacity 0.15s; font-family: 'DM Sans', sans-serif;">
-              <!-- Filled by JS -->
-            </div>
+          <div style="position: relative; flex: 1; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; display: flex; align-items: stretch; justify-content: stretch; min-height: 480px;">
+            <!-- Leaflet Map Container -->
+            <div id="leafletMap" style="width: 100%; height: 100%; min-height: 480px; flex: 1;"></div>
           </div>
         </div>
         
@@ -1195,6 +1211,8 @@ const API_BASE = 'http://localhost:8000';
 
 // ══ State ══
 let currentRole = 'viewer';
+let leafletMapInstance = null;
+let mapMarkersGroup = null;
 let currentPage = 1;
 const limit = 50;
 let totalPredictionsCount = 0;
@@ -1231,6 +1249,9 @@ function showPage(pageId) {
     loadModelPerformance();
   } else if (pageId === 'region-map') {
     loadRegionalRisk();
+    setTimeout(() => {
+      if (leafletMapInstance) leafletMapInstance.invalidateSize();
+    }, 100);
   }
 }
 
@@ -1791,41 +1812,38 @@ async function loadModelPerformance() {
 }
 
 // ══ Regional Risk Rank Page ══
-// ══ Region coordinates mapping for SVG World Map ══
+// ══ Region coordinates mapping (Lat/Lng) for Leaflet Map ══
 const REGION_COORDS = {
-  "Canada": { x: 190, y: 110 },
-  "West of USA ": { x: 140, y: 160 },
-  "US Center ": { x: 180, y: 160 },
-  "East of USA": { x: 220, y: 160 },
-  "South of  USA ": { x: 180, y: 185 },
-  "Central America": { x: 190, y: 225 },
-  "Caribbean": { x: 245, y: 225 },
-  "South America": { x: 280, y: 360 },
-  "Northern Europe": { x: 490, y: 110 },
-  "Western Europe": { x: 470, y: 160 },
-  "Southern Europe": { x: 500, y: 190 },
-  "Eastern Europe": { x: 570, y: 140 },
-  "North Africa": { x: 480, y: 250 },
-  "West Africa": { x: 450, y: 300 },
-  "Central Africa": { x: 510, y: 330 },
-  "East Africa": { x: 555, y: 320 },
-  "Southern Africa": { x: 525, y: 390 },
-  "West Asia": { x: 580, y: 220 },
-  "Central Asia": { x: 660, y: 160 },
-  "South Asia": { x: 710, y: 230 },
-  "Eastern Asia": { x: 790, y: 180 },
-  "Southeast Asia": { x: 795, y: 280 },
-  "Oceania": { x: 830, y: 390 }
+  "Canada": [56.1304, -106.3468],
+  "West of USA ": [37.7749, -122.4194],
+  "US Center ": [39.8283, -98.5795],
+  "East of USA": [40.7128, -74.0060],
+  "South of  USA ": [32.7767, -96.7970],
+  "Central America": [23.6345, -102.5528],
+  "Caribbean": [21.5218, -77.7812],
+  "South America": [-14.2350, -51.9253],
+  "Northern Europe": [62.0079, 17.6389],
+  "Western Europe": [46.2276, 2.2137],
+  "Southern Europe": [40.4637, -3.7492],
+  "Eastern Europe": [55.7558, 37.6173],
+  "North Africa": [26.3351, 17.2283],
+  "West Africa": [12.2383, -1.5616],
+  "Central Africa": [-0.2280, 15.8277],
+  "East Africa": [1.1528, 37.9083],
+  "Southern Africa": [-30.5595, 22.9375],
+  "West Asia": [29.2985, 42.5510],
+  "Central Asia": [48.0196, 66.9237],
+  "South Asia": [20.5937, 78.9629],
+  "Eastern Asia": [35.8617, 104.1954],
+  "Southeast Asia": [-0.7893, 113.9213],
+  "Oceania": [-25.2744, 133.7751]
 };
 
 // ══ Regional Risk Rank & Map Page ══
 async function loadRegionalRisk() {
   const container = document.getElementById('regionRiskRankList');
-  const nodesGroup = document.getElementById('mapNodesGroup');
-  const tooltip = document.getElementById('mapTooltip');
   
   container.innerHTML = '載入中...';
-  if (nodesGroup) nodesGroup.innerHTML = '';
   
   try {
     const data = await fetchRegions();
@@ -1834,7 +1852,26 @@ async function loadRegionalRisk() {
       return;
     }
     
-    // 1. Render ranking list
+    // 1. Initialize Leaflet Map Instance once
+    if (!leafletMapInstance) {
+      leafletMapInstance = L.map('leafletMap', {
+        minZoom: 1,
+        maxZoom: 8,
+        attributionControl: false
+      }).setView([15, 0], 2);
+      
+      // CartoDB Positron light clean tile layer
+      L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
+        subdomains: 'abcd',
+        maxZoom: 20
+      }).addTo(leafletMapInstance);
+      
+      mapMarkersGroup = L.layerGroup().addTo(leafletMapInstance);
+    } else {
+      mapMarkersGroup.clearLayers();
+    }
+    
+    // 2. Render ranking list
     container.innerHTML = data.map((r, i) => {
       const pct = (r.p_late * 100).toFixed(1);
       const isHigh = r.p_late >= 0.5;
@@ -1864,114 +1901,83 @@ async function loadRegionalRisk() {
       `;
     }).join('');
     
-    // 2. Render SVG map hot-spots
-    if (nodesGroup) {
-      data.forEach(r => {
-        const coords = REGION_COORDS[r.order_region];
-        if (!coords) return;
-        
-        const isHigh = r.p_late >= 0.5;
-        const isMed = r.p_late >= 0.35 && r.p_late < 0.5;
-        const color = isHigh ? '#c0392b' : isMed ? '#e67e22' : '#27ae60';
-        const statusText = isHigh ? '高風險' : isMed ? '中風險' : '低風險';
-        const textClass = isHigh ? 'r-high' : isMed ? 'r-med' : 'r-low';
-        
-        // Create SVG Group element for node
-        const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
-        g.setAttribute('class', 'map-node');
-        
-        // Pulsing radar ring
-        const pulse = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
-        pulse.setAttribute('cx', coords.x);
-        pulse.setAttribute('cy', coords.y);
-        pulse.setAttribute('r', '8');
-        pulse.setAttribute('class', 'pulse-circle');
-        pulse.setAttribute('fill', 'none');
-        pulse.setAttribute('stroke', color);
-        pulse.setAttribute('stroke-width', '1.5');
-        
-        // Inner solid dot
-        const dot = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
-        dot.setAttribute('cx', coords.x);
-        dot.setAttribute('cy', coords.y);
-        dot.setAttribute('r', '6');
-        dot.setAttribute('fill', color);
-        
-        // Invisible hover trigger area (larger radius for easy hovering)
-        const trigger = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
-        trigger.setAttribute('cx', coords.x);
-        trigger.setAttribute('cy', coords.y);
-        trigger.setAttribute('r', '15');
-        trigger.setAttribute('fill', 'transparent');
-        
-        g.appendChild(pulse);
-        g.appendChild(dot);
-        g.appendChild(trigger);
-        
-        // Tooltip hover actions
-        trigger.addEventListener('mouseenter', (e) => {
-          tooltip.style.display = 'block';
-          tooltip.innerHTML = `
-            <div style="font-weight: 700; color: var(--navy); font-size: 13px; margin-bottom: 2px;">${r.order_region}</div>
-            <div style="font-size: 11px; color: var(--muted); margin-bottom: 8px;">地區物流指標</div>
-            <div style="display: flex; justify-content: space-between; font-size: 12px; margin-bottom: 4px; gap: 12px;">
-              <span>風險狀態:</span>
-              <span class="risk-pill ${textClass}" style="padding: 1px 6px; font-size: 10px; font-weight:600;">${statusText}</span>
-            </div>
-            <div style="display: flex; justify-content: space-between; font-size: 12px; margin-bottom: 4px;">
-              <span>平均延遲率:</span>
-              <span style="font-weight: 700; color: ${color}; font-family:'DM Mono',monospace;">${(r.p_late * 100).toFixed(1)}%</span>
-            </div>
-            <div style="display: flex; justify-content: space-between; font-size: 12px;">
-              <span>統計訂單量:</span>
-              <span style="font-weight: 600; font-family:'DM Mono',monospace;">${r.count.toLocaleString()} 筆</span>
-            </div>
-          `;
-        });
-        
-        trigger.addEventListener('mousemove', (e) => {
-          // Position relative to map container
-          const mapContainer = nodesGroup.closest('svg').parentElement;
-          const rect = mapContainer.getBoundingClientRect();
-          const tooltipWidth = tooltip.offsetWidth || 180;
-          const tooltipHeight = tooltip.offsetHeight || 100;
-          
-          let x = e.clientX - rect.left + 15;
-          let y = e.clientY - rect.top + 15;
-          
-          // boundary checks
-          if (x + tooltipWidth > rect.width) x = e.clientX - rect.left - tooltipWidth - 15;
-          if (y + tooltipHeight > rect.height) y = e.clientY - rect.top - tooltipHeight - 15;
-          
-          tooltip.style.left = `${x}px`;
-          tooltip.style.top = `${y}px`;
-        });
-        
-        trigger.addEventListener('mouseleave', () => {
-          tooltip.style.display = 'none';
-        });
-        
-        // Click action: Link to ranking item on the right
-        trigger.addEventListener('click', () => {
-          const safeId = `rank-item-${r.order_region.replace(/\s+/g, '-')}`;
-          const rankEl = document.getElementById(safeId);
-          if (rankEl) {
-            // Remove highlight from all items
-            document.querySelectorAll('.rank-card-item').forEach(el => {
-              el.style.borderColor = 'var(--border)';
-              el.style.background = 'var(--card)';
-            });
-            // Highlight selected item
-            rankEl.style.borderColor = color;
-            rankEl.style.background = isHigh ? '#fdf2f2' : isMed ? '#fffaf4' : '#f4fbf7';
-            // Scroll into view
-            rankEl.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-          }
-        });
-        
-        nodesGroup.appendChild(g);
+    // 3. Render Leaflet custom pulsing markers
+    data.forEach(r => {
+      const coords = REGION_COORDS[r.order_region];
+      if (!coords) return;
+      
+      const isHigh = r.p_late >= 0.5;
+      const isMed = r.p_late >= 0.35 && r.p_late < 0.5;
+      const color = isHigh ? '#c0392b' : isMed ? '#e67e22' : '#27ae60';
+      const statusText = isHigh ? '高風險' : isMed ? '中風險' : '低風險';
+      const textClass = isHigh ? 'r-high' : isMed ? 'r-med' : 'r-low';
+      
+      // HTML for divIcon pulsing radar
+      const iconHtml = `
+        <div class="map-pulse-marker">
+          <div class="map-pulse-ring" style="border-color: ${color};"></div>
+          <div class="map-pulse-dot" style="background-color: ${color};"></div>
+        </div>
+      `;
+      
+      const customIcon = L.divIcon({
+        html: iconHtml,
+        className: '',
+        iconSize: [20, 20],
+        iconAnchor: [10, 10]
       });
-    }
+      
+      // Popup Tooltip HTML Content
+      const tooltipHtml = `
+        <div style="font-family: 'DM Sans', sans-serif;">
+          <div style="font-weight: 700; color: var(--navy); font-size: 13px; margin-bottom: 2px;">${r.order_region}</div>
+          <div style="font-size: 10px; color: var(--muted); margin-bottom: 8px;">地區物流指標</div>
+          <div style="display: flex; justify-content: space-between; font-size: 11px; margin-bottom: 4px; gap: 12px;">
+            <span>風險狀態:</span>
+            <span class="risk-pill ${textClass}" style="padding: 1px 6px; font-size: 9px; font-weight:600;">${statusText}</span>
+          </div>
+          <div style="display: flex; justify-content: space-between; font-size: 11px; margin-bottom: 4px;">
+            <span>平均延遲率:</span>
+            <span style="font-weight: 700; color: ${color}; font-family:'DM Mono',monospace;">${(r.p_late * 100).toFixed(1)}%</span>
+          </div>
+          <div style="display: flex; justify-content: space-between; font-size: 11px;">
+            <span>統計訂單量:</span>
+            <span style="font-weight: 600; font-family:'DM Mono',monospace;">${r.count.toLocaleString()} 筆</span>
+          </div>
+        </div>
+      `;
+      
+      // Create Marker
+      const marker = L.marker(coords, { icon: customIcon });
+      
+      // Bind detailed hover tooltip
+      marker.bindTooltip(tooltipHtml, {
+        className: 'custom-leaflet-tooltip',
+        direction: 'right',
+        offset: [10, 0],
+        opacity: 0.98
+      });
+      
+      // Bind click action
+      marker.on('click', () => {
+        const safeId = `rank-item-${r.order_region.replace(/\s+/g, '-')}`;
+        const rankEl = document.getElementById(safeId);
+        if (rankEl) {
+          // Reset highlights
+          document.querySelectorAll('.rank-card-item').forEach(el => {
+            el.style.borderColor = 'var(--border)';
+            el.style.background = 'var(--card)';
+          });
+          // Highlight selected
+          rankEl.style.borderColor = color;
+          rankEl.style.background = isHigh ? '#fdf2f2' : isMed ? '#fffaf4' : '#f4fbf7';
+          // Scroll list
+          rankEl.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        }
+      });
+      
+      mapMarkersGroup.addLayer(marker);
+    });
     
   } catch (e) {
     container.innerHTML = `<div style="color:red; font-size:12px;">載入失敗: ${e.message}</div>`;
