@@ -82,6 +82,15 @@ echo [INFO] Conda environment 'Fastapp' is ready.
 :: 5. Check pipeline outputs and run model training if needed
 if not exist "data\processed\predictions.csv" (
     echo [INFO] predictions.csv not found. Running pipeline and training model...
+    goto run_training_pipeline
+)
+if not exist "data\processed\val_ready.csv" (
+    echo [INFO] val_ready.csv not found. Rebuilding train/validation/test outputs...
+    goto run_training_pipeline
+)
+goto training_outputs_ready
+
+:run_training_pipeline
     set PYTHONIOENCODING=utf-8
     
     "%ENV_PYTHON%" core/data_pipeline.py
@@ -96,9 +105,12 @@ if not exist "data\processed\predictions.csv" (
         pause
         exit /b 1
     )
-) else (
-    echo [INFO] predictions.csv exists. Skipping training.
-)
+    goto after_training_check
+
+:training_outputs_ready
+echo [INFO] predictions.csv and val_ready.csv exist. Skipping training.
+
+:after_training_check
 
 if /I "%~1"=="tune-threshold" (
     echo [INFO] Running threshold tuning report...

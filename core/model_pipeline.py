@@ -94,6 +94,7 @@ class ModelPipeline:
         self,
         train_path: str,
         test_path: str,
+        val_path: str = None,
         output_dir: str = "data/processed",
         model_dir: str = "models",
     ) -> dict:
@@ -112,16 +113,24 @@ class ModelPipeline:
         print("EDIS ModelPipeline — 開始執行")
         print("=" * 60)
 
-        # 載入訓練/測試資料
+        # 載入訓練/驗證/測試資料
         X_train, y_train = self._load_data(train_path)
         X_test, y_test = self._load_data(test_path)
+        if val_path is None:
+            candidate_val_path = os.path.join(os.path.dirname(test_path), "val_ready.csv")
+            val_path = candidate_val_path if os.path.exists(candidate_val_path) else None
+        X_val, y_val = self._load_data(val_path) if val_path else (X_test, y_test)
         self.feature_names = list(X_train.columns)
 
-        # 訓練
-        self.train(X_train, y_train, X_test, y_test)
+        # 訓練：使用 validation set 做 early stopping，避免 test set 參與訓練流程
+        self.train(X_train, y_train, X_val, y_val)
 
-        # 評估
+        # 評估：test set 只用於最後評估與 predictions.csv
         self.eval_metrics = self.evaluate(X_test, y_test)
+        self.eval_metrics["evaluation_protocol"] = {
+            "validation_used_for_early_stopping": bool(val_path),
+            "test_used_for_final_evaluation": True,
+        }
 
         # 輸出 predictions.csv
         pred_path = os.path.join(output_dir, "predictions.csv")
@@ -312,6 +321,7 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser(description="EDIS ModelPipeline")
     parser.add_argument("--train", default="data/processed/train_ready.csv")
+    parser.add_argument("--val", default="data/processed/val_ready.csv")
     parser.add_argument("--test", default="data/processed/test_ready.csv")
     parser.add_argument("--output", default="data/processed")
     parser.add_argument("--model-dir", default="models")
@@ -320,6 +330,7 @@ if __name__ == "__main__":
     mp = ModelPipeline()
     mp.run(
         train_path=args.train,
+        val_path=args.val if os.path.exists(args.val) else None,
         test_path=args.test,
         output_dir=args.output,
         model_dir=args.model_dir,
