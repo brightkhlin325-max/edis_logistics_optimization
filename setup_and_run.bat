@@ -100,6 +100,22 @@ if not exist "data\processed\predictions.csv" (
     echo [INFO] predictions.csv exists. Skipping training.
 )
 
+if /I "%~1"=="tune-threshold" (
+    echo [INFO] Running threshold tuning report...
+    "%ENV_PYTHON%" scripts/tune_threshold.py
+    if %errorlevel% neq 0 (
+        echo [ERROR] Threshold tuning failed!
+        pause
+        exit /b 1
+    )
+    echo [INFO] Threshold tuning completed.
+    echo [INFO] Outputs:
+    echo   data\processed\threshold_tuning.csv
+    echo   data\processed\threshold_tuning_summary.json
+    pause
+    exit /b 0
+)
+
 :: 6. Install additional packages
 echo [INFO] Installing required packages...
 "%ENV_PYTHON%" -m pip install passlib bcrypt python-multipart --quiet

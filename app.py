@@ -103,6 +103,44 @@ def make_display_order_id(order_id: object) -> str:
     return f"ORD-{compact[:6]}" if compact else "ORD-UNKNOWN"
 
 
+def _safe_div(numerator: float, denominator: float) -> float:
+    return numerator / denominator if denominator else 0.0
+
+
+def _threshold_metrics(
+    actual: pd.Series,
+    probability: pd.Series,
+    threshold: float,
+    upgrade_cost: float = 80.0,
+    delay_penalty: float = 250.0,
+) -> dict:
+    predicted = probability >= threshold
+    tp = int(((actual == 1) & predicted).sum())
+    tn = int(((actual == 0) & (~predicted)).sum())
+    fp = int(((actual == 0) & predicted).sum())
+    fn = int(((actual == 1) & (~predicted)).sum())
+
+    precision = _safe_div(tp, tp + fp)
+    recall = _safe_div(tp, tp + fn)
+    f1 = _safe_div(2 * precision * recall, precision + recall)
+    selected_count = int(predicted.sum())
+    expected_cost = (fp * upgrade_cost) + (fn * delay_penalty)
+
+    return {
+        "threshold": round(float(threshold), 4),
+        "precision": round(float(precision), 4),
+        "recall": round(float(recall), 4),
+        "f1": round(float(f1), 4),
+        "tp": tp,
+        "tn": tn,
+        "fp": fp,
+        "fn": fn,
+        "selected_count": selected_count,
+        "upgrade_spend": round(float(selected_count * upgrade_cost), 2),
+        "expected_cost": round(float(expected_cost), 2),
+    }
+
+
 # ── RBAC 工具函數 ─────────────────────────────────────────────────────────────
 
 def get_role(x_role: Optional[str]) -> str:
@@ -186,7 +224,7 @@ async def root():
         "system": "EDIS — DataCo 物流延遲預測與最佳化調度系統",
         "version": "1.0.0",
         "docs": "/docs",
-        "endpoints": ["/api/metrics", "/api/predict", "/api/executive-summary", "/api/scenario-analysis", "/api/optimize", "/api/upload"],
+        "endpoints": ["/api/metrics", "/api/threshold-tuning", "/api/predict", "/api/executive-summary", "/api/scenario-analysis", "/api/optimize", "/api/upload"],
     }
 
 
@@ -309,6 +347,59 @@ async def get_metrics(threshold: float = 0.5):
         "high_risk_orders": metrics.get("high_risk_orders", 128),
         "confusion_matrix": metrics.get("confusion_matrix"),
         "feature_importance": metrics.get("feature_importance"),
+    }
+
+
+@app.get("/api/threshold-tuning")
+async def get_threshold_tuning(
+    current_threshold: float = 0.5,
+    start: float = 0.1,
+    stop: float = 0.9,
+    step: float = 0.05,
+    upgrade_cost: float = 80.0,
+    delay_penalty: float = 250.0,
+):
+    """
+    Return threshold candidates and recommendations for the dashboard slider.
+    """
+    if step <= 0:
+        raise HTTPException(status_code=400, detail="step must be greater than 0.")
+    if start < 0 or stop > 1 or start > stop:
+        raise HTTPException(status_code=400, detail="threshold range must stay within 0..1.")
+    if not PREDICTIONS_PATH.exists():
+        raise HTTPException(status_code=404, detail="predictions.csv not found.")
+
+    df = pd.read_csv(PREDICTIONS_PATH)
+    if "true_label" not in df.columns or "p_late" not in df.columns:
+        raise HTTPException(status_code=400, detail="predictions.csv must include true_label and p_late.")
+
+    actual = df["true_label"].astype(int)
+    probability = pd.to_numeric(df["p_late"], errors="coerce").fillna(0.0)
+
+    thresholds = []
+    threshold = start
+    while threshold <= stop + 1e-9:
+        thresholds.append(round(threshold, 10))
+        threshold += step
+
+    rows = [
+        _threshold_metrics(actual, probability, threshold, upgrade_cost, delay_penalty)
+        for threshold in thresholds
+    ]
+    current = _threshold_metrics(actual, probability, current_threshold, upgrade_cost, delay_penalty)
+    best_f1 = max(rows, key=lambda row: (row["f1"], row["recall"], row["precision"]))
+    best_expected_cost = min(rows, key=lambda row: (row["expected_cost"], row["fn"], row["fp"]))
+
+    return {
+        "row_count": int(len(df)),
+        "current": current,
+        "best_f1": best_f1,
+        "best_expected_cost": best_expected_cost,
+        "thresholds": rows,
+        "cost_model": {
+            "upgrade_cost": upgrade_cost,
+            "delay_penalty": delay_penalty,
+        },
     }
 
 

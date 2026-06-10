@@ -757,6 +757,36 @@ body {
         </div>
       </div>
 
+      <!-- Threshold tuning recommendation -->
+      <div class="panel fade-in" id="thresholdTuningPanel" style="margin-bottom:24px; padding:16px 20px; display:none;">
+        <div style="display:flex; justify-content:space-between; gap:16px; align-items:flex-start; flex-wrap:wrap; margin-bottom:14px;">
+          <div>
+            <div class="panel-title">Threshold Tuning 建議</div>
+            <div class="panel-subtitle">依目前 predictions.csv 即時計算 Precision、Recall、F1 與預估成本</div>
+          </div>
+          <div id="thresholdTuningNote" style="font-size:12px; color:var(--muted);"></div>
+        </div>
+        <div style="display:grid; grid-template-columns:repeat(3, minmax(0, 1fr)); gap:12px;" id="thresholdTuningCards">
+          <div class="stat-box">
+            <div class="stat-label">目前門檻</div>
+            <div class="stat-value" id="tuneCurrentThreshold">--</div>
+            <div class="exec-note" id="tuneCurrentMetrics">載入中...</div>
+          </div>
+          <div class="stat-box">
+            <div class="stat-label">F1 最佳</div>
+            <div class="stat-value green" id="tuneBestF1Threshold">--</div>
+            <div class="exec-note" id="tuneBestF1Metrics">載入中...</div>
+            <button class="run-btn" onclick="applyThresholdRecommendation('f1')" style="margin-top:10px; padding:7px 10px; font-size:12px;">套用 F1 最佳</button>
+          </div>
+          <div class="stat-box">
+            <div class="stat-label">成本最佳</div>
+            <div class="stat-value warm" id="tuneBestCostThreshold">--</div>
+            <div class="exec-note" id="tuneBestCostMetrics">載入中...</div>
+            <button class="run-btn" onclick="applyThresholdRecommendation('cost')" style="margin-top:10px; padding:7px 10px; font-size:12px; background:var(--warm);">套用成本最佳</button>
+          </div>
+        </div>
+      </div>
+
       <!-- KPI -->
       <div class="kpi-row fade-in">
         <div class="kpi-card">
@@ -1321,6 +1351,7 @@ let currentPage = 1;
 const limit = 50;
 let totalPredictionsCount = 0;
 let threshold = 0.50; // Dynamic threshold
+let lastThresholdTuning = null;
 
 // Risk List page state
 let currentRiskListPage = 1;
@@ -1361,6 +1392,13 @@ function showPage(pageId) {
 async function fetchMetrics() {
   const d = await fetch(`${API_BASE}/api/metrics?threshold=${threshold}`).then(r => r.json());
   return d;
+}
+
+async function fetchThresholdTuning() {
+  const url = `${API_BASE}/api/threshold-tuning?current_threshold=${threshold}`;
+  const res = await fetch(url);
+  if (!res.ok) throw new Error('Threshold tuning unavailable');
+  return res.json();
 }
 
 async function fetchRegions() {
@@ -1518,6 +1556,41 @@ function renderMetrics(d) {
   const expectedLoss = totalPredictionsCount * d.late_rate * 250.0; 
   document.getElementById('kpiExpectedPenaltyLoss').textContent = '$' + Math.round(expectedLoss).toLocaleString();
   document.getElementById('kpiExpectedDesc').textContent = `平均延遲率 ${(d.late_rate * 100).toFixed(1)}%`;
+}
+
+function formatTuneMetrics(row) {
+  if (!row) return '無資料';
+  return `Precision ${(row.precision * 100).toFixed(1)}% · Recall ${(row.recall * 100).toFixed(1)}% · F1 ${row.f1.toFixed(4)} · 成本 $${Math.round(row.expected_cost).toLocaleString()}`;
+}
+
+function renderThresholdTuning(data) {
+  lastThresholdTuning = data;
+  const panel = document.getElementById('thresholdTuningPanel');
+  if (!panel || !data) return;
+  panel.style.display = 'block';
+
+  document.getElementById('thresholdTuningNote').textContent =
+    `${data.row_count.toLocaleString()} 筆資料 · 升級成本 $${data.cost_model.upgrade_cost} · 漏判成本 $${data.cost_model.delay_penalty}`;
+
+  document.getElementById('tuneCurrentThreshold').textContent = data.current.threshold.toFixed(2);
+  document.getElementById('tuneCurrentMetrics').textContent = formatTuneMetrics(data.current);
+
+  document.getElementById('tuneBestF1Threshold').textContent = data.best_f1.threshold.toFixed(2);
+  document.getElementById('tuneBestF1Metrics').textContent = formatTuneMetrics(data.best_f1);
+
+  document.getElementById('tuneBestCostThreshold').textContent = data.best_expected_cost.threshold.toFixed(2);
+  document.getElementById('tuneBestCostMetrics').textContent = formatTuneMetrics(data.best_expected_cost);
+}
+
+function applyThresholdRecommendation(type) {
+  if (!lastThresholdTuning) return;
+  const selected = type === 'cost'
+    ? lastThresholdTuning.best_expected_cost
+    : lastThresholdTuning.best_f1;
+  threshold = parseFloat(selected.threshold);
+  document.getElementById('thresholdSlider').value = threshold.toFixed(2);
+  document.getElementById('thresholdValDisplay').textContent = threshold.toFixed(2);
+  refreshDashboard();
 }
 
 function renderExecutiveSummary(d) {
@@ -2047,10 +2120,11 @@ function closeExplainModal() {
 // ══ Dashboard Refresh Helper ══
 async function refreshDashboard() {
   try {
-    const [p, executive, scenarios] = await Promise.all([
+    const [p, executive, scenarios, tuning] = await Promise.all([
       fetchPredictions(currentPage),
       fetchExecutiveSummary(),
-      fetchScenarioAnalysis()
+      fetchScenarioAnalysis(),
+      fetchThresholdTuning().catch(() => null)
     ]);
     if (p) {
       totalPredictionsCount = p.count || 0;
@@ -2061,6 +2135,7 @@ async function refreshDashboard() {
     }
     if (executive) renderExecutiveSummary(executive);
     if (scenarios) renderBudgetScenarios(scenarios);
+    if (tuning) renderThresholdTuning(tuning);
   } catch (e) {
     console.error('Failed to refresh dashboard', e);
   }
