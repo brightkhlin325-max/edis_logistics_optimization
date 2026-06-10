@@ -556,6 +556,9 @@ body {
     <a class="nav-item" id="nav-risk-list" onclick="showPage('risk-list')">
       <i class="nav-icon">◈</i> 風險訂單列表
     </a>
+    <a class="nav-item" id="nav-threshold" onclick="showPage('threshold')">
+      <i class="nav-icon">◐</i> 風險門檻設定
+    </a>
     <a class="nav-item" id="nav-optimization" onclick="showPage('optimization')">
       <i class="nav-icon">◉</i> 最佳化調度
     </a>
@@ -611,69 +614,46 @@ body {
         <div class="page-sub">DataCo Supply Chain Dataset · XGBoost + PuLP 最佳化引擎</div>
       </div>
 
-      <!-- Control Bar (Threshold Slider & CSV Upload) -->
-      <div class="panel fade-in" style="margin-bottom: 24px; padding: 16px 20px; background: var(--card); border: 1px solid var(--border); border-radius: 10px; display: flex; flex-wrap: wrap; gap: 24px; align-items: center; justify-content: space-between;">
-        <div style="flex: 1; min-width: 280px; display: flex; align-items: center; gap: 16px;">
-          <div style="flex-shrink: 0;">
-            <label class="field-label" style="font-weight:600; font-size:11px; margin-bottom:2px;">延遲判定門檻值 (Threshold)</label>
-            <span style="font-size: 15px; font-weight: 700; color: var(--navy); font-family:'DM Mono',monospace;" id="thresholdValDisplay">0.50</span>
-          </div>
-          <input type="range" id="thresholdSlider" min="0.10" max="0.90" step="0.05" value="0.50" oninput="updateThreshold(this.value)" style="flex: 1; height: 6px; background: var(--border); border-radius: 3px; outline: none; cursor: pointer;">
-        </div>
-        <div style="display: flex; gap: 12px; align-items: center;">
-          <input type="file" id="csvFileInput" accept=".csv" style="display:none;" onchange="uploadCSV(this)">
-          <button class="run-btn" id="uploadCsvBtn" onclick="document.getElementById('csvFileInput').click()" style="width:auto; padding: 8px 16px; background: var(--navy); border-radius: 6px; font-size:12px; display:flex; align-items:center; gap:6px;">
-            📤 匯入待調度訂單 (CSV)
-          </button>
-          <button class="run-btn hidden" id="resetCsvBtn" onclick="resetCSV()" style="width:auto; padding: 8px 16px; background: #e07b54; border-radius: 6px; font-size:12px; display:none;">
-            🔄 還原驗證集
-          </button>
-          <span id="lockedUploadBox" class="locked-box" style="font-size:11px; padding:6px 12px; border-radius:6px; margin:0;">
-            🔒 需 Manager 權限以匯入 CSV
-          </span>
-        </div>
-      </div>
-
       <!-- KPI -->
       <div class="kpi-row fade-in">
         <div class="kpi-card">
-          <div class="kpi-icon-wrap icon-steel">📦</div>
+          <div class="kpi-icon-wrap icon-warm">📦</div>
           <div class="kpi-info">
-            <div class="kpi-label">待處理訂單總數</div>
-            <div class="kpi-value steel" id="kpiTotalOrders">—</div>
-            <div class="kpi-change" id="kpiTotalDesc">載入中...</div>
+            <div class="kpi-label">整體延遲率</div>
+            <div class="kpi-value warm" id="kpiLateRate">—</div>
+            <div class="kpi-change" id="kpiLateDesc">載入中...</div>
           </div>
         </div>
         <div class="kpi-card">
-          <div class="kpi-icon-wrap icon-warm">⚠️</div>
+          <div class="kpi-icon-wrap icon-navy">🧠</div>
           <div class="kpi-info">
-            <div class="kpi-label">預估延遲訂單數</div>
-            <div class="kpi-value warm" id="kpiPredictedLateOrders">—</div>
-            <div class="kpi-change" id="kpiPredictedDesc">載入中...</div>
+            <div class="kpi-label">模型 ROC-AUC</div>
+            <div class="kpi-value navy" id="kpiAuc">—</div>
+            <div class="kpi-change" id="kpiAucDesc">載入中...</div>
           </div>
         </div>
         <div class="kpi-card">
-          <div class="kpi-icon-wrap icon-navy">💸</div>
+          <div class="kpi-icon-wrap icon-steel">⚠️</div>
           <div class="kpi-info">
-            <div class="kpi-label">預期延遲罰金損失</div>
-            <div class="kpi-value navy" id="kpiExpectedPenaltyLoss">—</div>
-            <div class="kpi-change" id="kpiExpectedDesc">載入中...</div>
+            <div class="kpi-label">高風險訂單數</div>
+            <div class="kpi-value steel" id="kpiHighRisk">—</div>
+            <div class="kpi-change" id="kpiHighDesc">載入中...</div>
           </div>
         </div>
       </div>
 
       <!-- Two-col -->
       <div class="grid-2 fade-in">
-        <!-- Boss Q&A panel -->
+        <!-- Risk table -->
         <div class="panel">
           <div class="panel-head">
             <div>
-              <div class="panel-title" style="font-size:14px; font-weight:600; display:flex; align-items:center; gap:6px;">👑 老闆直觀問答區</div>
-              <div class="panel-subtitle">回答「哪些會延遲？」、「原因為何？」及「如何決策？」</div>
+              <div class="panel-title">延遲風險訂單列表</div>
+              <div class="panel-subtitle">p_late > 0.3 的訂單</div>
             </div>
-            <span class="tag tag-count" id="bossDelayCount">0 筆預估延遲</span>
+            <span class="tag tag-count" id="orderCount">載入中</span>
           </div>
-          <div class="table-scroll" style="max-height: 480px;">
+          <div class="table-scroll">
             <table class="risk-table">
               <thead>
                 <tr>
@@ -681,25 +661,29 @@ body {
                   <th>運送模式</th>
                   <th>地區</th>
                   <th>延遲機率</th>
-                  <th>主要延遲原因 (X 因子)</th>
-                  <th>最佳建議動作</th>
+                  <th>風險等級</th>
                 </tr>
               </thead>
-              <tbody id="bossTableBody">
-                <tr><td colspan="6" style="text-align:center;padding:32px;color:var(--muted);font-size:13px">
+              <tbody id="riskTableBody">
+                <tr><td colspan="5" style="text-align:center;padding:32px;color:var(--muted);font-size:13px">
                   載入中...
                 </td></tr>
               </tbody>
             </table>
           </div>
+          <div class="panel-footer" style="padding: 12px 20px; border-top: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; background: #fafbfa;">
+            <button id="prevBtn" onclick="changePage(-1)" style="padding: 5px 12px; font-size: 11px; border: 1px solid var(--border); border-radius: 4px; background: white; cursor: pointer; color: var(--text); font-weight: 500;">上一頁</button>
+            <span id="pageIndicator" style="font-size: 11px; color: var(--muted); font-family: 'DM Mono', monospace; font-weight: 500;">第 1 頁</span>
+            <button id="nextBtn" onclick="changePage(1)" style="padding: 5px 12px; font-size: 11px; border: 1px solid var(--border); border-radius: 4px; background: white; cursor: pointer; color: var(--text); font-weight: 500;">下一頁</button>
+          </div>
         </div>
 
         <!-- Optimize panel -->
-        <div class="panel" style="height:fit-content;">
+        <div class="panel">
           <div class="panel-head">
             <div>
-              <div class="panel-title">經理調度模擬區</div>
-              <div class="panel-subtitle">在預算限制下進行物流升級與決策模擬</div>
+              <div class="panel-title">最佳化調度</div>
+              <div class="panel-subtitle">預算限制下選出最值得升級的訂單</div>
             </div>
             <span class="role-badge badge-viewer" id="optRoleBadge">Viewer</span>
           </div>
@@ -738,16 +722,37 @@ body {
                   </div>
                 </div>
               </div>
-              <div id="managerAnalysisBox" style="padding:14px 16px; background:#f6f9fb; border:1px solid var(--border); border-radius:6px; display:none;">
-                <div style="font-size:11px;color:var(--muted);font-weight:600;margin-bottom:6px;text-transform:uppercase;letter-spacing:0.5px;font-family:'DM Mono',monospace">主管分析摘要</div>
-                <div id="managerAnalysisText" style="font-size:13px;line-height:1.65;color:var(--text);"></div>
-                <div id="managerAnalysisFactors" style="margin-top:10px;display:flex;flex-direction:column;gap:6px;"></div>
-              </div>
               <div>
                 <div style="font-size:11px;color:var(--muted);font-weight:500;margin-bottom:8px;text-transform:uppercase;letter-spacing:0.5px;font-family:'DM Mono',monospace">建議升級訂單</div>
                 <div class="ord-list" id="ordList"></div>
               </div>
             </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Distribution Analysis Card -->
+      <div class="panel fade-in" style="margin-top:20px;">
+        <div class="panel-head">
+          <div>
+            <div class="panel-title">訂單分佈分析</div>
+            <div class="panel-subtitle">選擇維度，查看各分類的訂單數量與平均延遲率</div>
+          </div>
+        </div>
+        <div style="padding:20px; display:flex; flex-direction:column; gap:16px;">
+          <div style="display:flex; align-items:flex-end; gap:12px; flex-wrap:wrap;">
+            <div>
+              <label class="field-label">分析維度 (X 軸)</label>
+              <select id="summaryDimension" style="padding:8px 14px; border:1px solid var(--border); border-radius:6px; font-size:13px; background:var(--card); color:var(--text); outline:none; min-width:160px;">
+                <option value="shipping_mode">運送模式</option>
+                <option value="order_region">目的地區域</option>
+                <option value="risk_bucket">風險等級</option>
+              </select>
+            </div>
+            <button onclick="loadSummary()" style="padding:8px 20px; background:var(--navy); color:white; border:none; border-radius:6px; font-size:13px; font-weight:500; cursor:pointer; font-family:'DM Sans',sans-serif;">Submit</button>
+          </div>
+          <div id="summaryChart" style="display:flex; flex-direction:column; gap:10px; min-height:40px;">
+            <div style="color:var(--muted); font-size:12px;">選擇維度後點擊 Submit 查看結果</div>
           </div>
         </div>
       </div>
@@ -770,9 +775,9 @@ body {
           <label class="field-label">風險等級</label>
           <select id="filterRisk" onchange="applyFilters()" style="padding:8px 12px; border:1px solid var(--border); border-radius:6px; font-size:12px; background:var(--card); color:var(--text); outline:none;">
             <option value="">全部風險</option>
-            <option value="High">High (>= 70%)</option>
-            <option value="Medium">Medium (40% - 70%)</option>
-            <option value="Low">Low (< 40%)</option>
+            <option value="High">High (≥ 50%)</option>
+            <option value="Medium">Medium (30% - 50%)</option>
+            <option value="Low">Low (< 30%)</option>
           </select>
         </div>
         <div>
@@ -808,12 +813,10 @@ body {
                 <th>地區</th>
                 <th>延遲機率</th>
                 <th>風險等級</th>
-                <th>實際結果 (Y)</th>
-                <th>預測正確？(Ŷ)</th>
               </tr>
             </thead>
             <tbody id="riskListTableBody">
-              <tr><td colspan="7" style="text-align:center;padding:32px;color:var(--muted);font-size:13px">載入中...</td></tr>
+              <tr><td colspan="5" style="text-align:center;padding:32px;color:var(--muted);font-size:13px">載入中...</td></tr>
             </tbody>
           </table>
         </div>
@@ -897,12 +900,6 @@ body {
                 </div>
               </div>
               
-              <div id="optPageManagerAnalysisBox" style="padding:14px 16px; background:#f6f9fb; border:1px solid var(--border); border-radius:6px; display:none;">
-                <div style="font-size:11px;color:var(--muted);font-weight:600;margin-bottom:6px;text-transform:uppercase;letter-spacing:0.5px;font-family:'DM Mono',monospace">主管分析摘要</div>
-                <div id="optPageManagerAnalysisText" style="font-size:13px;line-height:1.65;color:var(--text);"></div>
-                <div id="optPageManagerAnalysisFactors" style="margin-top:10px;display:flex;flex-direction:column;gap:6px;"></div>
-              </div>
-
               <div>
                 <div style="font-size:11px;color:var(--muted);font-weight:500;margin-bottom:8px;text-transform:uppercase;letter-spacing:0.5px;font-family:'DM Mono',monospace">升級訂單明細與預估省下金額</div>
                 <div class="table-scroll" style="max-height: 240px;">
@@ -922,24 +919,6 @@ body {
         <div class="page-sub">XGBoost 分類器評估成果與可解釋性模型特徵重要度排行</div>
       </div>
       
-      <!-- Monthly Chart (moved from homepage) -->
-      <div id="monthlyChartPanel" class="panel fade-in" style="display:none; margin-bottom:24px; padding:20px;">
-        <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:16px; flex-wrap:wrap; gap:10px;">
-          <div style="display:flex; align-items:center; gap:10px;">
-            <span style="font-size:16px;">📈</span>
-            <div>
-              <div style="font-size:14px;font-weight:600;color:var(--text);">月份延遲趨勢誤差追蹤</div>
-              <div style="font-size:12px;color:var(--muted);margin-top:2px;">預測延遲率 Ŷ vs 實際延遲率 Y（每月平均）</div>
-            </div>
-          </div>
-          <div style="display:flex;gap:6px;">
-            <button id="btnLine" onclick="switchChartType('line')" style="padding:5px 14px;border-radius:20px;border:1.5px solid var(--navy);background:var(--navy);color:#fff;font-size:11px;font-weight:600;cursor:pointer;">折線圖</button>
-            <button id="btnBar"  onclick="switchChartType('bar')"  style="padding:5px 14px;border-radius:20px;border:1.5px solid var(--border);background:transparent;color:var(--muted);font-size:11px;font-weight:600;cursor:pointer;">長條圖</button>
-          </div>
-        </div>
-        <div style="position:relative;height:260px;width:100%;"><canvas id="monthlyChartCanvas"></canvas></div>
-      </div>
-
       <div class="grid-2 fade-in">
         <!-- Metrics Matrix -->
         <div style="display:flex; flex-direction:column; gap:16px;">
@@ -994,44 +973,13 @@ body {
         </div>
         
         <!-- Top 10 Features chart -->
-        <div class="panel" style="height:fit-content;">
+        <div class="panel">
           <div class="panel-head">
-            <div class="panel-title">整體預測影響特徵統計 (Global Feature Importance)</div>
+            <div class="panel-title">Top 10 重要特徵影響權重</div>
           </div>
           <div style="padding:20px; display:flex; flex-direction:column; gap:14px;" id="featureImportanceList">
             載入中...
           </div>
-        </div>
-      </div>
-
-      <!-- Historical Predict Error List -->
-      <div class="panel fade-in" style="margin-top:24px;">
-        <div class="panel-head">
-          <div>
-            <div class="panel-title" style="font-size:14px; font-weight:600;">⚠️ 歷史預測誤差明細列表 (Y ≠ Ŷ)</div>
-            <div class="panel-subtitle">列出所有模型預測與實際結果不一致的訂單，可點選深入查看 X 因子</div>
-          </div>
-          <span class="tag tag-count" id="errorListCount">共 0 筆誤差</span>
-        </div>
-        <div class="table-scroll" style="max-height: 360px;">
-          <table class="risk-table">
-            <thead>
-              <tr>
-                <th>訂單 ID</th>
-                <th>運送模式</th>
-                <th>目的地區域</th>
-                <th>延遲機率</th>
-                <th>實際結果 (Y)</th>
-                <th>預測判定 (Ŷ)</th>
-                <th>動作</th>
-              </tr>
-            </thead>
-            <tbody id="errorListTableBody">
-              <tr><td colspan="7" style="text-align:center;padding:32px;color:var(--muted);font-size:13px">
-                載入中...
-              </td></tr>
-            </tbody>
-          </table>
         </div>
       </div>
     </div>
@@ -1050,6 +998,60 @@ body {
         </div>
         <div style="padding:20px; max-height:480px; overflow-y:auto; display:flex; flex-direction:column; gap:16px;" id="regionRiskRankList">
           載入中...
+        </div>
+      </div>
+    </div>
+
+    <!-- G. THRESHOLD FILTER PANEL -->
+    <div class="page-section hidden" id="page-threshold">
+      <div class="page-header fade-in">
+        <div class="page-title">風險門檻設定</div>
+        <div class="page-sub">自訂延遲機率門檻值，系統即時篩選並列出符合條件的高風險訂單</div>
+      </div>
+
+      <div class="panel fade-in" style="margin-bottom:16px;">
+        <div class="panel-head"><div class="panel-title">門檻值設定</div></div>
+        <div style="padding:24px; display:flex; flex-direction:column; gap:20px;">
+          <div>
+            <label class="field-label">延遲機率門檻 — 列出 p_late ≥ 設定值的所有訂單</label>
+            <div style="display:flex; align-items:center; gap:16px; margin-top:10px;">
+              <input type="range" id="thresholdSlider" min="0" max="1" step="0.01" value="0.5"
+                oninput="syncThresholdInput(this.value)"
+                style="flex:1; accent-color:var(--navy); height:6px; cursor:pointer;">
+              <input type="number" id="thresholdValue" min="0" max="1" step="0.01" value="0.50"
+                oninput="syncThresholdSlider(this.value)"
+                style="width:80px; padding:8px 10px; border:1px solid var(--border); border-radius:6px; font-size:14px; font-family:'DM Mono',monospace; text-align:center; font-weight:600; color:var(--navy);">
+            </div>
+            <div style="display:flex; justify-content:space-between; font-size:10px; color:var(--muted); margin-top:4px; font-family:'DM Mono',monospace;">
+              <span>0.0 — 全部</span><span>0.5 — 預設高風險</span><span>1.0 — 最嚴格</span>
+            </div>
+          </div>
+          <div style="display:flex; align-items:center; gap:12px;">
+            <button class="run-btn" onclick="applyThreshold()" style="max-width:180px; padding:10px 20px;">套用門檻篩選</button>
+            <span id="thresholdHint" style="font-size:12px; color:var(--muted);">點擊套用以查詢結果</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="panel fade-in">
+        <div class="panel-head">
+          <div class="panel-title">符合條件的訂單</div>
+          <span class="tag tag-count" id="thresholdCount">— 筆</span>
+        </div>
+        <div class="table-scroll" style="max-height:460px;">
+          <table class="risk-table">
+            <thead>
+              <tr><th>訂單 ID</th><th>運送模式</th><th>地區</th><th>延遲機率</th><th>風險等級</th></tr>
+            </thead>
+            <tbody id="thresholdTableBody">
+              <tr><td colspan="5" style="text-align:center;padding:40px;color:var(--muted);font-size:13px;">請設定門檻值並點擊「套用」</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="panel-footer" style="padding:12px 20px; border-top:1px solid var(--border); display:flex; align-items:center; justify-content:space-between; background:#fafbfa;">
+          <button id="thresholdPrevBtn" onclick="changeThresholdPage(-1)" style="padding:5px 12px; font-size:11px; border:1px solid var(--border); border-radius:4px; background:white; cursor:pointer; color:var(--text); font-weight:500;" disabled>上一頁</button>
+          <span id="thresholdPageIndicator" style="font-size:11px; color:var(--muted); font-family:'DM Mono',monospace; font-weight:500;">第 1 頁</span>
+          <button id="thresholdNextBtn" onclick="changeThresholdPage(1)" style="padding:5px 12px; font-size:11px; border:1px solid var(--border); border-radius:4px; background:white; cursor:pointer; color:var(--text); font-weight:500;" disabled>下一頁</button>
         </div>
       </div>
     </div>
@@ -1079,30 +1081,23 @@ body {
             <tr>
               <td><span class="order-id">/api/metrics</span></td>
               <td><span class="tag" style="background:#eaf4ea; color:#27ae60;">GET</span></td>
-              <td>取得機器學習模型評估 KPI 與特徵重要性</td>
-              <td><span class="risk-pill r-low">允許存取</span></td>
-              <td><span class="risk-pill r-low">允許存取</span></td>
+              <td>獲取機器學習模型評估 KPI 與特徵權重</td>
+              <td><span class="risk-pill r-low">✔ 允許存取</span></td>
+              <td><span class="risk-pill r-low">✔ 允許存取</span></td>
             </tr>
             <tr>
               <td><span class="order-id">/api/predict</span></td>
               <td><span class="tag" style="background:#eaf4ea; color:#27ae60;">GET</span></td>
-              <td>取得去識別化延遲風險訂單列表 (支援分頁)</td>
-              <td><span class="risk-pill r-low">允許存取</span></td>
-              <td><span class="risk-pill r-low">允許存取</span></td>
-            </tr>
-            <tr>
-              <td><span class="order-id">/api/explain/{order_id_hash}</span></td>
-              <td><span class="tag" style="background:#eaf4ea; color:#27ae60;">GET</span></td>
-              <td>回傳單筆訂單的 LIME-style X 因子與主管分析</td>
-              <td><span class="risk-pill r-low">允許存取</span></td>
-              <td><span class="risk-pill r-low">允許存取</span></td>
+              <td>獲取去識別化物流延遲風險訂單列表 (支援分頁)</td>
+              <td><span class="risk-pill r-low">✔ 允許存取</span></td>
+              <td><span class="risk-pill r-low">✔ 允許存取</span></td>
             </tr>
             <tr>
               <td><span class="order-id">/api/optimize</span></td>
               <td><span class="tag" style="background:#fdecea; color:#c0392b;">POST</span></td>
-              <td>匯入訂單調度最佳化求解器 (PuLP / SciPy)</td>
-              <td><span class="risk-pill r-high">拒絕 (403)</span></td>
-              <td><span class="risk-pill r-low">允許存取</span></td>
+              <td>傳入預算執行調度最佳化求解器 (PuLP / SciPy)</td>
+              <td><span class="risk-pill r-high">❌ 拒絕 (403)</span></td>
+              <td><span class="risk-pill r-low">✔ 允許存取</span></td>
             </tr>
           </tbody>
         </table>
@@ -1112,7 +1107,6 @@ body {
   </div>
 </div>
 
-<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
 <script>
 // ══ API BASE ══
 const API_BASE = 'http://localhost:8000';
@@ -1122,13 +1116,13 @@ let currentRole = 'viewer';
 let currentPage = 1;
 const limit = 50;
 let totalPredictionsCount = 0;
-let threshold = 0.50; // Dynamic threshold
 
 // Risk List page state
 let currentRiskListPage = 1;
 let totalRiskListCount = 0;
 
 // Cache for metrics & region risk
+let cachedMetrics = null;
 let cachedRegions = null;
 
 // ══ Navigation (SPA) ══
@@ -1155,13 +1149,16 @@ function showPage(pageId) {
     loadModelPerformance();
   } else if (pageId === 'region-map') {
     loadRegionalRisk();
+  } else if (pageId === 'threshold') {
+    // reset slider display only, don't auto-query
   }
 }
 
 // ══ API Calls ══
 async function fetchMetrics() {
-  const d = await fetch(`${API_BASE}/api/metrics?threshold=${threshold}`).then(r => r.json());
-  return d;
+  if (cachedMetrics) return cachedMetrics;
+  cachedMetrics = await fetch(`${API_BASE}/api/metrics`).then(r => r.json());
+  return cachedMetrics;
 }
 
 async function fetchRegions() {
@@ -1171,7 +1168,7 @@ async function fetchRegions() {
 }
 
 async function fetchPredictions(page = 1, search = '', risk = '', shipping = '', region = '') {
-  let url = `${API_BASE}/api/predict?page=${page}&limit=${limit}&threshold=${threshold}`;
+  let url = `${API_BASE}/api/predict?page=${page}&limit=${limit}`;
   if (search) url += `&search=${encodeURIComponent(search)}`;
   if (risk) url += `&risk=${encodeURIComponent(risk)}`;
   if (shipping) url += `&shipping=${encodeURIComponent(shipping)}`;
@@ -1194,8 +1191,7 @@ async function fetchOptimize(budget, upgradeCost, delayPenalty) {
     body: JSON.stringify({
       budget,
       upgrade_cost: upgradeCost,
-      delay_penalty: delayPenalty,
-      max_candidates: 500
+      delay_penalty: delayPenalty
     })
   });
   if (!response.ok) {
@@ -1208,6 +1204,7 @@ async function fetchOptimize(budget, upgradeCost, delayPenalty) {
 // ══ Populate Region Filter Options ══
 async function populateRegionDropdown() {
   const dropdown = document.getElementById('filterRegion');
+  // Avoid repopulating if it has options already
   if (dropdown.options.length > 1) return;
 
   try {
@@ -1225,142 +1222,49 @@ async function populateRegionDropdown() {
   }
 }
 
-// ══ Dynamic Threshold Handler ══
-function updateThreshold(val) {
-  threshold = parseFloat(val);
-  document.getElementById('thresholdValDisplay').textContent = threshold.toFixed(2);
-  refreshDashboard();
-}
-
-// ══ CSV Import & Reset Handlers ══
-async function uploadCSV(input) {
-  const file = input.files[0];
-  if (!file) return;
-  
-  const uploadBtn = document.getElementById('uploadCsvBtn');
-  const originalHtml = uploadBtn.innerHTML;
-  uploadBtn.innerHTML = '<span class="spinner"></span>匯入中...';
-  uploadBtn.disabled = true;
-  
-  const formData = new FormData();
-  formData.append('file', file);
-  
-  try {
-    const res = await fetch(`${API_BASE}/api/upload-orders`, {
-      method: 'POST',
-      headers: { 'X-Role': 'Logistics_Manager' },
-      body: formData
-    });
-    
-    if (!res.ok) {
-      const err = await res.json();
-      throw new Error(err.detail || '上傳失敗');
-    }
-    
-    const data = await res.json();
-    alert(data.message);
-    document.getElementById('resetCsvBtn').style.display = 'inline-flex';
-    refreshDashboard();
-  } catch (e) {
-    alert('上傳失敗: ' + e.message);
-  } finally {
-    uploadBtn.innerHTML = originalHtml;
-    uploadBtn.disabled = false;
-    input.value = ''; // Reset file input
-  }
-}
-
-async function resetCSV() {
-  const resetBtn = document.getElementById('resetCsvBtn');
-  resetBtn.disabled = true;
-  try {
-    const res = await fetch(`${API_BASE}/api/reset-orders`, {
-      method: 'POST',
-      headers: { 'X-Role': 'Logistics_Manager' }
-    });
-    if (res.ok) {
-      resetBtn.style.display = 'none';
-      refreshDashboard();
-    } else {
-      const err = await res.json();
-      alert('重設失敗: ' + (err.detail || '未知錯誤'));
-    }
-  } catch (e) {
-    alert('重設失敗: ' + e.message);
-  } finally {
-    resetBtn.disabled = false;
-  }
-}
-
 // ══ Render KPI & Dashboard ══
 function renderMetrics(d) {
-  document.getElementById('kpiTotalOrders').textContent = totalPredictionsCount.toLocaleString();
-  document.getElementById('kpiTotalDesc').textContent = d.is_active ? "已載入匯入資料" : "預設驗證集";
-  
-  document.getElementById('kpiPredictedLateOrders').textContent = d.high_risk_orders.toLocaleString();
-  document.getElementById('kpiPredictedDesc').textContent = `延遲機率 ≥ ${(threshold * 100).toFixed(0)}%`;
-  
-  const expectedLoss = totalPredictionsCount * d.late_rate * 250.0; 
-  document.getElementById('kpiExpectedPenaltyLoss').textContent = '$' + Math.round(expectedLoss).toLocaleString();
-  document.getElementById('kpiExpectedDesc').textContent = `平均延遲率 ${(d.late_rate * 100).toFixed(1)}%`;
+  document.getElementById('kpiLateRate').textContent = (d.late_rate * 100).toFixed(0) + '%';
+  document.getElementById('kpiLateDesc').textContent = `F1 ${d.f1} · Recall ${d.recall}`;
+  document.getElementById('kpiAuc').textContent = d.roc_auc.toFixed(2);
+  document.getElementById('kpiAucDesc').textContent = `Precision ${d.precision} · F1 ${d.f1}`;
+  document.getElementById('kpiHighRisk').textContent = d.high_risk_orders.toLocaleString();
+  document.getElementById('kpiHighDesc').textContent = `p_late ≥ 0.5 的訂單`;
 }
 
-function fillClass(p) {
-  return p >= 0.7 ? 'fill-high' : p >= 0.4 ? 'fill-med' : 'fill-low';
+function fillClass(bucket) {
+  return bucket === 'High' ? 'fill-high' : bucket === 'Medium' ? 'fill-med' : 'fill-low';
 }
-function pillClass(p) {
-  return p >= 0.7 ? 'r-high' : p >= 0.4 ? 'r-med' : 'r-low';
-}
-
-function getReasonText(o) {
-  let factors = [];
-  if (o.shipping_mode === "Standard Class") {
-    factors.push("Standard Class (運送天數較長，風險高)");
-  } else if (o.shipping_mode === "Same Day") {
-    factors.push("Same Day (計劃天數緊湊，容錯低)");
-  }
-  if (o.p_late >= 0.7) {
-    factors.push(`目的地區域 (${o.order_region || '未知'}) 風險性高`);
-  }
-  if (factors.length === 0) {
-    factors.push("時效要求高與承諾天數過緊");
-  }
-  return factors.join(" 且 ");
+function pillClass(bucket) {
+  return bucket === 'High' ? 'r-high' : bucket === 'Medium' ? 'r-med' : 'r-low';
 }
 
-function getActionText(o) {
-  // Action logic mimicking optimizer expected savings
-  const expected_saving = o.expected_penalty - o.upgrade_cost;
-  if (o.p_late >= threshold && expected_saving > 0) {
-    return `<span class="risk-pill r-high" style="font-weight:600; cursor:pointer;" onclick="openExplainModal('${o.order_id_hash}')">💡 建議升級運送</span>`;
-  }
-  return `<span class="risk-pill r-low" style="font-weight:500; cursor:pointer;" onclick="openExplainModal('${o.order_id_hash}')">✔ 監控並維持原狀</span>`;
-}
+function renderPredictions(data) {
+  document.getElementById('orderCount').textContent = `共 ${totalPredictionsCount} 筆`;
+  
+  const totalPages = Math.ceil(totalPredictionsCount / limit) || 1;
+  document.getElementById('pageIndicator').textContent = `第 ${currentPage} / ${totalPages} 頁`;
+  
+  const prevBtn = document.getElementById('prevBtn');
+  const nextBtn = document.getElementById('nextBtn');
+  
+  prevBtn.disabled = currentPage <= 1;
+  nextBtn.disabled = currentPage >= totalPages;
+  prevBtn.style.opacity = currentPage <= 1 ? 0.5 : 1;
+  nextBtn.style.opacity = currentPage >= totalPages ? 0.5 : 1;
 
-function renderBossTable(data) {
-  const tbody = document.getElementById('bossTableBody');
-  const delayed = data.filter(o => o.p_late >= threshold);
-  
-  document.getElementById('bossDelayCount').textContent = `${delayed.length} 筆預估延遲`;
-  
-  if (delayed.length === 0) {
-    tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;padding:32px;color:var(--muted);font-size:13px">沒有判定為延遲的訂單 (門檻值 = ${threshold.toFixed(2)})</td></tr>`;
-    return;
-  }
-  
-  tbody.innerHTML = delayed.map(o => `
+  document.getElementById('riskTableBody').innerHTML = data.map(o => `
     <tr>
-      <td><span class="order-id" style="cursor:pointer; text-decoration:underline;" onclick="openExplainModal('${o.order_id_hash}')">${o.order_id_hash.substring(0, 16)}...</span></td>
+      <td><span class="order-id">${o.order_id_hash}</span></td>
       <td>${o.shipping_mode || 'Unknown'}</td>
       <td style="color:var(--muted)">${o.order_region || 'Unknown'}</td>
       <td>
         <div class="prob-wrap">
-          <div class="prob-bar"><div class="prob-fill ${fillClass(o.p_late)}" style="width:${o.p_late*100}%"></div></div>
+          <div class="prob-bar"><div class="prob-fill ${fillClass(o.risk_bucket)}" style="width:${o.p_late*100}%"></div></div>
           <span class="prob-val">${(o.p_late*100).toFixed(0)}%</span>
         </div>
       </td>
-      <td style="font-size:12px; color:var(--text);">${getReasonText(o)}</td>
-      <td>${getActionText(o)}</td>
+      <td><span class="risk-pill ${pillClass(o.risk_bucket)}">${o.risk_bucket}</span></td>
     </tr>
   `).join('');
 }
@@ -1369,64 +1273,20 @@ function renderOptResult(d) {
   const el = document.getElementById('optResult');
   el.classList.remove('hidden');
   el.style.display = 'flex';
-  const _sel = Array.isArray(d.selected_orders) ? d.selected_orders : [];
-  document.getElementById('optSelected').textContent = _sel.length;
+  document.getElementById('optSelected').textContent = d.selected_orders.length;
   document.getElementById('optSaving').textContent = '$' + d.expected_total_saving.toLocaleString();
   document.getElementById('optCost').textContent = '$' + d.total_cost.toLocaleString();
   const pct = ((d.total_cost / d.budget) * 100).toFixed(0);
   document.getElementById('optUsage').textContent = pct + '%';
   document.getElementById('usageFill').style.width = pct + '%';
-  renderManagerAnalysis('managerAnalysisBox', 'managerAnalysisText', 'managerAnalysisFactors', d.manager_analysis);
 
-  document.getElementById('ordList').innerHTML = _sel.map((o, i) => `
+  document.getElementById('ordList').innerHTML = d.selected_orders.map((o, i) => `
     <div class="ord-item" style="animation-delay:${i*0.07}s">
       <div>
         <div class="ord-id">${o.order_id_hash}</div>
-        <div class="ord-sub">升級成本 $${o.upgrade_cost} · 延遲率 ${(o.p_late*100).toFixed(0)}% · ${o.reason || 'positive net benefit'}</div>
+        <div class="ord-sub">升級成本 $${o.upgrade_cost} · 延遲率 ${(o.p_late*100).toFixed(0)}%</div>
       </div>
-      <div class="ord-saving">+$${(o.net_benefit ?? o.expected_saving).toLocaleString()}</div>
-    </div>
-  `).join('');
-}
-
-function renderManagerAnalysis(boxId, textId, factorsId, analysis) {
-  const box = document.getElementById(boxId);
-  const text = document.getElementById(textId);
-  const factors = document.getElementById(factorsId);
-  if (!box || !text || !factors) return;
-
-  if (!analysis) {
-    box.style.display = 'none';
-    text.textContent = '';
-    factors.innerHTML = '';
-    return;
-  }
-
-  box.style.display = 'block';
-  text.textContent = analysis.headline || analysis.recommended_policy || '目前沒有可顯示的主管分析摘要。';
-  renderManagerFactors(factorsId, analysis.sample_order_explanations || []);
-}
-
-function renderManagerFactors(containerId, explanations) {
-  const container = document.getElementById(containerId);
-  if (!container) return;
-
-  const factors = explanations
-    .flatMap(e => e.top_x_factors || [])
-    .slice(0, 4);
-
-  if (!factors.length) {
-    container.innerHTML = '<div style="font-size:12px;color:var(--muted);">尚無可顯示的 X 因子。</div>';
-    return;
-  }
-
-  container.innerHTML = factors.map(f => `
-    <div style="padding:9px 10px;border:1px solid var(--border);border-radius:6px;background:white;">
-      <div style="display:flex;justify-content:space-between;gap:10px;align-items:center;">
-        <span style="font-size:12px;font-weight:700;color:var(--text);">${f.label || f.feature}</span>
-        <span style="font-size:11px;color:var(--muted);font-family:'DM Mono',monospace">${f.impact || 'context'}</span>
-      </div>
-      <div style="font-size:12px;color:var(--muted);line-height:1.5;margin-top:4px;">${f.evidence || '模型指出此因子會影響延遲風險。'}</div>
+      <div class="ord-saving">+$${o.expected_saving}</div>
     </div>
   `).join('');
 }
@@ -1447,36 +1307,28 @@ async function setRole(role) {
   document.getElementById('optPageRoleBadge').className = isM ? 'role-badge badge-manager' : 'role-badge badge-viewer';
   document.getElementById('optPageRoleBadge').textContent = isM ? 'Manager' : 'Viewer';
 
-  // Lock/Unlock Uploading for Manager
-  document.getElementById('uploadCsvBtn').style.display = isM ? 'inline-flex' : 'none';
-  document.getElementById('lockedUploadBox').style.display = isM ? 'none' : 'inline-flex';
-  
-  if (!isM) {
-    document.getElementById('resetCsvBtn').style.display = 'none';
-  } else {
-    // Check if active file exists by fetching metrics
-    const m = await fetchMetrics();
-    if (m.is_active) {
-      document.getElementById('resetCsvBtn').style.display = 'inline-flex';
-    }
-  }
-
   // Dashboard buttons
   document.getElementById('runBtn').classList.toggle('hidden', !isM);
   document.getElementById('lockedBox').classList.toggle('hidden', isM);
   document.getElementById('optResult').classList.add('hidden');
-  renderManagerAnalysis('managerAnalysisBox', 'managerAnalysisText', 'managerAnalysisFactors', null);
   
   // Optimization page buttons
   document.getElementById('optPageRunBtn').classList.toggle('hidden', !isM);
   document.getElementById('optPageLockedBox').classList.toggle('hidden', isM);
   document.getElementById('optPageResult').classList.add('hidden');
   document.getElementById('optPageResultPlaceholder').classList.remove('hidden');
-  renderManagerAnalysis('optPageManagerAnalysisBox', 'optPageManagerAnalysisText', 'optPageManagerAnalysisFactors', null);
 
-  // Refresh calculations
-  refreshDashboard();
+  // Refresh current view predictions
+  currentPage = 1;
+  currentRiskListPage = 1;
   
+  const p = await fetchPredictions(currentPage);
+  if (p) {
+    totalPredictionsCount = p.count || 0;
+    renderPredictions(p.data || []);
+  }
+  
+  // Refresh Risk list table if it's active
   if (!document.getElementById('page-risk-list').classList.contains('hidden')) {
     applyFilters();
   }
@@ -1524,15 +1376,14 @@ async function runPageOptimize() {
     const pct = ((data.total_cost / budget) * 100).toFixed(0);
     document.getElementById('optPageUsage').textContent = pct + '%';
     document.getElementById('optPageUsageFill').style.width = pct + '%';
-    renderManagerAnalysis('optPageManagerAnalysisBox', 'optPageManagerAnalysisText', 'optPageManagerAnalysisFactors', data.manager_analysis);
 
     document.getElementById('optPageOrdList').innerHTML = data.selected_orders.map((o, i) => `
       <div class="ord-item" style="animation-delay:${i*0.03}s">
         <div>
           <div class="ord-id">${o.order_id_hash}</div>
-          <div class="ord-sub">升級成本 $${o.upgrade_cost} · 延遲機率 ${(o.p_late*100).toFixed(0)}% · ${o.reason || 'positive net benefit'}</div>
+          <div class="ord-sub">升級成本 $${o.upgrade_cost} · 延遲機率 ${(o.p_late*100).toFixed(0)}%</div>
         </div>
-        <div class="ord-saving">+$${(o.net_benefit ?? o.expected_saving).toLocaleString()}</div>
+        <div class="ord-saving">+$${o.expected_saving}</div>
       </div>
     `).join('');
     
@@ -1551,7 +1402,7 @@ async function changePage(delta) {
   if (newPage >= 1 && newPage <= totalPages) {
     currentPage = newPage;
     document.getElementById('riskTableBody').innerHTML = `
-      <tr><td colspan="7" style="text-align:center;padding:32px;color:var(--muted);font-size:13px">載入中...</td></tr>
+      <tr><td colspan="5" style="text-align:center;padding:32px;color:var(--muted);font-size:13px">載入中...</td></tr>
     `;
     const p = await fetchPredictions(currentPage);
     if (p) {
@@ -1575,7 +1426,7 @@ async function loadFilteredRiskList() {
   
   const tbody = document.getElementById('riskListTableBody');
   tbody.innerHTML = `
-    <tr><td colspan="7" style="text-align:center;padding:32px;color:var(--muted);font-size:13px">載入中...</td></tr>
+    <tr><td colspan="5" style="text-align:center;padding:32px;color:var(--muted);font-size:13px">載入中...</td></tr>
   `;
 
   try {
@@ -1599,7 +1450,7 @@ async function loadFilteredRiskList() {
     const data = payload.data || [];
     if (data.length === 0) {
       tbody.innerHTML = `
-        <tr><td colspan="7" style="text-align:center;padding:32px;color:var(--muted);font-size:13px">無符合篩選條件的訂單</td></tr>
+        <tr><td colspan="5" style="text-align:center;padding:32px;color:var(--muted);font-size:13px">無符合篩選條件的訂單</td></tr>
       `;
       return;
     }
@@ -1616,14 +1467,12 @@ async function loadFilteredRiskList() {
           </div>
         </td>
         <td><span class="risk-pill ${pillClass(o.risk_bucket)}">${o.risk_bucket}</span></td>
-        <td>${o.actual_late===1||o.actual_late===true?'<span style="padding:2px 8px;background:#fee2e2;color:#b91c1c;border-radius:12px;font-size:10px;font-weight:600;">延遲</span>':o.actual_late===0||o.actual_late===false?'<span style="padding:2px 8px;background:#dcfce7;color:#15803d;border-radius:12px;font-size:10px;font-weight:600;">準時</span>':'<span style="color:var(--muted);font-size:12px;">—</span>'}</td>
-        <td>${o.is_correct===true?'<span style="padding:2px 8px;background:#dcfce7;color:#15803d;border-radius:12px;font-size:10px;font-weight:600;">✓ 正確</span>':o.is_correct===false?'<span style="padding:2px 8px;background:#fee2e2;color:#b91c1c;border-radius:12px;font-size:10px;font-weight:600;">✗ 錯誤</span>':'<span style="color:var(--muted);font-size:12px;">—</span>'}</td>
       </tr>
     `).join('');
 
   } catch (e) {
     tbody.innerHTML = `
-      <tr><td colspan="7" style="text-align:center;padding:32px;color:red;font-size:13px">資料載入失敗: ${e.message}</td></tr>
+      <tr><td colspan="5" style="text-align:center;padding:32px;color:red;font-size:13px">資料載入失敗: ${e.message}</td></tr>
     `;
   }
 }
@@ -1688,27 +1537,6 @@ async function loadModelPerformance() {
       featList.innerHTML = '<div style="color:var(--muted); font-size:12px;">無特徵重要性數據</div>';
     }
 
-    // Load Predict Discrepancies
-    const errorsRes = await fetch(`${API_BASE}/api/predict?limit=250&threshold=${threshold}`).then(r => r.json());
-    const errors = (errorsRes.data || []).filter(o => o.is_correct === false);
-    document.getElementById('errorListCount').textContent = `共 ${errors.length} 筆誤差`;
-    const errorBody = document.getElementById('errorListTableBody');
-    if (errors.length === 0) {
-      errorBody.innerHTML = `<tr><td colspan="7" style="text-align:center;padding:32px;color:var(--muted);font-size:13px">目前沒有預測判定錯誤的訂單</td></tr>`;
-    } else {
-      errorBody.innerHTML = errors.map(o => `
-        <tr>
-          <td><span class="order-id" style="cursor:pointer; text-decoration:underline;" onclick="openExplainModal('${o.order_id_hash}')">${o.order_id_hash.substring(0, 16)}...</span></td>
-          <td>${o.shipping_mode}</td>
-          <td>${o.order_region}</td>
-          <td>${(o.p_late*100).toFixed(0)}%</td>
-          <td>${o.actual_late===1?'<span style="color:#b91c1c; font-weight:600;">延遲 (1)</span>':'<span style="color:#15803d; font-weight:600;">準時 (0)</span>'}</td>
-          <td>${o.p_late>=threshold?'<span style="color:#b91c1c; font-weight:600;">延遲 (1)</span>':'<span style="color:#15803d; font-weight:600;">準時 (0)</span>'}</td>
-          <td><button class="run-btn" onclick="openExplainModal('${o.order_id_hash}')" style="width:auto; padding:4px 10px; font-size:11px; border-radius:4px;">🔎 查看原因</button></td>
-        </tr>
-      `).join('');
-    }
-
   } catch(e) {
     featList.innerHTML = `<div style="color:red; font-size:12px;">載入失敗: ${e.message}</div>`;
   }
@@ -1759,77 +1587,137 @@ async function loadRegionalRisk() {
   }
 }
 
-// ══ Explain Modal (LIME Local Attribution) ══
-async function openExplainModal(orderId) {
-  const modal = document.getElementById('explainModal');
-  document.getElementById('modalOrderId').textContent = orderId;
-  document.getElementById('modalProb').textContent = '讀取中...';
-  document.getElementById('modalPenalty').textContent = '讀取中...';
-  document.getElementById('modalSummaryText').textContent = '讀取中...';
-  document.getElementById('modalFactorsList').innerHTML = '讀取中...';
-  
-  modal.style.display = 'flex';
-  
+// ══ Threshold Filter Page ══
+let thresholdPage = 1;
+let thresholdTotalCount = 0;
+let currentThreshold = 0.5;
+
+function syncThresholdInput(val) {
+  document.getElementById('thresholdValue').value = parseFloat(val).toFixed(2);
+}
+function syncThresholdSlider(val) {
+  const v = Math.min(1, Math.max(0, parseFloat(val) || 0));
+  document.getElementById('thresholdSlider').value = v;
+}
+
+async function applyThreshold() {
+  currentThreshold = parseFloat(document.getElementById('thresholdValue').value);
+  if (isNaN(currentThreshold)) currentThreshold = 0.5;
+  currentThreshold = Math.min(1, Math.max(0, currentThreshold));
+  thresholdPage = 1;
+  await loadThresholdOrders();
+}
+
+async function loadThresholdOrders() {
+  const tbody = document.getElementById('thresholdTableBody');
+  tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;padding:32px;color:var(--muted);font-size:13px">載入中...</td></tr>`;
+
   try {
-    const res = await fetch(`${API_BASE}/api/explain/${orderId}`, {
+    const url = `${API_BASE}/api/predict?page=${thresholdPage}&limit=${limit}&threshold=${currentThreshold}`;
+    const payload = await fetch(url, {
       headers: { 'X-Role': currentRole === 'manager' ? 'Logistics_Manager' : 'Viewer' }
-    });
-    if (!res.ok) throw new Error('分析資料讀取失敗');
-    const data = await res.json();
-    
-    document.getElementById('modalProb').textContent = (data.p_late * 100).toFixed(0) + '%';
-    document.getElementById('modalPenalty').textContent = '$' + Math.round(data.expected_penalty).toLocaleString();
-    document.getElementById('modalSummaryText').textContent = data.manager_summary || '無摘要。';
-    
-    const factors = data.top_x_factors || [];
-    document.getElementById('modalFactorsList').innerHTML = factors.map(f => `
-      <div style="padding:10px 14px; border:1px solid var(--border); border-radius:8px; background:#fcfcfc; display:flex; justify-content:space-between; align-items:center; gap:12px;">
-        <div>
-          <div style="font-size:12px; font-weight:600; color:var(--text);">${f.label || f.feature}</div>
-          <div style="font-size:11.5px; color:var(--muted); margin-top:2px;">${f.evidence}</div>
-        </div>
-        <span class="risk-pill ${f.impact === 'raises risk' ? 'r-high' : 'r-low'}" style="font-size:10px; font-weight:600; white-space:nowrap;">
-          ${f.impact === 'raises risk' ? '▲ 增加延遲風險' : '▼ 正常或次要因子'}
-        </span>
-      </div>
+    }).then(r => r.json());
+
+    thresholdTotalCount = payload.count || 0;
+    document.getElementById('thresholdCount').textContent = `${thresholdTotalCount.toLocaleString()} 筆`;
+    document.getElementById('thresholdHint').textContent =
+      `p_late ≥ ${currentThreshold.toFixed(2)} 的訂單，共 ${thresholdTotalCount.toLocaleString()} 筆`;
+
+    const totalPages = Math.ceil(thresholdTotalCount / limit) || 1;
+    document.getElementById('thresholdPageIndicator').textContent = `第 ${thresholdPage} / ${totalPages} 頁`;
+
+    const prevBtn = document.getElementById('thresholdPrevBtn');
+    const nextBtn = document.getElementById('thresholdNextBtn');
+    prevBtn.disabled = thresholdPage <= 1;
+    nextBtn.disabled = thresholdPage >= totalPages;
+    prevBtn.style.opacity = thresholdPage <= 1 ? 0.5 : 1;
+    nextBtn.style.opacity = thresholdPage >= totalPages ? 0.5 : 1;
+
+    const data = payload.data || [];
+    if (data.length === 0) {
+      tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;padding:32px;color:var(--muted);font-size:13px">無符合條件的訂單</td></tr>`;
+      return;
+    }
+
+    tbody.innerHTML = data.map(o => `
+      <tr>
+        <td><span class="order-id">${o.order_id_hash}</span></td>
+        <td>${o.shipping_mode || 'Unknown'}</td>
+        <td style="color:var(--muted)">${o.order_region || 'Unknown'}</td>
+        <td>
+          <div class="prob-wrap">
+            <div class="prob-bar"><div class="prob-fill ${fillClass(o.risk_bucket)}" style="width:${o.p_late*100}%"></div></div>
+            <span class="prob-val">${(o.p_late*100).toFixed(0)}%</span>
+          </div>
+        </td>
+        <td><span class="risk-pill ${pillClass(o.risk_bucket)}">${o.risk_bucket}</span></td>
+      </tr>
     `).join('');
-    
-  } catch (e) {
-    document.getElementById('modalSummaryText').textContent = '載入分析失敗: ' + e.message;
+  } catch(e) {
+    tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;padding:32px;color:red;font-size:13px">載入失敗: ${e.message}</td></tr>`;
   }
 }
 
-function closeExplainModal() {
-  document.getElementById('explainModal').style.display = 'none';
+async function changeThresholdPage(delta) {
+  const totalPages = Math.ceil(thresholdTotalCount / limit) || 1;
+  const newPage = thresholdPage + delta;
+  if (newPage >= 1 && newPage <= totalPages) {
+    thresholdPage = newPage;
+    await loadThresholdOrders();
+  }
 }
 
-// ══ Dashboard Refresh Helper ══
-async function refreshDashboard() {
+// ══ Dashboard Distribution Summary ══
+async function loadSummary() {
+  const by = document.getElementById('summaryDimension').value;
+  const chart = document.getElementById('summaryChart');
+  chart.innerHTML = `<div style="color:var(--muted);font-size:12px;">載入中...</div>`;
+
   try {
-    const p = await fetchPredictions(currentPage);
-    if (p) {
-      totalPredictionsCount = p.count || 0;
-      renderBossTable(p.data || []);
-      
-      const m = await fetchMetrics();
-      if (m) renderMetrics(m);
+    const data = await fetch(`${API_BASE}/api/summary?by=${by}`).then(r => r.json());
+    if (!data || data.length === 0) {
+      chart.innerHTML = `<div style="color:var(--muted);font-size:12px;">無資料</div>`;
+      return;
     }
-  } catch (e) {
-    console.error('Failed to refresh dashboard', e);
+
+    const maxCount = Math.max(...data.map(d => d.count));
+    const dimLabel = { shipping_mode: '運送模式', order_region: '目的地區域', risk_bucket: '風險等級' }[by] || by;
+
+    chart.innerHTML = `
+      <div style="display:grid; grid-template-columns:160px 1fr 80px 80px; gap:0; font-family:'DM Mono',monospace; font-size:10px; color:var(--muted); padding:0 4px 6px; border-bottom:1px solid var(--border);">
+        <span>${dimLabel}</span><span>訂單數量</span><span style="text-align:right">筆數</span><span style="text-align:right">平均延遲率</span>
+      </div>
+      ${data.map(row => {
+        const barPct = (row.count / maxCount * 100).toFixed(0);
+        const isHigh = row.avg_p_late >= 0.5;
+        const isMed  = row.avg_p_late >= 0.3;
+        const barColor = isHigh ? 'var(--fill-high, #e74c3c)' : isMed ? '#e67e22' : 'var(--navy)';
+        return `
+          <div style="display:grid; grid-template-columns:160px 1fr 80px 80px; gap:0; align-items:center; padding:8px 4px; border-bottom:1px solid var(--border);">
+            <span style="font-size:11px; color:var(--text); font-family:'DM Sans',sans-serif; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;" title="${row.label}">${row.label}</span>
+            <div style="height:10px; background:var(--bg); border-radius:5px; overflow:hidden; margin:0 12px;">
+              <div style="height:100%; width:${barPct}%; background:${barColor}; border-radius:5px; transition:width 0.6s ease;"></div>
+            </div>
+            <span style="font-size:11px; font-family:'DM Mono',monospace; text-align:right; color:var(--text); font-weight:600;">${row.count.toLocaleString()}</span>
+            <span style="font-size:11px; font-family:'DM Mono',monospace; text-align:right; color:${isHigh ? '#e74c3c' : isMed ? '#e67e22' : 'var(--navy)'}; font-weight:600;">${(row.avg_p_late*100).toFixed(1)}%</span>
+          </div>
+        `;
+      }).join('')}
+    `;
+  } catch(e) {
+    chart.innerHTML = `<div style="color:red;font-size:12px;">載入失敗: ${e.message}</div>`;
   }
 }
 
 // ══ Init ══
 async function init() {
   try {
-    // Check role to set CSV button visibility initially
-    const isM = currentRole === 'manager';
-    document.getElementById('uploadCsvBtn').style.display = isM ? 'inline-flex' : 'none';
-    document.getElementById('lockedUploadBox').style.display = isM ? 'none' : 'inline-flex';
-
-    await refreshDashboard();
-    await loadMonthlyChart();
-    
+    const [m, p] = await Promise.all([fetchMetrics(), fetchPredictions(currentPage)]);
+    if (m) renderMetrics(m);
+    if (p) {
+      totalPredictionsCount = p.count || 0;
+      renderPredictions(p.data || []);
+    }
     document.getElementById('statusText').textContent = 'Live API Connection';
   } catch (e) {
     console.error('Initialization failed', e);
@@ -1837,94 +1725,6 @@ async function init() {
   }
 }
 init();
-// ══ Feature 3：月份延遲趨勢圖 ══
-let monthlyChart = null;
-let monthlyData = { labels: [], yhat: [], yact: [] };
-let currentChartType = 'line';
-
-function buildMonthlyChart(type) {
-  const ctx = document.getElementById('monthlyChartCanvas');
-  if (!ctx) return;
-  if (monthlyChart) { monthlyChart.destroy(); monthlyChart = null; }
-  const { labels, yhat, yact } = monthlyData;
-  monthlyChart = new Chart(ctx, {
-    type: type === 'bar' ? 'bar' : 'line',
-    data: {
-      labels,
-      datasets: [
-        { label: '預測延遲率 Ŷ (%)', data: yhat, borderColor: '#437096', backgroundColor: type==='bar'?'rgba(67,112,150,0.7)':'rgba(67,112,150,0.15)', fill: type!=='bar', tension: 0.35, pointRadius: 3, borderWidth: 2 },
-        { label: '實際延遲率 Y (%)',  data: yact, borderColor: '#e07b54', backgroundColor: type==='bar'?'rgba(224,123,84,0.7)':'rgba(224,123,84,0.15)',  fill: type!=='bar', tension: 0.35, borderDash: type==='bar'?[]:[5,4], pointRadius: 4, borderWidth: 2 }
-      ]
-    },
-    options: {
-      responsive: true, maintainAspectRatio: false,
-      interaction: { mode: 'index', intersect: false },
-      plugins: {
-        legend: { position: 'top', labels: { font: { size: 12 }, color: '#2d3340' } },
-        tooltip: { callbacks: { label: c => `${c.dataset.label}: ${c.parsed.y}%` } }
-      },
-      scales: {
-        x: { grid: { color: 'rgba(0,0,0,0.05)' }, ticks: { font: { size: 10 }, color: '#8a939e', maxTicksLimit: 8, maxRotation: 45, autoSkip: true } },
-        y: { min: 0, max: 100, grid: { color: 'rgba(0,0,0,0.05)' }, ticks: { font: { size: 11 }, color: '#8a939e', callback: v => v + '%' } }
-      }
-    }
-  });
-}
-
-function switchChartType(type) {
-  if (type === currentChartType) return;
-  currentChartType = type;
-  const bl = document.getElementById('btnLine'), bb = document.getElementById('btnBar');
-  if (bl) { bl.style.background = type==='line'?'var(--navy)':'transparent'; bl.style.color = type==='line'?'#fff':'var(--muted)'; bl.style.border = '1.5px solid '+(type==='line'?'var(--navy)':'var(--border)'); }
-  if (bb) { bb.style.background = type==='bar' ?'var(--navy)':'transparent'; bb.style.color = type==='bar' ?'#fff':'var(--muted)'; bb.style.border = '1.5px solid '+(type==='bar' ?'var(--navy)':'var(--border)'); }
-  buildMonthlyChart(type);
-}
-
-async function loadMonthlyChart() {
-  try {
-    const res = await fetch(`${API_BASE}/api/chart/monthly`);
-    if (!res.ok) return;
-    const json = await res.json();
-    const data = Array.isArray(json) ? json : (json.data || []);
-    monthlyData.labels = data.map(d => d.month);
-    monthlyData.yhat   = data.map(d => d.avg_p_late        != null ? +(d.avg_p_late * 100).toFixed(1)        : null);
-    monthlyData.yact   = data.map(d => d.actual_late_rate  != null ? +(d.actual_late_rate * 100).toFixed(1)  : null);
-    document.getElementById('monthlyChartPanel').style.display = 'block';
-    buildMonthlyChart(currentChartType);
-  } catch(e) { console.warn('Monthly chart failed:', e); }
-}
-
-
 </script>
-
-<!-- Modal for Local Attribution Explanation -->
-<div id="explainModal" class="hidden" style="position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:999; display:none; align-items:center; justify-content:center; padding:20px;">
-  <div style="background:white; border-radius:10px; width:100%; max-width:600px; padding:24px; box-shadow:0 10px 25px rgba(0,0,0,0.1); display:flex; flex-direction:column; gap:16px; position:relative;">
-    <button onclick="closeExplainModal()" style="position:absolute; top:16px; right:20px; border:none; background:transparent; font-size:24px; cursor:pointer; color:var(--muted); line-height:1;">&times;</button>
-    <div style="font-size:16px; font-weight:700; color:var(--text); display:flex; align-items:center; gap:8px; margin-bottom:4px;">🔎 訂單延遲原因詳細分析 (LIME-style)</div>
-    <div style="font-size:12px; color:var(--muted); font-family:'DM Mono',monospace; margin-top:-8px;" id="modalOrderId">—</div>
-    <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
-      <div class="stat-box">
-        <div class="stat-label">預測延遲機率</div>
-        <div class="stat-value" id="modalProb" style="color:var(--navy);">—</div>
-      </div>
-      <div class="stat-box">
-        <div class="stat-label">預估延遲罰款</div>
-        <div class="stat-value warm" id="modalPenalty">—</div>
-      </div>
-    </div>
-    <div>
-      <div style="font-size:11px; color:var(--muted); font-weight:600; text-transform:uppercase; margin-bottom:8px; font-family:'DM Mono',monospace;">主管分析摘要</div>
-      <div id="modalSummaryText" style="font-size:13px; line-height:1.6; color:var(--text); background:#f6f9fb; border:1px solid var(--border); border-radius:6px; padding:12px;">—</div>
-    </div>
-    <div>
-      <div style="font-size:11px; color:var(--muted); font-weight:600; text-transform:uppercase; margin-bottom:8px; font-family:'DM Mono',monospace;">影響預測之關鍵特徵權重 (Top X Factors)</div>
-      <div id="modalFactorsList" style="display:flex; flex-direction:column; gap:8px;">
-        <!-- Factors list -->
-      </div>
-    </div>
-  </div>
-</div>
-
 </body>
 </html>
