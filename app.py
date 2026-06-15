@@ -1202,9 +1202,10 @@ async def diagnose_monthly(
 async def flag_monthly_event(
     body: FlagEventRequest,
     x_role: Optional[str] = Header(default=None),
+    authorization: Optional[str] = Header(default=None),
 ):
     """[Manager 限定] 將某月份標記為外部偶發事件。"""
-    role = get_role(x_role)
+    role = get_role(x_role, authorization)
     require_manager(role)
 
     month      = body.month.strip()
