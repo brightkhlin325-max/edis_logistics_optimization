@@ -758,6 +758,7 @@ body {
       <div class="page-header fade-in">
         <div class="page-title">物流延遲預測與最佳化調度</div>
         <div class="page-sub">DataCo Supply Chain Dataset · XGBoost + PuLP 最佳化引擎</div>
+        <div id="sopRoleBadge" style="margin-top: 5px; min-height: 20px;"></div>
       </div>
 
       <div class="panel fade-in" style="margin-bottom: 24px; padding: 18px 20px; background: var(--card); border: 1px solid var(--border); border-radius: 12px; display: flex; flex-wrap: wrap; gap: 24px; align-items: center; justify-content: space-between;">
@@ -1808,30 +1809,34 @@ let sopDefaultThreshold = 0.50;
 function updateSopUI() {
   const slider = document.getElementById('thresholdSlider');
   const lockWrap = document.getElementById('sopStatusLockWrap');
+  const badge = document.getElementById('sopRoleBadge');
   if (!slider || !lockWrap) return;
-  
-  if (currentRole === 'viewer') {
+
+  const badgeSpan = (bg, color, border, text) =>
+    `<span style="background:${bg}; color:${color}; border:1px solid ${border}; border-radius:20px; padding:3px 12px; font-size:11px; font-weight:700; display:inline-block;">${text}</span>`;
+
+  if (currentRole === 'manager') {
     isSandboxMode = false;
     slider.disabled = false;
+    if (badge) badge.innerHTML = badgeSpan('rgba(5,150,105,0.1)', '#059669', 'rgba(5,150,105,0.3)', '● 管理者模式');
     lockWrap.innerHTML = `
-      <span style="color: #059669; font-weight: 700;">🔓 管理者模式：可設定 SOP 門檻</span>
-      <button onclick="publishSopThreshold()" class="run-btn" style="width:auto; padding:2px 8px; font-size:10px; font-weight:bold; background:var(--navy); margin-left:6px;">發佈為公司 SOP 基準</button>
+      <button onclick="publishSopThreshold()" class="run-btn" style="width:auto; padding:2px 8px; font-size:10px; font-weight:bold; background:var(--navy);">發佈為公司 SOP 基準</button>
     `;
   } else {
     if (isSandboxMode) {
       slider.disabled = false;
+      if (badge) badge.innerHTML = badgeSpan('rgba(217,119,6,0.1)', '#d97706', 'rgba(217,119,6,0.3)', '🔓 沙盒模擬中（不影響正式 SOP）');
       lockWrap.innerHTML = `
-        <span style="color: #d97706; font-weight: 700;">🔓 沙盒模擬中</span>
-        <button onclick="toggleSandboxMode()" style="background: #dc2626; color: white; border: none; border-radius: 4px; padding: 2px 8px; cursor: pointer; font-size: 10px; font-weight: bold; margin-left: 6px;">恢復 SOP</button>
+        <button onclick="toggleSandboxMode()" style="background:#dc2626; color:white; border:none; border-radius:4px; padding:2px 8px; cursor:pointer; font-size:10px; font-weight:bold;">恢復 SOP</button>
       `;
     } else {
       slider.disabled = true;
       slider.value = sopDefaultThreshold.toFixed(2);
       document.getElementById('thresholdValDisplay').textContent = sopDefaultThreshold.toFixed(2);
       threshold = sopDefaultThreshold;
+      if (badge) badge.innerHTML = badgeSpan('rgba(220,38,38,0.08)', '#dc2626', 'rgba(220,38,38,0.2)', '🔒 SOP 已鎖定');
       lockWrap.innerHTML = `
-        <span style="color: #dc2626; font-weight: 700;">🔒 SOP 已鎖定</span>
-        <button onclick="toggleSandboxMode()" style="background: var(--steel); color: white; border: none; border-radius: 4px; padding: 2px 8px; cursor: pointer; font-size: 10px; font-weight: bold; margin-left: 6px;">啟動沙盒模擬</button>
+        <button onclick="toggleSandboxMode()" style="background:var(--steel); color:white; border:none; border-radius:4px; padding:2px 8px; cursor:pointer; font-size:10px; font-weight:bold;">啟動沙盒模擬</button>
       `;
     }
   }

@@ -21,11 +21,11 @@ if not exist "data\raw\DataCoSupplyChainDataset.csv" (
 
 :: 2. Resolve target environment python path first
 set "ENV_PYTHON="
-if exist "%USERPROFILE%\anaconda3\envs\Fastapp\python.exe" set "ENV_PYTHON=%USERPROFILE%\anaconda3\envs\Fastapp\python.exe"
-if not defined ENV_PYTHON if exist "D:\anaconda_envs\Fastapp\python.exe" set "ENV_PYTHON=D:\anaconda_envs\Fastapp\python.exe"
-if not defined ENV_PYTHON if exist "C:\ProgramData\anaconda3\envs\Fastapp\python.exe" set "ENV_PYTHON=C:\ProgramData\anaconda3\envs\Fastapp\python.exe"
-if not defined ENV_PYTHON if exist "%USERPROFILE%\miniconda3\envs\Fastapp\python.exe" set "ENV_PYTHON=%USERPROFILE%\miniconda3\envs\Fastapp\python.exe"
-if not defined ENV_PYTHON if exist "C:\ProgramData\miniconda3\envs\Fastapp\python.exe" set "ENV_PYTHON=C:\ProgramData\miniconda3\envs\Fastapp\python.exe"
+if exist "D:\anaconda_envs\edis_env\python.exe" set "ENV_PYTHON=D:\anaconda_envs\edis_env\python.exe"
+if not defined ENV_PYTHON if exist "%USERPROFILE%\anaconda3\envs\edis_env\python.exe" set "ENV_PYTHON=%USERPROFILE%\anaconda3\envs\edis_env\python.exe"
+if not defined ENV_PYTHON if exist "C:\ProgramData\anaconda3\envs\edis_env\python.exe" set "ENV_PYTHON=C:\ProgramData\anaconda3\envs\edis_env\python.exe"
+if not defined ENV_PYTHON if exist "%USERPROFILE%\miniconda3\envs\edis_env\python.exe" set "ENV_PYTHON=%USERPROFILE%\miniconda3\envs\edis_env\python.exe"
+if not defined ENV_PYTHON if exist "C:\ProgramData\miniconda3\envs\edis_env\python.exe" set "ENV_PYTHON=C:\ProgramData\miniconda3\envs\edis_env\python.exe"
 
 :: 3. Find Conda Path (Only needed if environment doesn't exist)
 if not defined ENV_PYTHON (
@@ -55,7 +55,7 @@ if not defined ENV_PYTHON (
 echo [INFO] Checking Conda environment...
 if defined ENV_PYTHON goto env_exists
 
-echo [INFO] Environment 'Fastapp' not detected. Creating it now (this may take a few minutes)...
+echo [INFO] Environment 'edis_env' not detected. Creating it now (this may take a few minutes)...
 "%CONDA_EXE%" env create -f environment.yml
 if %errorlevel% neq 0 (
     echo [ERROR] Failed to create environment!
@@ -64,11 +64,11 @@ if %errorlevel% neq 0 (
 )
 
 :: Re-resolve ENV_PYTHON after creation
-if exist "%USERPROFILE%\anaconda3\envs\Fastapp\python.exe" set "ENV_PYTHON=%USERPROFILE%\anaconda3\envs\Fastapp\python.exe"
-if not defined ENV_PYTHON if exist "D:\anaconda_envs\Fastapp\python.exe" set "ENV_PYTHON=D:\anaconda_envs\Fastapp\python.exe"
-if not defined ENV_PYTHON if exist "C:\ProgramData\anaconda3\envs\Fastapp\python.exe" set "ENV_PYTHON=C:\ProgramData\anaconda3\envs\Fastapp\python.exe"
-if not defined ENV_PYTHON if exist "%USERPROFILE%\miniconda3\envs\Fastapp\python.exe" set "ENV_PYTHON=%USERPROFILE%\miniconda3\envs\Fastapp\python.exe"
-if not defined ENV_PYTHON if exist "C:\ProgramData\miniconda3\envs\Fastapp\python.exe" set "ENV_PYTHON=C:\ProgramData\miniconda3\envs\Fastapp\python.exe"
+if exist "D:\anaconda_envs\edis_env\python.exe" set "ENV_PYTHON=D:\anaconda_envs\edis_env\python.exe"
+if not defined ENV_PYTHON if exist "%USERPROFILE%\anaconda3\envs\edis_env\python.exe" set "ENV_PYTHON=%USERPROFILE%\anaconda3\envs\edis_env\python.exe"
+if not defined ENV_PYTHON if exist "C:\ProgramData\anaconda3\envs\edis_env\python.exe" set "ENV_PYTHON=C:\ProgramData\anaconda3\envs\edis_env\python.exe"
+if not defined ENV_PYTHON if exist "%USERPROFILE%\miniconda3\envs\edis_env\python.exe" set "ENV_PYTHON=%USERPROFILE%\miniconda3\envs\edis_env\python.exe"
+if not defined ENV_PYTHON if exist "C:\ProgramData\miniconda3\envs\edis_env\python.exe" set "ENV_PYTHON=C:\ProgramData\miniconda3\envs\edis_env\python.exe"
 
 if not defined ENV_PYTHON (
     echo [ERROR] Failed to locate Python in the created environment!
@@ -77,7 +77,7 @@ if not defined ENV_PYTHON (
 )
 
 :env_exists
-echo [INFO] Conda environment 'Fastapp' is ready.
+echo [INFO] Conda environment 'edis_env' is ready.
 
 :: 5. Check pipeline outputs and run model training if needed
 if not exist "data\processed\predictions.csv" (
