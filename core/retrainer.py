@@ -79,6 +79,8 @@ class ModelRetrainer:
         self.pred_path    = base_dir / "data" / "processed" / "predictions.csv"
         self.mapping_path = base_dir / "models" / "feature_mapping.json"
         self.temp_dir     = base_dir / "data" / "processed" / "retrain_temp"
+        # 乙：累積的上傳訓練資料（append 累積，供重訓一起使用）
+        self.training_store_path = base_dir / "data" / "training_store" / "accumulated.csv"
 
     # ── 公開方法 ───────────────────────────────────────────────────────────────
 
@@ -110,10 +112,17 @@ class ModelRetrainer:
         if not self.raw_path.exists():
             raise FileNotFoundError(f"找不到原始資料：{self.raw_path}")
 
+        # 乙：若有累積的上傳訓練資料，合併『原始 + 累積』一起重訓（模型才會隨新資料進步）
+        from training_store import build_combined_training_file
+        combined_path = self.base_dir / "data" / "processed" / "_combined_training_input.csv"
+        merge_info = build_combined_training_file(self.raw_path, self.training_store_path, combined_path)
+        train_source = combined_path if merge_info["accumulated"] > 0 else self.raw_path
+        print(f"[Retrain] 訓練資料來源：原始 {merge_info['raw']} + 累積 {merge_info['accumulated']} = {merge_info['total']} 筆")
+
         # Step 1：資料前處理（重用現有 DataPipeline，但不存檔）
         pipeline = DataPipeline()
         splits = pipeline.run(
-            filepath=str(self.raw_path),
+            filepath=str(train_source),
             output_dir=str(self.base_dir / "data" / "processed"),
         )
         X_train: pd.DataFrame = splits["X_train"]

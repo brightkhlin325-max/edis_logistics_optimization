@@ -48,11 +48,15 @@ sys.path.insert(0, str(Path(__file__).parent / "core"))
 try:
     from optimizer import ShippingOptimizer
     from preprocessor import predict_uploaded_csv, validate_upload_columns, UploadValidationError
+    from training_store import append_training_csv, TrainingDataError
 except ImportError:
     ShippingOptimizer = None
     predict_uploaded_csv = None
     validate_upload_columns = None
+    append_training_csv = None
     class UploadValidationError(ValueError):
+        pass
+    class TrainingDataError(ValueError):
         pass
 
 
@@ -457,6 +461,41 @@ async def upload_csv(
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"CSV 檔案處理或預測失敗：{str(e)}")
 
+
+@app.post("/api/upload-training")
+async def upload_training_csv(
+    file: UploadFile = File(...),
+    x_role: Optional[str] = Header(default=None),
+    authorization: Optional[str] = Header(default=None),
+):
+    """
+    [Manager 限定] 上傳『可進訓練』的訂單資料（乙）。
+    必須含真實標籤 Late_delivery_risk；通過 C 驗證後去除 PII，並『累積』到訓練資料庫，
+    供日後重訓一併使用（仍走 adopt/discard 決定保留或捨棄）。
+    """
+    role = get_role(x_role, authorization)
+    require_manager(role)
+
+    if not file.filename.endswith(".csv"):
+        raise HTTPException(status_code=400, detail="請上傳 .csv 格式的檔案。")
+    if append_training_csv is None:
+        raise HTTPException(status_code=500, detail="系統內部錯誤：無法載入訓練資料模組 (training_store.py)。")
+
+    try:
+        contents = await file.read()
+        store_path = BASE_DIR / "data" / "training_store" / "accumulated.csv"
+        result = append_training_csv(io.BytesIO(contents), store_path)
+        return {
+            "success": True,
+            "message": f"已累積 {result['added']} 筆訓練資料（總計 {result['total']} 筆）。下次重訓將一併使用。",
+            **result,
+        }
+    except HTTPException:
+        raise
+    except (UploadValidationError, TrainingDataError) as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"訓練資料上傳失敗：{str(e)}")
 
 
 @app.post("/api/reset-orders")
