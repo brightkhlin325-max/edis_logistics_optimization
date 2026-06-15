@@ -1448,3 +1448,15 @@ if __name__ == "__main__":
         uvicorn.run("app:app", host="0.0.0.0", port=8000, reload=True)
     except ImportError:
         print("uvicorn 未安裝。請執行：conda install -n Fastapp -c conda-forge uvicorn")
+
+@app.get("/api/geojson/countries")
+async def get_countries_geojson():
+    """代理抓取 GeoJSON，解決前端 CORS 問題"""
+    import httpx
+    url = "https://raw.githubusercontent.com/datasets/geo-countries/master/data/countries.geojson"
+    try:
+        async with httpx.AsyncClient(timeout=30) as client:
+            res = await client.get(url)
+            return JSONResponse(content=res.json())
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"GeoJSON 載入失敗：{e}")

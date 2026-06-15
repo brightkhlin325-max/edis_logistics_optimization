@@ -310,6 +310,7 @@ class DataPipeline:
             "Order Id_hash",
             "Shipping Mode",
             "Order Region",
+            "order date (DateOrders)",
         ]
         existing_cols = [c for c in metadata_cols if c in df.columns]
         metadata = df[existing_cols].copy() if existing_cols else pd.DataFrame(index=df.index)
@@ -317,6 +318,7 @@ class DataPipeline:
             "Order Id_hash": "order_id_hash",
             "Shipping Mode": "shipping_mode",
             "Order Region": "order_region",
+            "order date (DateOrders)": "order_date",
         })
         print(f"\n[Metadata] 保留展示欄位：{list(metadata.columns)}")
         return metadata.reset_index(drop=True)
