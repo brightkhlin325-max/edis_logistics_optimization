@@ -30,6 +30,10 @@ from security_utils import DeIdentifier, get_leakage_columns
 DEFAULT_SAMPLE_SIZE = None     # 預設不進行抽樣，使用完整資料集
 RANDOM_STATE = 42
 TARGET_COLUMN = "Late_delivery_risk"
+DEFAULT_TRAIN_SIZE = 0.70
+DEFAULT_VAL_SIZE = 0.15
+DEFAULT_TEST_SIZE = 0.15
+DEFAULT_MAX_TEST_ROWS = None
 
 # 特徵工程中使用的原始欄位
 NUMERICAL_FEATURES = [
@@ -77,9 +81,22 @@ class DataPipeline:
         sample_size: int = DEFAULT_SAMPLE_SIZE,
         random_state: int = RANDOM_STATE,
         hash_salt: str = "EDIS_2026",
+        train_size: float = DEFAULT_TRAIN_SIZE,
+        val_size: float = DEFAULT_VAL_SIZE,
+        test_size: float = DEFAULT_TEST_SIZE,
+        max_test_rows: int = DEFAULT_MAX_TEST_ROWS,
     ):
         self.sample_size = sample_size
         self.random_state = random_state
+        total_split = train_size + val_size + test_size
+        if abs(total_split - 1.0) > 1e-9:
+            raise ValueError("train_size + val_size + test_size must equal 1.0")
+        if min(train_size, val_size, test_size) <= 0:
+            raise ValueError("train_size, val_size, and test_size must all be greater than 0")
+        self.train_size = train_size
+        self.val_size = val_size
+        self.test_size = test_size
+        self.max_test_rows = max_test_rows
         self.de_identifier = DeIdentifier(hash_salt=hash_salt)
         self.label_encoders: dict = {}
 
@@ -126,34 +143,49 @@ class DataPipeline:
         X = self.engineer_features(df)
 
         # Step 7：train/test split
-        X_train, X_test, y_train, y_test, meta_train, meta_test = train_test_split(
+        X_train_full, X_test, y_train_full, y_test, meta_train_full, meta_test = train_test_split(
             X, y, metadata,
-            test_size=0.2,
+            test_size=self.test_size,
             random_state=self.random_state,
             stratify=y,
+        )
+        X_train, X_val, y_train, y_val, meta_train, meta_val = train_test_split(
+            X_train_full,
+            y_train_full,
+            meta_train_full,
+            test_size=self.val_size / (self.train_size + self.val_size),
+            random_state=self.random_state,
+            stratify=y_train_full,
         )
 
         # Step 8：儲存
         self._save_processed(
             X_train,
+            X_val,
             X_test,
             y_train,
+            y_val,
             y_test,
             meta_train,
+            meta_val,
             meta_test,
             output_dir,
+            max_test_rows=self.max_test_rows,
         )
 
-        print(f"\n✓ 管線完成。訓練集：{len(X_train)} 筆，測試集：{len(X_test)} 筆")
+        print(f"\n✓ 管線完成。訓練集：{len(X_train)} 筆，驗證集：{len(X_val)} 筆，測試集：{len(X_test)} 筆")
         print(f"  輸出目錄：{os.path.abspath(output_dir)}")
         print("=" * 60)
 
         return {
             "X_train": X_train,
+            "X_val": X_val,
             "X_test": X_test,
             "y_train": y_train,
+            "y_val": y_val,
             "y_test": y_test,
             "meta_train": meta_train,
+            "meta_val": meta_val,
             "meta_test": meta_test,
         }
 
@@ -316,36 +348,46 @@ class DataPipeline:
 
     def _save_processed(
         self,
-        X_train, X_test, y_train, y_test,
-        meta_train, meta_test,
+        X_train, X_val, X_test, y_train, y_val, y_test,
+        meta_train, meta_val, meta_test,
         output_dir: str,
+        max_test_rows: int = None,
     ) -> None:
         """將訓練/測試特徵與展示 metadata 儲存為 CSV。"""
         train_df = X_train.copy()
         train_df[TARGET_COLUMN] = y_train.values
 
+        val_df = X_val.copy()
+        val_df[TARGET_COLUMN] = y_val.values
+
         test_df = X_test.copy()
         test_df[TARGET_COLUMN] = y_test.values
 
-        # 限制測試集數量至最大 1,000 筆訂單以加速運算
-        if len(test_df) > 1000:
-            test_df = test_df.head(1000)
-            meta_test = meta_test.head(1000)
+        # Optional demo mode: cap test rows only when max_test_rows is provided.
+        if max_test_rows and len(test_df) > max_test_rows:
+            test_df = test_df.head(max_test_rows)
+            meta_test = meta_test.head(max_test_rows)
 
         train_path = os.path.join(output_dir, "train_ready.csv")
+        val_path = os.path.join(output_dir, "val_ready.csv")
         test_path = os.path.join(output_dir, "test_ready.csv")
         train_meta_path = os.path.join(output_dir, "train_metadata.csv")
+        val_meta_path = os.path.join(output_dir, "val_metadata.csv")
         test_meta_path = os.path.join(output_dir, "test_metadata.csv")
 
         train_df.to_csv(train_path, index=False)
+        val_df.to_csv(val_path, index=False)
         test_df.to_csv(test_path, index=False)
         meta_train.reset_index(drop=True).to_csv(train_meta_path, index=False)
+        meta_val.reset_index(drop=True).to_csv(val_meta_path, index=False)
         meta_test.reset_index(drop=True).to_csv(test_meta_path, index=False)
 
         print(f"\n[Step 5] 儲存完成")
         print(f"  → {train_path}")
+        print(f"  → {val_path}")
         print(f"  → {test_path}")
         print(f"  → {train_meta_path}")
+        print(f"  → {val_meta_path}")
         print(f"  → {test_meta_path}")
 
 
@@ -371,7 +413,17 @@ if __name__ == "__main__":
         default=DEFAULT_SAMPLE_SIZE,
         help="抽樣筆數（預設 30000）",
     )
+    parser.add_argument("--train-size", type=float, default=DEFAULT_TRAIN_SIZE)
+    parser.add_argument("--val-size", type=float, default=DEFAULT_VAL_SIZE)
+    parser.add_argument("--test-size", type=float, default=DEFAULT_TEST_SIZE)
+    parser.add_argument("--max-test-rows", type=int, default=DEFAULT_MAX_TEST_ROWS)
     args = parser.parse_args()
 
-    pipeline = DataPipeline(sample_size=args.sample)
+    pipeline = DataPipeline(
+        sample_size=args.sample,
+        train_size=args.train_size,
+        val_size=args.val_size,
+        test_size=args.test_size,
+        max_test_rows=args.max_test_rows,
+    )
     pipeline.run(filepath=args.input, output_dir=args.output)
