@@ -192,7 +192,7 @@ async function initRegionMap(regionLookup) {
   }).addTo(regionMap);
 
   try {
-    const geoRes = await fetch('https://raw.githubusercontent.com/datasets/geo-countries/master/data/countries.geojson');
+    const geoRes = await fetch('/api/geojson/countries');
     const geoData = await geoRes.json();
 
     regionGeoLayer = L.geoJSON(geoData, {

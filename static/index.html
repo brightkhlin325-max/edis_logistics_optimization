@@ -758,6 +758,7 @@ body {
       <div class="page-header fade-in">
         <div class="page-title">物流延遲預測與最佳化調度</div>
         <div class="page-sub">DataCo Supply Chain Dataset · XGBoost + PuLP 最佳化引擎</div>
+        <div id="sopRoleBadge" style="margin-top: 5px; min-height: 20px;"></div>
       </div>
 
       <div class="panel fade-in" style="margin-bottom: 24px; padding: 18px 20px; background: var(--card); border: 1px solid var(--border); border-radius: 12px; display: flex; flex-wrap: wrap; gap: 24px; align-items: center; justify-content: space-between;">
@@ -776,10 +777,10 @@ body {
           <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap; font-size: 11px;">
             <span style="color: var(--muted); font-weight: 500;">快速套用：</span>
             <button id="badgeF1Btn" onclick="applyThresholdRecommendation('f1')" style="background: rgba(16, 185, 129, 0.1); color: #059669; border: 1px solid rgba(16, 185, 129, 0.2); border-radius: 4px; padding: 2px 6px; cursor: pointer; font-size: 10px; font-weight: 600;">
-              ⚖ F1 最佳 (常態營運): <span id="badgeF1Val">0.45</span>
+              ⚖ 平衡模式 (F1): <span id="badgeF1Val">0.45</span>
             </button>
             <button id="badgeCostBtn" onclick="applyThresholdRecommendation('cost')" style="background: rgba(245, 158, 11, 0.1); color: #d97706; border: 1px solid rgba(245, 158, 11, 0.2); border-radius: 4px; padding: 2px 6px; cursor: pointer; font-size: 10px; font-weight: 600;">
-              💰 成本最佳 (省錢): <span id="badgeCostVal">0.35</span>
+              💰 成本最低模式: <span id="badgeCostVal">0.35</span>
             </button>
             <span id="sopStatusLockWrap" style="margin-left: auto; display: flex; align-items: center; gap: 4px;">
               <!-- SOP lock widgets dynamically populated -->
@@ -807,8 +808,8 @@ body {
       <div class="panel fade-in" id="thresholdTuningPanel" style="margin-bottom:24px; padding:16px 20px; display:none;">
         <div style="display:flex; justify-content:space-between; gap:16px; align-items:flex-start; flex-wrap:wrap; margin-bottom:14px;">
           <div>
-            <div class="panel-title">Threshold Tuning 建議</div>
-            <div class="panel-subtitle">依目前 predictions.csv 即時計算 Precision、Recall、F1 與預估成本</div>
+            <div class="panel-title">門檻模式建議</div>
+            <div class="panel-subtitle">依目前訂單資料即時計算預警命中、延遲抓取與預估成本；F1 代表兼顧命中率與抓到率的綜合分數</div>
           </div>
           <div id="thresholdTuningNote" style="font-size:12px; color:var(--muted);"></div>
         </div>
@@ -819,16 +820,16 @@ body {
             <div class="exec-note" id="tuneCurrentMetrics">載入中...</div>
           </div>
           <div class="stat-box">
-            <div class="stat-label">F1 最佳</div>
+            <div class="stat-label" title="F1 是兼顧命中率與抓到率的綜合分數，用來挑選不過度漏判、也不過度誤報的門檻。">平衡模式 (F1)</div>
             <div class="stat-value green" id="tuneBestF1Threshold">--</div>
             <div class="exec-note" id="tuneBestF1Metrics">載入中...</div>
-            <button class="run-btn" onclick="applyThresholdRecommendation('f1')" style="margin-top:10px; padding:7px 10px; font-size:12px;">套用 F1 最佳</button>
+            <button class="run-btn" onclick="applyThresholdRecommendation('f1')" style="margin-top:10px; padding:7px 10px; font-size:12px;">套用平衡模式 (F1)</button>
           </div>
           <div class="stat-box">
-            <div class="stat-label">成本最佳</div>
+            <div class="stat-label" title="依升級成本與漏判延遲成本估算總損失最低的門檻。">成本最低模式</div>
             <div class="stat-value warm" id="tuneBestCostThreshold">--</div>
             <div class="exec-note" id="tuneBestCostMetrics">載入中...</div>
-            <button class="run-btn" onclick="applyThresholdRecommendation('cost')" style="margin-top:10px; padding:7px 10px; font-size:12px; background:var(--warm);">套用成本最佳</button>
+            <button class="run-btn" onclick="applyThresholdRecommendation('cost')" style="margin-top:10px; padding:7px 10px; font-size:12px; background:var(--warm);">套用成本最低模式</button>
           </div>
         </div>
       </div>
@@ -1032,8 +1033,8 @@ body {
       <!-- Filter controls -->
       <div class="panel fade-in" style="margin-bottom: 16px; padding: 16px; display: flex; flex-wrap: wrap; gap: 12px; align-items: center; background: var(--card);">
         <div style="flex: 1; min-width: 200px;">
-          <label class="field-label">搜尋訂單 ID (Hash)</label>
-          <input type="text" id="riskSearchInput" oninput="applyFilters()" placeholder="輸入關鍵字搜尋..." style="width:100%; padding:8px 12px; border:1px solid var(--border); border-radius:6px; font-size:12px; outline:none; background:var(--bg); color:var(--text);">
+          <label class="field-label">搜尋訂單 ID</label>
+          <input type="text" id="riskSearchInput" oninput="applyFilters()" placeholder="輸入訂單 ID 或片段（例：ORD-BFD69941 或 bfd69941）" style="width:100%; padding:8px 12px; border:1px solid var(--border); border-radius:6px; font-size:12px; outline:none; background:var(--bg); color:var(--text);">
         </div>
         <div>
           <label class="field-label">風險等級</label>
@@ -1682,7 +1683,7 @@ async function fetchPredictions(page = 1, search = '', risk = '', shipping = '',
 
 function displayOrderId(orderId) {
   const raw = String(orderId || '').replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
-  return raw ? `ORD-${raw.slice(0, 6)}` : 'ORD-UNKNOWN';
+  return raw ? `ORD-${raw.slice(0, 8)}` : 'ORD-UNKNOWN';
 }
 
 async function fetchOptimize(budget, upgradeCost, delayPenalty) {
@@ -1800,7 +1801,7 @@ function renderMetrics(d) {
 
 function formatTuneMetrics(row) {
   if (!row) return '無資料';
-  return `Precision ${(row.precision * 100).toFixed(1)}% · Recall ${(row.recall * 100).toFixed(1)}% · F1 ${row.f1.toFixed(4)} · 成本 $${Math.round(row.expected_cost).toLocaleString()}`;
+  return `命中率 ${(row.precision * 100).toFixed(1)}% · 抓到率 ${(row.recall * 100).toFixed(1)}% · 平衡分數 ${row.f1.toFixed(4)} · 預估成本 $${Math.round(row.expected_cost).toLocaleString()}`;
 }
 
 let isSandboxMode = false;
@@ -1809,30 +1810,34 @@ let sopDefaultThreshold = 0.50;
 function updateSopUI() {
   const slider = document.getElementById('thresholdSlider');
   const lockWrap = document.getElementById('sopStatusLockWrap');
+  const badge = document.getElementById('sopRoleBadge');
   if (!slider || !lockWrap) return;
-  
-  if (currentRole === 'viewer') {
+
+  const badgeSpan = (bg, color, border, text) =>
+    `<span style="background:${bg}; color:${color}; border:1px solid ${border}; border-radius:20px; padding:3px 12px; font-size:11px; font-weight:700; display:inline-block;">${text}</span>`;
+
+  if (currentRole === 'manager') {
     isSandboxMode = false;
     slider.disabled = false;
+    if (badge) badge.innerHTML = badgeSpan('rgba(5,150,105,0.1)', '#059669', 'rgba(5,150,105,0.3)', '● 管理者模式');
     lockWrap.innerHTML = `
-      <span style="color: #059669; font-weight: 700;">🔓 管理者模式：可設定 SOP 門檻</span>
-      <button onclick="publishSopThreshold()" class="run-btn" style="width:auto; padding:2px 8px; font-size:10px; font-weight:bold; background:var(--navy); margin-left:6px;">發佈為公司 SOP 基準</button>
+      <button onclick="publishSopThreshold()" class="run-btn" style="width:auto; padding:2px 8px; font-size:10px; font-weight:bold; background:var(--navy);">發佈為公司 SOP 基準</button>
     `;
   } else {
     if (isSandboxMode) {
       slider.disabled = false;
+      if (badge) badge.innerHTML = badgeSpan('rgba(217,119,6,0.1)', '#d97706', 'rgba(217,119,6,0.3)', '🔓 沙盒模擬中（不影響正式 SOP）');
       lockWrap.innerHTML = `
-        <span style="color: #d97706; font-weight: 700;">🔓 沙盒模擬中</span>
-        <button onclick="toggleSandboxMode()" style="background: #dc2626; color: white; border: none; border-radius: 4px; padding: 2px 8px; cursor: pointer; font-size: 10px; font-weight: bold; margin-left: 6px;">恢復 SOP</button>
+        <button onclick="toggleSandboxMode()" style="background:#dc2626; color:white; border:none; border-radius:4px; padding:2px 8px; cursor:pointer; font-size:10px; font-weight:bold;">恢復 SOP</button>
       `;
     } else {
       slider.disabled = true;
       slider.value = sopDefaultThreshold.toFixed(2);
       document.getElementById('thresholdValDisplay').textContent = sopDefaultThreshold.toFixed(2);
       threshold = sopDefaultThreshold;
+      if (badge) badge.innerHTML = badgeSpan('rgba(220,38,38,0.08)', '#dc2626', 'rgba(220,38,38,0.2)', '🔒 SOP 已鎖定');
       lockWrap.innerHTML = `
-        <span style="color: #dc2626; font-weight: 700;">🔒 SOP 已鎖定</span>
-        <button onclick="toggleSandboxMode()" style="background: var(--steel); color: white; border: none; border-radius: 4px; padding: 2px 8px; cursor: pointer; font-size: 10px; font-weight: bold; margin-left: 6px;">啟動沙盒模擬</button>
+        <button onclick="toggleSandboxMode()" style="background:var(--steel); color:white; border:none; border-radius:4px; padding:2px 8px; cursor:pointer; font-size:10px; font-weight:bold;">啟動沙盒模擬</button>
       `;
     }
   }

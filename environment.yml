@@ -21,3 +21,5 @@ dependencies:
     - pydantic>=2.0
     # FastAPI 檔案上傳 (/api/upload 的 UploadFile/File) 必要依賴
     - python-multipart>=0.0.9
+    # 密碼雜湊（auth.py 登入驗證，bcrypt 4.0 為 Rust 重寫版下限）
+    - bcrypt>=4.0

@@ -25,6 +25,7 @@ EDIS — DataCo 物流延遲預測與最佳化調度系統
 import io
 import json
 import os
+import re
 from pathlib import Path
 from typing import Optional
 
@@ -256,7 +257,8 @@ def make_display_order_id(order_id: object) -> str:
     if order_id is None:
         return "ORD-UNKNOWN"
     compact = "".join(ch for ch in str(order_id).upper() if ch.isalnum())
-    return f"ORD-{compact[:6]}" if compact else "ORD-UNKNOWN"
+    # 取前 8 碼：6 碼在 ~2.8 萬筆訂單會有約 0.16% 撞號，8 碼幾乎不撞號（顯示與搜尋一致）
+    return f"ORD-{compact[:8]}" if compact else "ORD-UNKNOWN"
 
 
 def _safe_div(numerator: float, denominator: float) -> float:
@@ -682,7 +684,14 @@ def get_predictions(
 
     # 應用過濾器
     if search:
-        df = df[df["order_id_hash"].astype(str).str.contains(search, case=False, na=False)]
+        # 正規化搜尋字串：去掉 ORD- 前綴與非英數字、轉小寫，再比對小寫雜湊。
+        # 讓「畫面上的 ID（ORD-XXXXXXXX）」與「純雜湊片段」都搜得到（顯示=搜尋一致）。
+        search_norm = re.sub(
+            r"[^a-z0-9]", "",
+            re.sub(r"^ord[-_]?", "", search.strip(), flags=re.IGNORECASE).lower(),
+        )
+        if search_norm:
+            df = df[df["order_id_hash"].astype(str).str.lower().str.contains(search_norm, na=False)]
     if risk:
         df = df[df["risk_bucket"] == risk]
     if shipping:
@@ -1462,3 +1471,15 @@ if __name__ == "__main__":
         uvicorn.run("app:app", host="0.0.0.0", port=8000, reload=True)
     except ImportError:
         print("uvicorn 未安裝。請執行：conda install -n Fastapp -c conda-forge uvicorn")
+
+@app.get("/api/geojson/countries")
+async def get_countries_geojson():
+    """代理抓取 GeoJSON，解決前端 CORS 問題"""
+    import httpx
+    url = "https://raw.githubusercontent.com/datasets/geo-countries/master/data/countries.geojson"
+    try:
+        async with httpx.AsyncClient(timeout=30) as client:
+            res = await client.get(url)
+            return JSONResponse(content=res.json())
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"GeoJSON 載入失敗：{e}")
