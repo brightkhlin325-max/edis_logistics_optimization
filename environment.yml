@@ -14,7 +14,7 @@ dependencies:
   # 最佳化
   - scipy>=1.11
   - pip:
-    - pulp>=2.7
+    - pulp>=2.7,<4
     # API 後端
     - fastapi>=0.110
     - uvicorn[standard]>=0.27
@@ -22,4 +22,4 @@ dependencies:
     # FastAPI 檔案上傳 (/api/upload 的 UploadFile/File) 必要依賴
     - python-multipart>=0.0.9
     # 密碼雜湊（auth.py 登入驗證，bcrypt 4.0 為 Rust 重寫版下限）
-    - bcrypt>=4.0
+    - bcrypt>=4.0,<6
