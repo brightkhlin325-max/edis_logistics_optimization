@@ -1113,6 +1113,7 @@ body {
                 <span id="flipThresholdLabel" style="font-weight:700;color:var(--navy);">5%</span>
                 才顯示診斷按鈕
               </div>
+              <div id="monthlyPeriodNote" style="font-size:11px;color:var(--muted);margin-top:3px;"></div>
             </div>
           </div>
           <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
@@ -2588,12 +2589,20 @@ function updateFlipThreshold(val) {
 }
 
 async function loadMonthlyChart() {
+  const grid = document.getElementById('flipperGrid');
+  const rangeEl = document.getElementById('flipPageRangeLabel');
+  if (grid) grid.innerHTML = '<div style="grid-column:1/-1;text-align:center;padding:24px;color:var(--muted);font-size:12px;">載入分析資料...</div>';
   try {
     const res = await fetch(`${API_BASE}/api/chart/monthly`);
-    if (!res.ok) return;
+    if (!res.ok) {
+      const error = await res.json().catch(() => ({}));
+      throw new Error(error.detail || `HTTP ${res.status}`);
+    }
     const json = await res.json();
     monthlyAllData = Array.isArray(json) ? json : (json.data || []);
-    if (!monthlyAllData.length) return;
+    const note = document.getElementById('monthlyPeriodNote');
+    if (note) note.textContent = json.period_note || '';
+    if (!monthlyAllData.length) throw new Error('沒有可供分析的預測資料');
 
     const sel = document.getElementById('monthFlipSelect');
     if (sel) {
@@ -2605,7 +2614,12 @@ async function loadMonthlyChart() {
     }
     flipperPageStart = 0;
     renderFlipperPage(0);
-  } catch(e) { console.warn('Monthly Flipper load failed:', e); }
+  } catch(e) {
+    console.warn('Monthly Flipper load failed:', e);
+    monthlyAllData = [];
+    if (rangeEl) rangeEl.textContent = '資料載入失敗';
+    if (grid) grid.innerHTML = `<div style="grid-column:1/-1;text-align:center;padding:24px;color:#b91c1c;font-size:12px;">${e.message}</div>`;
+  }
 }
 
 function renderFlipperPage(startIdx) {

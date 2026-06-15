@@ -1124,6 +1124,22 @@ def get_region_risk(
 
 # ── 月份診斷端點 ──────────────────────────────────────────────────────────────
 
+def add_analysis_period(df: pd.DataFrame) -> tuple[pd.DataFrame, str]:
+    """Add a real month when dates exist, otherwise stable sequential data batches."""
+    result = df.copy()
+    if "order_date" in result.columns:
+        parsed_dates = pd.to_datetime(result["order_date"], errors="coerce")
+        if parsed_dates.notna().any():
+            result = result.loc[parsed_dates.notna()].copy()
+            result["month"] = parsed_dates.loc[parsed_dates.notna()].dt.to_period("M").astype(str)
+            return result, "calendar_month"
+
+    batch_count = min(12, max(1, len(result)))
+    batch_size = max(1, (len(result) + batch_count - 1) // batch_count)
+    batch_numbers = (pd.Series(range(len(result)), index=result.index) // batch_size) + 1
+    result["month"] = batch_numbers.clip(upper=batch_count).map(lambda value: f"資料批次 {value:02d}")
+    return result, "data_batch"
+
 @app.get("/api/chart/monthly")
 def get_monthly_chart(
     x_session_id: Optional[str] = Header(default=None)
@@ -1134,10 +1150,10 @@ def get_monthly_chart(
         raise HTTPException(status_code=404, detail="predictions.csv 不存在。")
     df = load_cached_predictions(pred_path)
 
-    if "order_date" not in df.columns or "p_late" not in df.columns:
-        raise HTTPException(status_code=500, detail="predictions.csv 缺少必要欄位。")
+    if "p_late" not in df.columns:
+        raise HTTPException(status_code=500, detail="predictions.csv 缺少 p_late 欄位。")
 
-    df["month"] = pd.to_datetime(df["order_date"], errors="coerce").dt.to_period("M").astype(str)
+    df, period_mode = add_analysis_period(df)
     if "true_label" in df.columns:
         df["actual_late"] = df["true_label"].astype(int)
 
@@ -1155,7 +1171,15 @@ def get_monthly_chart(
             "actual_late_rate": round(float(row["actual_late_rate"]), 4),
             "total_orders":     int(row["total_orders"]),
         })
-    return {"data": records}
+    return {
+        "data": records,
+        "period_mode": period_mode,
+        "period_note": (
+            "依原始訂單日期彙整月份。"
+            if period_mode == "calendar_month"
+            else "目前預測檔未包含訂單日期，改以固定資料批次呈現；重新產生含 order_date 的預測檔後會自動切回月份。"
+        ),
+    }
 
 
 @app.get("/api/diagnose/monthly")
@@ -1171,7 +1195,9 @@ def diagnose_monthly(
 
     df = load_cached_predictions(pred_path)
 
-    df["month"] = pd.to_datetime(df["order_date"], errors="coerce").dt.to_period("M").astype(str)
+    if "p_late" not in df.columns:
+        raise HTTPException(status_code=500, detail="predictions.csv 缺少 p_late 欄位。")
+    df, period_mode = add_analysis_period(df)
     month_df = df[df["month"] == month].copy()
     if month_df.empty:
         raise HTTPException(status_code=404, detail=f"找不到 {month} 的資料。")
@@ -1189,38 +1215,25 @@ def diagnose_monthly(
     error             = abs(avg_p_late - actual_late_rate)
     error_orders      = month_df[month_df["is_correct"] == False]
 
-    # LIME 聚合
+    # Use saved model importance for an immediate aggregate diagnosis. Running
+    # per-order explanation repeatedly here can block the single API worker.
     top_factors = []
     try:
-        import sys as _sys
-        _sys.path.insert(0, str(BASE_DIR / "core"))
-        from explainer import ManagerExplainer
         metrics_data = {}
         if METRICS_PATH.exists():
             with open(METRICS_PATH, "r", encoding="utf-8") as f:
                 metrics_data = json.load(f)
-
-        sample = error_orders.head(20)
-        explainer = ManagerExplainer(sample, metrics_data)
-        factor_counts: dict = {}
-        factor_dirs: dict = {}
-        for _, row in sample.iterrows():
-            explanation = explainer.explain_order(row.to_dict())
-            for factor in explanation.get("top_x_factors", []):
-                feat = factor.get("feature", "")
-                dirn = factor.get("impact", "neutral")
-                factor_counts[feat] = factor_counts.get(feat, 0) + 1
-                factor_dirs.setdefault(feat, dirn)
-
-        max_count = max(factor_counts.values(), default=1)
+        feature_importance = metrics_data.get("feature_importance", {})
+        ranked_factors = sorted(feature_importance.items(), key=lambda item: -float(item[1]))[:5]
+        max_weight = max((float(weight) for _, weight in ranked_factors), default=1.0)
         top_factors = [
             {
-                "feature":   feat,
-                "count":     cnt,
-                "direction": factor_dirs.get(feat, "neutral"),
-                "pct":       round(cnt / max_count * 100, 1),
+                "feature": feature,
+                "count": len(error_orders),
+                "direction": "model influence",
+                "pct": round(float(weight) / max_weight * 100, 1),
             }
-            for feat, cnt in sorted(factor_counts.items(), key=lambda x: -x[1])[:5]
+            for feature, weight in ranked_factors
         ]
     except Exception:
         pass
@@ -1243,6 +1256,7 @@ def diagnose_monthly(
         "error_orders_count":    len(error_orders),
         "top_factors":           top_factors,
         "event_flag":            event_flag,
+        "period_mode":           period_mode,
     }
 
 
