@@ -1571,7 +1571,7 @@ body {
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
 <script>
 // ══ API BASE ══
-const API_BASE = 'http://localhost:8000';
+const API_BASE = window.location.origin;
 
 // ══ Fetch Interceptor for JWT Auth & Session ID ══
 const originalFetch = window.fetch;
