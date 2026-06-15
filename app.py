@@ -29,7 +29,7 @@ from pathlib import Path
 from typing import Optional
 
 try:
-    from fastapi import FastAPI, HTTPException, Header, Request, UploadFile, File
+    from fastapi import FastAPI, HTTPException, Header, Request, UploadFile, File, BackgroundTasks
     from fastapi.responses import JSONResponse
     from fastapi.staticfiles import StaticFiles
     from fastapi.middleware.cors import CORSMiddleware
@@ -87,12 +87,50 @@ if static_dir.exists():
     app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
 
 
+@app.on_event("startup")
+async def startup_event():
+    """啟動背景磁碟清理任務，每小時清理過期 24 小時的暫存檔"""
+    import asyncio
+    async def cleanup_loop():
+        while True:
+            try:
+                import time
+                now = time.time()
+                # 清理 predictions_session_*.csv
+                if DATA_DIR.exists():
+                    for f in DATA_DIR.glob("predictions_session_*.csv"):
+                        if f.is_file() and (now - f.stat().st_mtime) > 86400:
+                            try:
+                                os.remove(f)
+                                print(f"[Cleanup] 已刪除過期 session 檔案: {f.name}")
+                            except Exception:
+                                pass
+                # 清理 retrain_temp/*
+                temp_dir = DATA_DIR / "retrain_temp"
+                if temp_dir.exists():
+                    import shutil
+                    for d in temp_dir.iterdir():
+                        if d.is_dir() and (now - d.stat().st_mtime) > 86400:
+                            try:
+                                shutil.rmtree(d)
+                                print(f"[Cleanup] 已刪除過期重訓 session 目錄: {d.name}")
+                            except Exception:
+                                pass
+            except Exception as e:
+                print(f"[Cleanup] 清理發生錯誤: {str(e)}")
+            await asyncio.sleep(3600)
+
+    asyncio.create_task(cleanup_loop())
+
+
 # ── Pydantic 模型 ─────────────────────────────────────────────────────────────
+
 
 class OptimizeRequest(BaseModel):
     budget: float = 5000.0
     upgrade_cost: float = 80.0
     delay_penalty: float = 250.0
+    risk_threshold: float = 0.3
 
 
 class FlagEventRequest(BaseModel):
@@ -109,7 +147,66 @@ class RetrainSessionRequest(BaseModel):
     session_id: str
 
 
+# ── 非同步模型重訓背景任務與雜湊輔助 ───────────────────────────────────────────
+
+RETRAIN_TASKS: dict[str, dict] = {}
+
+def get_file_hash(path: Path) -> str:
+    """計算並回傳指定檔案的 SHA-256 雜湊值。"""
+    if not path.exists():
+        return ""
+    import hashlib
+    h = hashlib.sha256()
+    try:
+        with open(path, "rb") as f:
+            h.update(f.read())
+        return h.hexdigest()
+    except Exception:
+        return ""
+
+
+def run_retrain_task(task_id: str, excluded_features: list):
+    """背景執行緒：跑資料前處理與特徵工程，重新訓練 XGBoost。"""
+    try:
+        from retrainer import ModelRetrainer
+        
+        # 1. 記錄基礎模型的 SHA-256 雜湊（用於 adopt 時的併發寫入版本控制）
+        model_path = BASE_DIR / "models" / "xgboost_model.json"
+        base_hash = get_file_hash(model_path)
+        RETRAIN_TASKS[task_id]["base_model_hash"] = base_hash
+        RETRAIN_TASKS[task_id]["progress"] = 15
+        RETRAIN_TASKS[task_id]["log"] = "已載入重訓參數，開始讀取原始資料集..."
+
+        retrainer = ModelRetrainer(base_dir=BASE_DIR)
+        RETRAIN_TASKS[task_id]["progress"] = 45
+        RETRAIN_TASKS[task_id]["log"] = "正在進行特徵工程與特徵刪除處理..."
+        
+        # 呼叫重訓（會進行資料分割、XGBoost 訓練與指標計算）
+        result = retrainer.run(excluded_features=excluded_features)
+        
+        RETRAIN_TASKS[task_id]["progress"] = 90
+        RETRAIN_TASKS[task_id]["log"] = "重訓結束，正在儲存暫存模型指標並封裝..."
+        
+        RETRAIN_TASKS[task_id]["result"] = {
+            "session_id":      result["session_id"],
+            "old_metrics":     result["old_metrics"],
+            "new_metrics":     result["new_metrics"],
+            "dropped_columns": result["dropped_columns"],
+        }
+        RETRAIN_TASKS[task_id]["status"] = "success"
+        RETRAIN_TASKS[task_id]["progress"] = 100
+        RETRAIN_TASKS[task_id]["log"] = "XGBoost 模型重訓順利完成，新舊模型對比就緒。"
+        
+    except Exception as e:
+        import traceback
+        error_msg = f"模型訓練失敗：{str(e)}\n\n詳細呼叫堆疊：\n{traceback.format_exc()}"
+        RETRAIN_TASKS[task_id]["status"] = "failed"
+        RETRAIN_TASKS[task_id]["error"] = str(e)
+        RETRAIN_TASKS[task_id]["log"] = error_msg
+
+
 def make_display_order_id(order_id: object) -> str:
+
     """Return a short manager-friendly display ID while preserving the hash in APIs."""
     if order_id is None:
         return "ORD-UNKNOWN"
@@ -157,14 +254,42 @@ def _threshold_metrics(
 
 # ── RBAC 工具函數 ─────────────────────────────────────────────────────────────
 
-def get_role(x_role: Optional[str]) -> str:
+from auth import verify_token
+
+def get_role(x_role: Optional[str] = None, authorization: Optional[str] = None) -> str:
     """
-    從 HTTP Header X-Role 取得角色。
-    若未提供或無效，預設為 Viewer。
+    從 HTTP Header Authorization (JWT Bearer Token) 或 X-Role 取得角色。
+    優先校驗 JWT Token，安全防禦加固。
     """
+    if authorization:
+        try:
+            if authorization.startswith("Bearer "):
+                token = authorization[7:]
+            else:
+                token = authorization
+            result = verify_token(token)
+            if result["success"]:
+                return result["role"]
+        except Exception:
+            pass
+
     if x_role and x_role in VALID_ROLES:
         return x_role
     return ROLE_VIEWER
+
+
+def get_predictions_path(x_session_id: Optional[str] = None) -> Path:
+    """
+    根據 X-Session-ID Header 回傳對應的 CSV 預測資料路徑。
+    若該 Session 專屬檔案不存在，則 fallback 回傳預設驗證集 predictions.csv。
+    """
+    if x_session_id:
+        safe_id = "".join(c for c in x_session_id if c.isalnum() or c in ("-", "_"))
+        if safe_id:
+            session_file = DATA_DIR / f"predictions_session_{safe_id}.csv"
+            if session_file.exists():
+                return session_file
+    return PREDICTIONS_PATH
 
 
 def require_manager(role: str) -> None:
@@ -183,11 +308,12 @@ def require_manager(role: str) -> None:
         )
 
 
+
 # ── 路由 ──────────────────────────────────────────────────────────────────────
 
 
 # ── 登入驗證 ──────────────────────────────────────────────────────────────────
-from auth import init_db, verify_user
+from auth import init_db, verify_user, generate_token
 
 init_db()
 
@@ -199,7 +325,15 @@ class LoginRequest(BaseModel):
 async def login(request: LoginRequest):
     result = verify_user(request.username, request.password)
     if result["success"]:
-        return {"success": True, "role": result["role"]}
+        import uuid
+        token = generate_token(request.username, result["role"])
+        session_id = uuid.uuid4().hex[:12]
+        return {
+            "success": True,
+            "role": result["role"],
+            "token": token,
+            "session_id": session_id
+        }
     raise HTTPException(
         status_code=401,
         detail={"success": False, "message": "帳號或密碼錯誤"}
@@ -216,9 +350,12 @@ async def root():
 
 
 @app.post("/api/upload")
-async def upload_csv(file: UploadFile = File(...)):
+async def upload_csv(
+    file: UploadFile = File(...),
+    x_session_id: Optional[str] = Header(default=None)
+):
     """
-    [公開/Manager] 上傳訂單 CSV 檔案以進行延遲機率預測，並更新寫入 predictions.csv。
+    [公開/Manager] 上傳訂單 CSV 檔案以進行延遲機率預測，並更新寫入 predictions_[session_id].csv。
     """
     if not file.filename.endswith(".csv"):
         raise HTTPException(status_code=400, detail="請上傳 .csv 格式的檔案。")
@@ -240,7 +377,13 @@ async def upload_csv(file: UploadFile = File(...)):
             model_path=model_path
         )
         
-        df_predicted.to_csv(PREDICTIONS_PATH, index=False)
+        if x_session_id:
+            safe_id = "".join(c for c in x_session_id if c.isalnum() or c in ("-", "_"))
+            save_path = DATA_DIR / f"predictions_session_{safe_id}.csv"
+        else:
+            save_path = PREDICTIONS_PATH
+            
+        df_predicted.to_csv(save_path, index=False)
         
         return {
             "success": True,
@@ -251,8 +394,33 @@ async def upload_csv(file: UploadFile = File(...)):
         raise HTTPException(status_code=500, detail=f"CSV 檔案處理或預測失敗：{str(e)}")
 
 
+
+@app.post("/api/reset-orders")
+async def reset_orders(
+    x_role: Optional[str] = Header(default=None),
+    authorization: Optional[str] = Header(default=None),
+    x_session_id: Optional[str] = Header(default=None),
+):
+    """[Manager 限定] 重置目前 session 的上傳資料，回復為預設驗證集。"""
+    role = get_role(x_role, authorization)
+    require_manager(role)
+    
+    pred_path = get_predictions_path(x_session_id)
+    if pred_path.exists() and pred_path != PREDICTIONS_PATH:
+        try:
+            os.remove(pred_path)
+            return {"success": True, "message": "已成功重置為預設驗證集。"}
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"重置失敗：{str(e)}")
+    return {"success": True, "message": "使用預設驗證集，無需重置。"}
+
+
 @app.get("/api/metrics")
-async def get_metrics(threshold: float = 0.5):
+
+async def get_metrics(
+    threshold: float = 0.5,
+    x_session_id: Optional[str] = Header(default=None)
+):
     """
     [公開] 回傳模型 KPI 指標，支援動態門檻值計算。
     """
@@ -262,10 +430,12 @@ async def get_metrics(threshold: float = 0.5):
         with open(METRICS_PATH, "r", encoding="utf-8") as f:
             metrics = json.load(f)
 
+    pred_path = get_predictions_path(x_session_id)
     # 如果 predictions.csv 存在，則根據輸入的 threshold 動態重新計算混淆矩陣與指標
-    if PREDICTIONS_PATH.exists():
+    if pred_path.exists():
         try:
-            df = pd.read_csv(PREDICTIONS_PATH)
+            df = pd.read_csv(pred_path)
+
             if "true_label" in df.columns and "p_late" in df.columns:
                 actual = df["true_label"].astype(int)
                 predicted = (df["p_late"] >= threshold).astype(int)
@@ -345,6 +515,7 @@ async def get_threshold_tuning(
     step: float = 0.05,
     upgrade_cost: float = 80.0,
     delay_penalty: float = 250.0,
+    x_session_id: Optional[str] = Header(default=None)
 ):
     """
     Return threshold candidates and recommendations for the dashboard slider.
@@ -353,10 +524,13 @@ async def get_threshold_tuning(
         raise HTTPException(status_code=400, detail="step must be greater than 0.")
     if start < 0 or stop > 1 or start > stop:
         raise HTTPException(status_code=400, detail="threshold range must stay within 0..1.")
-    if not PREDICTIONS_PATH.exists():
+    
+    pred_path = get_predictions_path(x_session_id)
+    if not pred_path.exists():
         raise HTTPException(status_code=404, detail="predictions.csv not found.")
 
-    df = pd.read_csv(PREDICTIONS_PATH)
+    df = pd.read_csv(pred_path)
+
     if "true_label" not in df.columns or "p_late" not in df.columns:
         raise HTTPException(status_code=400, detail="predictions.csv must include true_label and p_late.")
 
@@ -393,6 +567,8 @@ async def get_threshold_tuning(
 @app.get("/api/predict")
 async def get_predictions(
     x_role: Optional[str] = Header(default=None),
+    authorization: Optional[str] = Header(default=None),
+    x_session_id: Optional[str] = Header(default=None),
     limit: int = 50,
     page: int = 1,
     search: Optional[str] = None,
@@ -405,10 +581,12 @@ async def get_predictions(
     """
     [Viewer / Manager] 回傳去識別化的訂單延遲風險列表。
     """
-    role = get_role(x_role)
+    role = get_role(x_role, authorization)
     threshold_val = threshold if threshold is not None else 0.5
+    pred_path = get_predictions_path(x_session_id)
 
-    if not PREDICTIONS_PATH.exists():
+    if not pred_path.exists():
+
         # 回傳示範資料
         sample = [
             {
@@ -445,7 +623,8 @@ async def get_predictions(
             "note": "示範資料（請先執行 model_pipeline.py）",
         }
 
-    df = pd.read_csv(PREDICTIONS_PATH)
+    df = pd.read_csv(pred_path)
+
 
     # 動態計算 predicted_late、actual_late 和 is_correct
     if "p_late" in df.columns:
@@ -532,17 +711,22 @@ async def get_predictions(
 
 
 @app.get("/api/summary")
-async def get_summary(by: str = "shipping_mode"):
+async def get_summary(
+    by: str = "shipping_mode",
+    x_session_id: Optional[str] = Header(default=None)
+):
     """[公開] 依指定維度彙總訂單數量與平均延遲機率。"""
     allowed = {"shipping_mode", "order_region", "risk_bucket"}
     if by not in allowed:
         from fastapi import HTTPException
         raise HTTPException(status_code=400, detail=f"by 必須為: {', '.join(allowed)}")
 
-    if not PREDICTIONS_PATH.exists():
+    pred_path = get_predictions_path(x_session_id)
+    if not pred_path.exists():
         return []
 
-    df = pd.read_csv(PREDICTIONS_PATH)
+    df = pd.read_csv(pred_path)
+
     grouped = (
         df.groupby(by)
         .agg(count=(by, "count"), avg_p_late=("p_late", "mean"))
@@ -558,6 +742,7 @@ async def get_executive_summary(
     threshold: float = 0.5,
     upgrade_cost: float = 80.0,
     delay_penalty: float = 250.0,
+    x_session_id: Optional[str] = Header(default=None)
 ):
     """
     [公開] 高階經理人決策摘要。
@@ -565,7 +750,9 @@ async def get_executive_summary(
     將模型預測轉成營運語言：服務水準風險、財務曝險、建議預算、
     以及優先處理的區域與運送模式。
     """
-    if not PREDICTIONS_PATH.exists():
+    pred_path = get_predictions_path(x_session_id)
+    if not pred_path.exists():
+
         total_orders = 2
         at_risk_orders = 1
         expected_penalty_exposure = 205.0
@@ -585,7 +772,8 @@ async def get_executive_summary(
             "data_quality_note": "示範資料，請先產生 predictions.csv。",
         }
 
-    df = pd.read_csv(PREDICTIONS_PATH)
+    df = pd.read_csv(pred_path)
+
     if df.empty or "p_late" not in df.columns:
         raise HTTPException(status_code=500, detail="predictions.csv 缺少 p_late 或資料為空。")
 
@@ -652,6 +840,7 @@ async def get_scenario_analysis(
     budgets: str = "1000,3000,5000,10000",
     upgrade_cost: float = 80.0,
     delay_penalty: float = 250.0,
+    x_session_id: Optional[str] = Header(default=None)
 ):
     """
     [公開] 預算情境比較。
@@ -659,7 +848,9 @@ async def get_scenario_analysis(
     使用與正式最佳化相同的 PuLP MILP solver，讓主管比較不同預算下
     可升級訂單數、預估淨效益、避免罰金與預算使用率。
     """
-    if not PREDICTIONS_PATH.exists():
+    pred_path = get_predictions_path(x_session_id)
+    if not pred_path.exists():
+
         return {
             "scenarios": [
                 {
@@ -700,9 +891,10 @@ async def get_scenario_analysis(
             max_candidates=500,
         )
         result = optimizer.run(
-            predictions_path=str(PREDICTIONS_PATH),
+            predictions_path=str(pred_path),
             output_dir=str(DATA_DIR),
         ).to_dict()
+
         scenarios.append({
             "budget": budget,
             "selected_count": result.get("selected_count", len(result.get("selected_orders", []))),
@@ -732,37 +924,21 @@ async def get_scenario_analysis(
 async def run_optimization(
     request: OptimizeRequest,
     x_role: Optional[str] = Header(default=None),
+    authorization: Optional[str] = Header(default=None),
+    x_session_id: Optional[str] = Header(default=None),
 ):
     """
     [僅限 Logistics_Manager] 執行最佳化調度。
-    Viewer 呼叫此端點將收到 403 Forbidden。
-
-    Header：
-        X-Role: Logistics_Manager    ← 必須
-
-    Body：
-        {
-            "budget": 5000,
-            "upgrade_cost": 80,
-            "delay_penalty": 250
-        }
-
-    回傳格式：
-        {
-            "budget": 5000,
-            "selected_count": 42,
-            "total_cost": 3360,
-            "expected_total_saving": 9450,
-            "selected_orders": [...]
-        }
     """
-    role = get_role(x_role)
+    role = get_role(x_role, authorization)
 
     # ── RBAC 核心：403 檢查 ──────────────────────────────────────────────
     require_manager(role)
     # ─────────────────────────────────────────────────────────────────────
 
-    if not PREDICTIONS_PATH.exists():
+    pred_path = get_predictions_path(x_session_id)
+    if not pred_path.exists():
+
         # 示範回傳
         return {
             "role": role,
@@ -793,24 +969,27 @@ async def run_optimization(
         budget=request.budget,
         upgrade_cost=request.upgrade_cost,
         delay_penalty=request.delay_penalty,
+        risk_threshold=request.risk_threshold,
     )
     result = optimizer.run(
-        predictions_path=str(PREDICTIONS_PATH),
+        predictions_path=str(pred_path),
         output_dir=str(DATA_DIR),
     )
+
 
     result_dict = result.to_dict()
     
     # 執行 ManagerExplainer 產出對應的管理報告以通過系統合約驗證與提供前端數據
     try:
         from explainer import ManagerExplainer
-        df = pd.read_csv(PREDICTIONS_PATH)
+        df = pd.read_csv(pred_path)
         metrics = {}
         if METRICS_PATH.exists():
             with open(METRICS_PATH, "r", encoding="utf-8") as f:
                 metrics = json.load(f)
         explainer = ManagerExplainer(df, metrics)
         result_dict["manager_analysis"] = explainer.summarize_optimization(result_dict)
+
     except Exception as e:
         result_dict["manager_analysis"] = {
             "headline": f"最佳化建議（無法載入分析器：{str(e)}）",
@@ -828,16 +1007,20 @@ async def run_optimization(
 async def get_order_explanation(
     order_id_hash: str,
     x_role: Optional[str] = Header(default=None),
+    authorization: Optional[str] = Header(default=None),
+    x_session_id: Optional[str] = Header(default=None),
 ):
     """
     [Viewer / Manager] 回傳特定訂單的 LIME-style 可解釋性分析。
     """
-    role = get_role(x_role)
+    role = get_role(x_role, authorization)
 
-    if not PREDICTIONS_PATH.exists():
+    pred_path = get_predictions_path(x_session_id)
+    if not pred_path.exists():
         raise HTTPException(status_code=404, detail="預測資料不存在，請先執行 pipeline。")
 
-    df = pd.read_csv(PREDICTIONS_PATH)
+    df = pd.read_csv(pred_path)
+
     rows = df[df["order_id_hash"].astype(str) == order_id_hash]
     if rows.empty:
         raise HTTPException(status_code=404, detail=f"找不到訂單：{order_id_hash}")
@@ -864,14 +1047,18 @@ async def get_order_explanation(
 
 
 @app.get("/api/regions")
-async def get_region_risk():
+async def get_region_risk(
+    x_session_id: Optional[str] = Header(default=None)
+):
     """計算並回傳各區域的平均延遲率排行。"""
-    if not PREDICTIONS_PATH.exists():
+    pred_path = get_predictions_path(x_session_id)
+    if not pred_path.exists():
         return [
             {"order_region": "Western Europe", "p_late": 0.82, "count": 2},
             {"order_region": "Central America", "p_late": 0.45, "count": 1},
         ]
-    df = pd.read_csv(PREDICTIONS_PATH)
+    df = pd.read_csv(pred_path)
+
     if 'order_region' not in df.columns:
         return []
     
@@ -890,11 +1077,15 @@ async def get_region_risk():
 # ── 月份診斷端點 ──────────────────────────────────────────────────────────────
 
 @app.get("/api/chart/monthly")
-async def get_monthly_chart():
+async def get_monthly_chart(
+    x_session_id: Optional[str] = Header(default=None)
+):
     """回傳所有月份的預測延遲率與實際延遲率，供前端 Flipper 使用。"""
-    if not PREDICTIONS_PATH.exists():
+    pred_path = get_predictions_path(x_session_id)
+    if not pred_path.exists():
         raise HTTPException(status_code=404, detail="predictions.csv 不存在。")
-    df = pd.read_csv(PREDICTIONS_PATH)
+    df = pd.read_csv(pred_path)
+
     if "order_date" not in df.columns or "p_late" not in df.columns:
         raise HTTPException(status_code=500, detail="predictions.csv 缺少必要欄位。")
 
@@ -920,12 +1111,18 @@ async def get_monthly_chart():
 
 
 @app.get("/api/diagnose/monthly")
-async def diagnose_monthly(month: str, error_threshold: float = 0.05):
+async def diagnose_monthly(
+    month: str,
+    error_threshold: float = 0.05,
+    x_session_id: Optional[str] = Header(default=None)
+):
     """對指定月份跑 LIME 聚合分析，回傳誤差來源特徵。"""
-    if not PREDICTIONS_PATH.exists():
+    pred_path = get_predictions_path(x_session_id)
+    if not pred_path.exists():
         raise HTTPException(status_code=404, detail="predictions.csv 不存在。")
 
-    df = pd.read_csv(PREDICTIONS_PATH)
+    df = pd.read_csv(pred_path)
+
     df["month"] = pd.to_datetime(df["order_date"], errors="coerce").dt.to_period("M").astype(str)
     month_df = df[df["month"] == month].copy()
     if month_df.empty:
@@ -1037,49 +1234,71 @@ async def flag_monthly_event(
     return {"success": True, "month": month, "event_type": event_type, "note": note}
 
 
-# ── 模型重訓端點 ───────────────────────────────────────────────────────────────
-
 @app.post("/api/retrain")
 async def retrain_model(
     body: RetrainRequest,
+    background_tasks: BackgroundTasks,
     x_role: Optional[str] = Header(default=None),
+    authorization: Optional[str] = Header(default=None),
 ):
     """
-    [Manager 限定] 排除指定特徵後重新訓練 XGBoost，回傳新舊模型指標比對。
-    新模型存入 temp 目錄，尚未替換現有模型。
+    [Manager 限定] 排除指定特徵後非同步重新訓練 XGBoost。
+    回傳 task_id，以便前端進行狀態輪詢。
     """
-    role = get_role(x_role)
+    role = get_role(x_role, authorization)
     require_manager(role)
 
-    try:
-        from retrainer import ModelRetrainer
-    except ImportError:
-        raise HTTPException(status_code=500, detail="retrainer.py 載入失敗。")
-
-    retrainer = ModelRetrainer(base_dir=BASE_DIR)
-    try:
-        result = retrainer.run(excluded_features=body.excluded_features)
-    except FileNotFoundError as e:
-        raise HTTPException(status_code=404, detail=str(e))
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"重訓失敗：{str(e)}")
-
-    return {
-        "session_id":      result["session_id"],
-        "old_metrics":     result["old_metrics"],
-        "new_metrics":     result["new_metrics"],
-        "dropped_columns": result["dropped_columns"],
+    import uuid
+    task_id = uuid.uuid4().hex[:12]
+    
+    RETRAIN_TASKS[task_id] = {
+        "status": "running",
+        "progress": 0,
+        "log": "任務初始化中，已排入排程...",
+        "result": None,
+        "error": None,
+        "base_model_hash": ""
     }
+    
+    background_tasks.add_task(run_retrain_task, task_id, body.excluded_features)
+    
+    return {"success": True, "task_id": task_id}
+
+
+@app.get("/api/tasks/{task_id}/status")
+async def get_task_status(task_id: str):
+    """查詢模型重訓背景任務的最新狀態與訓練進度。"""
+    if task_id not in RETRAIN_TASKS:
+        raise HTTPException(status_code=404, detail="找不到指定的任務。")
+    return RETRAIN_TASKS[task_id]
 
 
 @app.post("/api/retrain/adopt")
 async def adopt_retrain(
     body: RetrainSessionRequest,
     x_role: Optional[str] = Header(default=None),
+    authorization: Optional[str] = Header(default=None),
 ):
     """[Manager 限定] 採用新模型，覆蓋現有 xgboost_model.json 與 model_metrics.json。"""
-    role = get_role(x_role)
+    role = get_role(x_role, authorization)
     require_manager(role)
+
+    # 1. 併發防禦：校驗 Adopt 時的基礎模型雜湊值是否與重訓開始時一致
+    target_task = None
+    for tid, t in RETRAIN_TASKS.items():
+        if t["result"] and t["result"]["session_id"] == body.session_id:
+            target_task = t
+            break
+
+    if target_task:
+        model_path = BASE_DIR / "models" / "xgboost_model.json"
+        current_hash = get_file_hash(model_path)
+        base_hash = target_task.get("base_model_hash", "")
+        if base_hash and current_hash != base_hash:
+            raise HTTPException(
+                status_code=409,
+                detail="模型採用失敗：基礎模型已被其他管理員重訓並覆蓋，請重新診斷。"
+            )
 
     try:
         from retrainer import ModelRetrainer
@@ -1089,8 +1308,56 @@ async def adopt_retrain(
     retrainer = ModelRetrainer(base_dir=BASE_DIR)
     try:
         retrainer.adopt(body.session_id)
+        
+        # 2. 寫入 SQLite 管理員審計日誌
+        try:
+            import sqlite3
+            from auth import DB_PATH
+            conn = sqlite3.connect(DB_PATH)
+            c = conn.cursor()
+            c.execute('''
+                CREATE TABLE IF NOT EXISTS audit_logs (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    operator TEXT NOT NULL,
+                    action TEXT NOT NULL,
+                    detail TEXT,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            ''')
+            
+            # 從 Token 解析用戶名
+            username = "admin"
+            if authorization:
+                try:
+                    if authorization.startswith("Bearer "):
+                        token = authorization[7:]
+                    else:
+                        token = authorization
+                    from auth import verify_token
+                    res = verify_token(token)
+                    if res["success"]:
+                        username = res["username"]
+                except Exception:
+                    pass
+                    
+            log_detail = f"採用重訓後之新模型 (Session: {body.session_id})。"
+            if target_task and target_task["result"]:
+                dropped = target_task["result"].get("dropped_columns", [])
+                log_detail += f" 排除之特徵欄位: {', '.join(dropped)}。"
+                
+            c.execute(
+                "INSERT INTO audit_logs (operator, action, detail) VALUES (?, ?, ?)",
+                (username, "ADOPT_MODEL", log_detail)
+            )
+            conn.commit()
+            conn.close()
+        except Exception as e:
+            print(f"[Audit Log] 寫入日誌發生錯誤: {str(e)}")
+            
     except FileNotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"採用失敗：{str(e)}")
 
     return {"success": True, "message": "新模型已採用並替換現有模型。"}
 
@@ -1099,9 +1366,10 @@ async def adopt_retrain(
 async def discard_retrain(
     body: RetrainSessionRequest,
     x_role: Optional[str] = Header(default=None),
+    authorization: Optional[str] = Header(default=None),
 ):
     """[Manager 限定] 捨棄新模型，保留現有模型不變。"""
-    role = get_role(x_role)
+    role = get_role(x_role, authorization)
     require_manager(role)
 
     try:
@@ -1112,6 +1380,7 @@ async def discard_retrain(
     retrainer = ModelRetrainer(base_dir=BASE_DIR)
     retrainer.discard(body.session_id)
     return {"success": True, "message": "已捨棄新模型，現有模型不變。"}
+
 
 
 # ── 全域錯誤處理 ──────────────────────────────────────────────────────────────

@@ -62,8 +62,46 @@ def verify_user(username: str, password: str):
         return {"success": True, "role": row[0]}
     return {"success": False, "role": None}
 
+# ── Cryptographic Stateless Session Tokens (JWT-like) ───────────────────
+import hmac
+import base64
+import json
+import time
+
+SECRET_KEY = b"edis_super_secret_key_2026_rf"
+
+def generate_token(username: str, role: str) -> str:
+    """Generate a cryptographic signature token containing user role and expiration."""
+    payload = {
+        "username": username,
+        "role": role,
+        "exp": time.time() + 86400  # 24 hours validity
+    }
+    payload_b64 = base64.urlsafe_b64encode(json.dumps(payload).encode()).decode()
+    signature = hmac.new(SECRET_KEY, payload_b64.encode(), hashlib.sha256).hexdigest()
+    return f"{payload_b64}.{signature}"
+
+def verify_token(token: str) -> dict:
+    """Verify the signature and expiration of the token, returning payload info if valid."""
+    try:
+        parts = token.split(".")
+        if len(parts) != 2:
+            return {"success": False, "message": "Invalid token format"}
+        payload_b64, signature = parts
+        expected_sig = hmac.new(SECRET_KEY, payload_b64.encode(), hashlib.sha256).hexdigest()
+        if not hmac.compare_digest(expected_sig, signature):
+            return {"success": False, "message": "Signature mismatch"}
+        payload_str = base64.urlsafe_b64decode(payload_b64.encode()).decode()
+        payload = json.loads(payload_str)
+        if time.time() > payload.get("exp", 0):
+            return {"success": False, "message": "Token expired"}
+        return {"success": True, "username": payload["username"], "role": payload["role"]}
+    except Exception as e:
+        return {"success": False, "message": f"Token verification error: {str(e)}"}
+
 if __name__ == "__main__":
     init_db()
     print("測試帳號：")
     print("  Manager → username: admin    password: edis1234")
     print("  Viewer  → username: viewer   password: view1234")
+

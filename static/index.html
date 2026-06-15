@@ -324,15 +324,44 @@ body {
 .kpi-card {
   background: var(--card);
   border: 1px solid var(--border);
-  border-radius: 10px;
-  padding: 20px 24px;
+  border-radius: 12px;
+  padding: 22px 26px;
   display: flex;
   align-items: center;
-  gap: 16px;
-  transition: box-shadow 0.2s;
+  gap: 20px;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03);
 }
 
-.kpi-card:hover { box-shadow: 0 4px 16px rgba(67,112,150,0.1); }
+.kpi-card:hover { 
+  transform: translateY(-4px);
+  box-shadow: 0 12px 20px -8px rgba(67, 112, 150, 0.35);
+}
+
+.kpi-card.kpi-total {
+  background: linear-gradient(135deg, #ffffff 0%, #f1f5f9 100%);
+  border-left: 5px solid var(--steel);
+}
+.kpi-card.kpi-late {
+  background: linear-gradient(135deg, #ffffff 0%, #fffbeb 100%);
+  border-left: 5px solid #d97706;
+}
+.kpi-card.kpi-penalty {
+  background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+  color: #ffffff;
+  border-left: 5px solid #ef4444;
+  box-shadow: 0 10px 15px -3px rgba(15, 23, 42, 0.25);
+}
+.kpi-card.kpi-penalty .kpi-label {
+  color: #94a3b8;
+}
+.kpi-card.kpi-penalty .kpi-value {
+  color: #fca5a5;
+  text-shadow: 0 2px 4px rgba(0,0,0,0.3);
+}
+.kpi-card.kpi-penalty .kpi-change {
+  color: #cbd5e1;
+}
 
 .kpi-icon-wrap {
   width: 52px; height: 52px;
@@ -731,14 +760,31 @@ body {
         <div class="page-sub">DataCo Supply Chain Dataset · XGBoost + PuLP 最佳化引擎</div>
       </div>
 
-      <!-- Control Bar (Threshold Slider & CSV Upload) -->
-      <div class="panel fade-in" style="margin-bottom: 24px; padding: 16px 20px; background: var(--card); border: 1px solid var(--border); border-radius: 10px; display: flex; flex-wrap: wrap; gap: 24px; align-items: center; justify-content: space-between;">
-        <div style="flex: 1; min-width: 280px; display: flex; align-items: center; gap: 16px;">
-          <div style="flex-shrink: 0;">
-            <label class="field-label" style="font-weight:600; font-size:11px; margin-bottom:2px;">延遲判定門檻值 (Threshold)</label>
-            <span style="font-size: 15px; font-weight: 700; color: var(--navy); font-family:'DM Mono',monospace;" id="thresholdValDisplay">0.50</span>
+      <div class="panel fade-in" style="margin-bottom: 24px; padding: 18px 20px; background: var(--card); border: 1px solid var(--border); border-radius: 12px; display: flex; flex-wrap: wrap; gap: 24px; align-items: center; justify-content: space-between;">
+        <div style="flex: 1; min-width: 300px; display: flex; flex-direction: column; gap: 8px;">
+          <div style="display: flex; align-items: center; gap: 16px; width: 100%;">
+            <div style="flex-shrink: 0; min-width: 130px;">
+              <label class="field-label" style="font-weight:600; font-size:11px; margin-bottom:2px; display: flex; align-items: center; gap: 4px;">
+                延遲判定門檻值 (Threshold)
+                <span style="cursor: pointer; color: var(--navy); font-weight: bold; background: rgba(67,112,150,0.1); width: 14px; height: 14px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-size: 10px;" title="機器學習模型預測延遲機率大於此門檻時，即判定為延遲並啟動後續調度考量。">?</span>
+              </label>
+              <span style="font-size: 15px; font-weight: 700; color: var(--navy); font-family:'DM Mono',monospace;" id="thresholdValDisplay">0.50</span>
+            </div>
+            <input type="range" id="thresholdSlider" min="0.10" max="0.90" step="0.05" value="0.50" oninput="updateThreshold(this.value)" style="flex: 1; height: 6px; background: var(--border); border-radius: 3px; outline: none; cursor: pointer;">
           </div>
-          <input type="range" id="thresholdSlider" min="0.10" max="0.90" step="0.05" value="0.50" oninput="updateThreshold(this.value)" style="flex: 1; height: 6px; background: var(--border); border-radius: 3px; outline: none; cursor: pointer;">
+          <!-- Presets and SOP Status -->
+          <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap; font-size: 11px;">
+            <span style="color: var(--muted); font-weight: 500;">快速套用：</span>
+            <button id="badgeF1Btn" onclick="applyThresholdRecommendation('f1')" style="background: rgba(16, 185, 129, 0.1); color: #059669; border: 1px solid rgba(16, 185, 129, 0.2); border-radius: 4px; padding: 2px 6px; cursor: pointer; font-size: 10px; font-weight: 600;">
+              ⚖ F1 最佳 (常態營運): <span id="badgeF1Val">0.45</span>
+            </button>
+            <button id="badgeCostBtn" onclick="applyThresholdRecommendation('cost')" style="background: rgba(245, 158, 11, 0.1); color: #d97706; border: 1px solid rgba(245, 158, 11, 0.2); border-radius: 4px; padding: 2px 6px; cursor: pointer; font-size: 10px; font-weight: 600;">
+              💰 成本最佳 (省錢): <span id="badgeCostVal">0.35</span>
+            </button>
+            <span id="sopStatusLockWrap" style="margin-left: auto; display: flex; align-items: center; gap: 4px;">
+              <!-- SOP lock widgets dynamically populated -->
+            </span>
+          </div>
         </div>
         <div style="display: flex; gap: 12px; align-items: center;">
           <input type="file" id="csvFileInput" accept=".csv" style="display:none;" onchange="uploadCSV(this)">
@@ -789,7 +835,7 @@ body {
 
       <!-- KPI -->
       <div class="kpi-row fade-in">
-        <div class="kpi-card">
+        <div class="kpi-card kpi-total">
           <div class="kpi-icon-wrap icon-steel">📦</div>
           <div class="kpi-info">
             <div class="kpi-label">待處理訂單總數</div>
@@ -797,7 +843,7 @@ body {
             <div class="kpi-change" id="kpiTotalDesc">載入中...</div>
           </div>
         </div>
-        <div class="kpi-card">
+        <div class="kpi-card kpi-late">
           <div class="kpi-icon-wrap icon-warm">⚠️</div>
           <div class="kpi-info">
             <div class="kpi-label">預估延遲訂單數</div>
@@ -805,14 +851,28 @@ body {
             <div class="kpi-change" id="kpiPredictedDesc">載入中...</div>
           </div>
         </div>
-        <div class="kpi-card">
+        <div class="kpi-card kpi-penalty">
           <div class="kpi-icon-wrap icon-navy">💸</div>
           <div class="kpi-info">
             <div class="kpi-label">預期延遲罰金損失</div>
-            <div class="kpi-value navy" id="kpiExpectedPenaltyLoss">—</div>
+            <div class="kpi-value" id="kpiExpectedPenaltyLoss" style="font-weight:700;">—</div>
             <div class="kpi-change" id="kpiExpectedDesc">載入中...</div>
           </div>
         </div>
+      </div>
+
+      <!-- Actionable Insights Banner -->
+      <div id="actionableInsightsBanner" class="panel fade-in" style="margin-bottom: 24px; padding: 16px 20px; background: linear-gradient(90deg, #1e3a8a 0%, #3b82f6 100%); color: white; border-radius: 10px; display: none; align-items: center; justify-content: space-between; box-shadow: 0 4px 14px rgba(59, 130, 246, 0.25);">
+        <div style="display:flex; align-items:center; gap:12px;">
+          <span style="font-size:22px;">💡</span>
+          <div>
+            <div style="font-size:13.5px; font-weight:700; color:white;">高階經理人決策建議 (Actionable Insight)</div>
+            <div id="actionableInsightsText" style="font-size:12px; opacity:0.9; margin-top:2px;">載入中...</div>
+          </div>
+        </div>
+        <button class="run-btn" onclick="document.getElementById('nav-optimization').click()" style="background:white; color:#1e3a8a; font-weight:700; border:none; padding:8px 16px; font-size:12px; border-radius:6px; box-shadow:0 2px 6px rgba(0,0,0,0.1); cursor:pointer; width:auto; flex-shrink:0;">
+          前往最佳化調度
+        </button>
       </div>
 
       <div class="exec-grid fade-in">
@@ -1137,10 +1197,37 @@ body {
               style="width:100%;padding:10px;background:#16a34a;border:none;border-radius:6px;font-size:13px;font-weight:600;color:#fff;cursor:pointer;">
               ▶ 開始重訓模型
             </button>
-            <div id="diagRetrainStatus" style="display:none;text-align:center;padding:12px;font-size:13px;color:var(--muted);">重訓中，請稍候…</div>
+            <div id="diagRetrainStatus" style="display:none;text-align:center;padding:12px;font-size:13px;color:var(--muted);line-height:1.65;">重訓中，請稍候…</div>
+          </div>
+
+          <!-- Step 3：重訓比對與 Adopt (就地診斷重訓面板) -->
+          <div id="diagStep3" style="display:none;border-top:1px solid var(--border);padding-top:14px;">
+            <div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:10px;">模型重訓比對結果</div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:12px;">
+              <div>
+                <div style="font-size:10px;color:var(--muted);font-weight:600;margin-bottom:6px;text-transform:uppercase;letter-spacing:0.5px;">舊模型</div>
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;" id="diagOldMetricsGrid"></div>
+              </div>
+              <div>
+                <div style="font-size:10px;color:var(--muted);font-weight:600;margin-bottom:6px;text-transform:uppercase;letter-spacing:0.5px;">新模型 (重訓後)</div>
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;" id="diagNewMetricsGrid"></div>
+              </div>
+            </div>
+            <div id="diagDroppedColsNote" style="font-size:11px;color:var(--muted);margin-bottom:16px;font-family:'DM Mono',monospace;padding:8px 10px;background:var(--bg);border-radius:6px;"></div>
+            <div style="display:flex;gap:12px;">
+              <button onclick="diagAdoptNewModel()" id="diagAdoptBtn"
+                style="flex:1;padding:10px;background:#16a34a;border:none;border-radius:6px;font-size:13px;font-weight:600;color:#fff;cursor:pointer;">
+                ✓ 採用新模型
+              </button>
+              <button onclick="diagDiscardNewModel()" id="diagDiscardBtn"
+                style="flex:1;padding:10px;background:white;border:1.5px solid var(--border);border-radius:6px;font-size:13px;font-weight:600;color:var(--text);cursor:pointer;">
+                ✗ 捨棄，保留舊模型
+              </button>
+            </div>
           </div>
         </div>
       </div>
+
 
       <!-- ② 訂單升級調度（原有功能，標題調整） -->
       <div class="grid-2 fade-in">
@@ -1484,6 +1571,24 @@ body {
 // ══ API BASE ══
 const API_BASE = 'http://localhost:8000';
 
+// ══ Fetch Interceptor for JWT Auth & Session ID ══
+const originalFetch = window.fetch;
+window.fetch = function (url, options) {
+  options = options || {};
+  options.headers = options.headers || {};
+  
+  const token = sessionStorage.getItem('edis_token');
+  if (token) {
+    options.headers['Authorization'] = 'Bearer ' + token;
+  }
+  const sessionId = sessionStorage.getItem('edis_session_id');
+  if (sessionId) {
+    options.headers['X-Session-ID'] = sessionId;
+  }
+  return originalFetch(url, options);
+};
+
+
 // ══ State ══
 let currentRole = 'viewer';
 let currentPage = 1;
@@ -1690,18 +1795,62 @@ async function resetCSV() {
 function renderMetrics(d) {
   document.getElementById('kpiTotalOrders').textContent = totalPredictionsCount.toLocaleString();
   document.getElementById('kpiTotalDesc').textContent = d.is_active ? "已載入匯入資料" : "預設驗證集";
-  
-  document.getElementById('kpiPredictedLateOrders').textContent = d.high_risk_orders.toLocaleString();
-  document.getElementById('kpiPredictedDesc').textContent = `延遲機率 ≥ ${(threshold * 100).toFixed(0)}%`;
-  
-  const expectedLoss = totalPredictionsCount * d.late_rate * 250.0; 
-  document.getElementById('kpiExpectedPenaltyLoss').textContent = '$' + Math.round(expectedLoss).toLocaleString();
-  document.getElementById('kpiExpectedDesc').textContent = `平均延遲率 ${(d.late_rate * 100).toFixed(1)}%`;
 }
 
 function formatTuneMetrics(row) {
   if (!row) return '無資料';
   return `Precision ${(row.precision * 100).toFixed(1)}% · Recall ${(row.recall * 100).toFixed(1)}% · F1 ${row.f1.toFixed(4)} · 成本 $${Math.round(row.expected_cost).toLocaleString()}`;
+}
+
+let isSandboxMode = false;
+let sopDefaultThreshold = 0.50;
+
+function updateSopUI() {
+  const slider = document.getElementById('thresholdSlider');
+  const lockWrap = document.getElementById('sopStatusLockWrap');
+  if (!slider || !lockWrap) return;
+  
+  if (currentRole === 'viewer') {
+    isSandboxMode = false;
+    slider.disabled = false;
+    lockWrap.innerHTML = `
+      <span style="color: #059669; font-weight: 700;">🔓 管理者模式：可設定 SOP 門檻</span>
+      <button onclick="publishSopThreshold()" class="run-btn" style="width:auto; padding:2px 8px; font-size:10px; font-weight:bold; background:var(--navy); margin-left:6px;">發佈為公司 SOP 基準</button>
+    `;
+  } else {
+    if (isSandboxMode) {
+      slider.disabled = false;
+      lockWrap.innerHTML = `
+        <span style="color: #d97706; font-weight: 700;">🔓 沙盒模擬中</span>
+        <button onclick="toggleSandboxMode()" style="background: #dc2626; color: white; border: none; border-radius: 4px; padding: 2px 8px; cursor: pointer; font-size: 10px; font-weight: bold; margin-left: 6px;">恢復 SOP</button>
+      `;
+    } else {
+      slider.disabled = true;
+      slider.value = sopDefaultThreshold.toFixed(2);
+      document.getElementById('thresholdValDisplay').textContent = sopDefaultThreshold.toFixed(2);
+      threshold = sopDefaultThreshold;
+      lockWrap.innerHTML = `
+        <span style="color: #dc2626; font-weight: 700;">🔒 SOP 已鎖定</span>
+        <button onclick="toggleSandboxMode()" style="background: var(--steel); color: white; border: none; border-radius: 4px; padding: 2px 8px; cursor: pointer; font-size: 10px; font-weight: bold; margin-left: 6px;">啟動沙盒模擬</button>
+      `;
+    }
+  }
+}
+
+function toggleSandboxMode() {
+  isSandboxMode = !isSandboxMode;
+  updateSopUI();
+  if (!isSandboxMode) {
+    refreshDashboard();
+  }
+}
+
+async function publishSopThreshold() {
+  const newSop = parseFloat(document.getElementById('thresholdSlider').value);
+  sopDefaultThreshold = newSop;
+  alert(`已將門檻值 ${newSop.toFixed(2)} 發佈為公司新季度 SOP 基準門檻！`);
+  updateSopUI();
+  refreshDashboard();
 }
 
 function renderThresholdTuning(data) {
@@ -1721,6 +1870,21 @@ function renderThresholdTuning(data) {
 
   document.getElementById('tuneBestCostThreshold').textContent = data.best_expected_cost.threshold.toFixed(2);
   document.getElementById('tuneBestCostMetrics').textContent = formatTuneMetrics(data.best_expected_cost);
+  
+  // Update recommendation badges directly under slider
+  if (document.getElementById('badgeF1Val')) {
+    document.getElementById('badgeF1Val').textContent = data.best_f1.threshold.toFixed(2);
+  }
+  if (document.getElementById('badgeCostVal')) {
+    document.getElementById('badgeCostVal').textContent = data.best_expected_cost.threshold.toFixed(2);
+  }
+  
+  // Initialize default threshold once
+  if (!window._sopDefaultThresholdInitialized) {
+    sopDefaultThreshold = data.best_f1.threshold;
+    window._sopDefaultThresholdInitialized = true;
+    updateSopUI();
+  }
 }
 
 function applyThresholdRecommendation(type) {
@@ -1728,9 +1892,15 @@ function applyThresholdRecommendation(type) {
   const selected = type === 'cost'
     ? lastThresholdTuning.best_expected_cost
     : lastThresholdTuning.best_f1;
+    
+  if (currentRole === 'manager' && !isSandboxMode) {
+    isSandboxMode = true;
+  }
+  
   threshold = parseFloat(selected.threshold);
   document.getElementById('thresholdSlider').value = threshold.toFixed(2);
   document.getElementById('thresholdValDisplay').textContent = threshold.toFixed(2);
+  updateSopUI();
   refreshDashboard();
 }
 
@@ -1739,6 +1909,29 @@ function renderExecutiveSummary(d) {
   const atRiskRate = ((d.at_risk_rate || 0) * 100).toFixed(1);
   const topRegion = (d.top_regions && d.top_regions[0]) ? d.top_regions[0] : null;
   const topMode = (d.top_shipping_modes && d.top_shipping_modes[0]) ? d.top_shipping_modes[0] : null;
+
+  // Update Main Dashboard KPI Cards Dynamically based on Executive Summary
+  if (d.total_orders !== undefined) {
+    document.getElementById('kpiTotalOrders').textContent = d.total_orders.toLocaleString();
+  }
+  document.getElementById('kpiPredictedLateOrders').textContent = d.at_risk_orders.toLocaleString();
+  document.getElementById('kpiPredictedDesc').textContent = `延遲機率 ≥ ${(threshold * 100).toFixed(0)}%`;
+  
+  document.getElementById('kpiExpectedPenaltyLoss').textContent = '$' + Math.round(d.expected_penalty_exposure || 0).toLocaleString();
+  const savings = Math.max(0, (d.expected_penalty_exposure || 0) - (d.recommended_budget || 0));
+  document.getElementById('kpiExpectedDesc').textContent = `建議升級預算: $${Math.round(d.recommended_budget || 0).toLocaleString()}`;
+
+  // Actionable Insights Banner Decision Logic
+  const banner = document.getElementById('actionableInsightsBanner');
+  const bannerText = document.getElementById('actionableInsightsText');
+  if (banner && bannerText) {
+    if ((d.recommended_budget || 0) > 0 && savings > 0) {
+      banner.style.display = 'flex';
+      bannerText.innerHTML = `建議投入物流預算 <strong>$${Math.round(d.recommended_budget).toLocaleString()}</strong>，可挽回 <strong>${d.positive_roi_orders.toLocaleString()}</strong> 筆訂單的延遲罰金損失，預估為公司省下淨額 <strong>$${Math.round(savings).toLocaleString()}</strong>！`;
+    } else {
+      banner.style.display = 'none';
+    }
+  }
 
   document.getElementById('execSlaRisk').textContent = `${serviceLevel}%`;
   document.getElementById('execSlaRiskNote').textContent =
@@ -1832,22 +2025,82 @@ function renderBossTable(data) {
     return;
   }
   
-  tbody.innerHTML = delayed.map(o => `
-    <tr>
-      <td><span class="order-id" title="${o.order_id_hash}" style="cursor:pointer; text-decoration:underline;" onclick="openExplainModal('${o.order_id_hash}')">${o.display_order_id || displayOrderId(o.order_id_hash)}</span></td>
-      <td>${o.shipping_mode || 'Unknown'}</td>
-      <td style="color:var(--muted)">${o.order_region || 'Unknown'}</td>
-      <td>
-        <div class="prob-wrap">
-          <div class="prob-bar"><div class="prob-fill ${fillClass(o.p_late)}" style="width:${o.p_late*100}%"></div></div>
-          <span class="prob-val">${(o.p_late*100).toFixed(0)}%</span>
-        </div>
-      </td>
-      <td style="font-size:12px; color:var(--text);">${getReasonText(o)}</td>
-      <td>${getActionText(o)}</td>
-    </tr>
-  `).join('');
+  tbody.innerHTML = delayed.map(o => {
+    const hash = o.order_id_hash;
+    return `
+      <tr>
+        <td>
+          <span id="explain-btn-${hash}" style="cursor:pointer; display:inline-block; width:12px; margin-right:4px; font-size:10px; color:var(--navy);" onclick="toggleRowExplanation('${hash}')">▶</span>
+          <span class="order-id" title="${hash}" style="cursor:pointer; text-decoration:underline;" onclick="toggleRowExplanation('${hash}')">${o.display_order_id || displayOrderId(hash)}</span>
+        </td>
+        <td>${o.shipping_mode || 'Unknown'}</td>
+        <td style="color:var(--muted)">${o.order_region || 'Unknown'}</td>
+        <td>
+          <div class="prob-wrap">
+            <div class="prob-bar"><div class="prob-fill ${fillClass(o.p_late)}" style="width:${o.p_late*100}%"></div></div>
+            <span class="prob-val">${(o.p_late*100).toFixed(0)}%</span>
+          </div>
+        </td>
+        <td style="font-size:12px; color:var(--text);">${getReasonText(o)}</td>
+        <td>${getActionText(o)}</td>
+      </tr>
+      <tr id="explain-row-${hash}" class="hidden">
+        <td colspan="6" style="padding:0; background:#f9faf9;">
+          <div id="explain-content-${hash}" style="padding:14px 20px; border-top:1px solid var(--border); border-bottom:1px solid var(--border); font-size:12.5px; line-height:1.5; color:var(--text);">載入中...</div>
+        </td>
+      </tr>
+    `;
+  }).join('');
 }
+
+async function toggleRowExplanation(orderId) {
+  const row = document.getElementById(`explain-row-${orderId}`);
+  const btn = document.getElementById(`explain-btn-${orderId}`);
+  const content = document.getElementById(`explain-content-${orderId}`);
+  if (!row || !content) return;
+  
+  if (row.classList.contains('hidden')) {
+    row.classList.remove('hidden');
+    if (btn) btn.textContent = '▼';
+    
+    if (content.textContent === '載入中...') {
+      try {
+        const res = await fetch(`${API_BASE}/api/explain/${orderId}`);
+        if (!res.ok) throw new Error('讀取詳細歸因失敗');
+        const data = await res.json();
+        
+        const factors = data.top_x_factors || [];
+        const factorsHtml = factors.map(f => `
+          <div style="display:flex; justify-content:space-between; margin-bottom:6px; font-size:12px; border-bottom:1px dashed #dde0de; padding-bottom:4px;">
+            <span><strong>${f.label || f.feature}</strong>: <span style="color:var(--muted);">${f.evidence}</span></span>
+            <span style="font-weight:600; color:${f.impact === 'raises risk' ? '#c0392b' : '#27ae60'}">${f.impact === 'raises risk' ? '▲ 增加延遲風險' : '▼ 正常/次要'}</span>
+          </div>
+        `).join('');
+        
+        content.innerHTML = `
+          <div style="display:flex; flex-direction:column; gap:10px;">
+            <div style="font-weight:600; color:var(--navy); font-size:13px;">🔎 訂單延遲歸因與決策 (LIME-style)：</div>
+            <div style="background:white; border:1px solid var(--border); border-radius:6px; padding:12px; color:var(--text); line-height:1.6; font-weight:500; box-shadow:0 1px 3px rgba(0,0,0,0.02);">
+              ${data.manager_summary || '無摘要說明。'}
+            </div>
+            <div style="margin-top:6px;">
+              <div style="font-weight:600; color:var(--muted); font-size:11px; text-transform:uppercase; letter-spacing:0.5px; margin-bottom:8px; font-family:'DM Mono',monospace;">影響預測之關鍵特徵權重：</div>
+              <div style="display:flex; flex-direction:column; gap:6px;">
+                ${factorsHtml || '<div style="color:var(--muted); font-size:12px;">無明顯特徵影響</div>'}
+              </div>
+            </div>
+          </div>
+        `;
+      } catch (e) {
+        content.textContent = '分析載入失敗：' + e.message;
+      }
+    }
+  } else {
+    row.classList.add('hidden');
+    if (btn) btn.textContent = '▶';
+  }
+}
+
 
 function renderOptResult(d) {
   const el = document.getElementById('optResult');
@@ -1927,8 +2180,13 @@ async function setRole(role) {
   }
   window._managerAuthenticated = false;
   currentRole = role;
+  if (role === 'viewer') {
+    sessionStorage.removeItem('edis_token');
+    sessionStorage.removeItem('edis_session_id');
+  }
   document.querySelectorAll('.role-btn').forEach(b =>
     b.classList.toggle('active', b.textContent.toLowerCase() === role));
+
 
   const isM = role === 'manager';
   
@@ -1968,6 +2226,7 @@ async function setRole(role) {
   renderManagerAnalysis('optPageManagerAnalysisBox', 'optPageManagerAnalysisText', 'optPageManagerAnalysisFactors', null);
 
   // Refresh calculations
+  updateSopUI();
   refreshDashboard();
   
   if (!document.getElementById('page-risk-list').classList.contains('hidden')) {
@@ -2182,9 +2441,9 @@ async function loadModelPerformance() {
     }
 
     // Load Predict Discrepancies
-    const errorsRes = await fetch(`${API_BASE}/api/predict?limit=250&threshold=${threshold}`).then(r => r.json());
-    const errors = (errorsRes.data || []).filter(o => o.is_correct === false);
-    document.getElementById('errorListCount').textContent = `共 ${errors.length} 筆誤差`;
+    const errorsRes = await fetch(`${API_BASE}/api/predict?limit=250&threshold=${threshold}&error_only=true`).then(r => r.json());
+    const errors = errorsRes.data || [];
+    document.getElementById('errorListCount').textContent = `共 ${errorsRes.count || errors.length} 筆誤差`;
     const errorBody = document.getElementById('errorListTableBody');
     if (errors.length === 0) {
       errorBody.innerHTML = `<tr><td colspan="7" style="text-align:center;padding:32px;color:var(--muted);font-size:13px">目前沒有預測判定錯誤的訂單</td></tr>`;
@@ -2294,12 +2553,25 @@ async function init() {
     await loadMonthlyChart();
     
     document.getElementById('statusText').textContent = 'Live API Connection';
+
+    // 檢查是否有正在執行的背景重訓任務，若有則就地恢復輪詢與 UI 狀態
+    const activeTaskId = sessionStorage.getItem('edis_active_task_id');
+    const activeMonth = sessionStorage.getItem('edis_active_task_month');
+    if (activeTaskId && activeMonth) {
+      openDiagnoseModal(activeMonth);
+      document.getElementById('diagStep1').style.display = 'none';
+      document.getElementById('diagStep2').style.display = 'block';
+      document.getElementById('diagStartRetrainBtn').style.display = 'none';
+      document.getElementById('diagRetrainStatus').style.display = 'block';
+      pollRetrainTask(activeTaskId);
+    }
   } catch (e) {
     console.error('Initialization failed', e);
     document.getElementById('statusText').textContent = 'API Connection Error';
   }
 }
 init();
+
 // ══ Feature 3：月份 Flipper（6 格 × 最佳化調度頁） ══
 let monthlyAllData  = [];
 let flipperPageStart = 0;
@@ -2549,7 +2821,7 @@ async function startRetrain() {
   const btn    = document.getElementById('diagStartRetrainBtn');
   const status = document.getElementById('diagRetrainStatus');
   if (btn)    { btn.style.display    = 'none'; }
-  if (status) { status.style.display = 'block'; status.textContent = '重訓中，請稍候（可能需要 1-3 分鐘）…'; }
+  if (status) { status.style.display = 'block'; status.innerHTML = '<span class="spinner"></span> 正在啟動重訓任務...'; }
 
   try {
     const res = await fetch(`${API_BASE}/api/retrain`, {
@@ -2559,18 +2831,147 @@ async function startRetrain() {
     });
     if (!res.ok) { const e = await res.json().catch(()=>({})); throw new Error(e.detail || res.status); }
     const data = await res.json();
-    pendingRetrainSession = data.session_id;
-
-    closeDiagnoseModal();
-    showPage('model-perf');
-    renderRetrainResult(data);
-    showToast('重訓完成，請確認新舊指標後決定是否採用', 'success');
+    
+    // 儲存任務 ID 到 sessionStorage 防止重整網頁遺失
+    sessionStorage.setItem('edis_active_task_id', data.task_id);
+    sessionStorage.setItem('edis_active_task_month', diagCurrentMonth);
+    
+    pollRetrainTask(data.task_id);
   } catch(e) {
     if (status) { status.textContent = '重訓失敗：' + e.message; status.style.color = '#e07b54'; }
     if (btn) btn.style.display = 'block';
     showToast('重訓失敗：' + e.message, 'error');
   }
 }
+
+function pollRetrainTask(taskId) {
+  const status = document.getElementById('diagRetrainStatus');
+  const interval = setInterval(async () => {
+    try {
+      const res = await fetch(`${API_BASE}/api/tasks/${taskId}/status`);
+      if (!res.ok) throw new Error('無法取得任務進度');
+      const data = await res.json();
+      
+      if (status) {
+        status.innerHTML = `<span class="spinner"></span> <strong>[${data.progress}%]</strong> ${data.log}`;
+      }
+      
+      if (data.status === 'success') {
+        clearInterval(interval);
+        sessionStorage.removeItem('edis_active_task_id');
+        sessionStorage.removeItem('edis_active_task_month');
+        if (status) status.style.display = 'none';
+        
+        pendingRetrainSession = data.result.session_id;
+        renderDiagRetrainResult(data.result);
+        showToast('重訓完成，新舊模型指標比對就緒。', 'success');
+      } else if (data.status === 'failed') {
+        clearInterval(interval);
+        sessionStorage.removeItem('edis_active_task_id');
+        sessionStorage.removeItem('edis_active_task_month');
+        if (status) {
+          status.textContent = '重訓失敗：' + (data.error || '未知錯誤');
+          status.style.color = '#e07b54';
+        }
+        const btn = document.getElementById('diagStartRetrainBtn');
+        if (btn) btn.style.display = 'block';
+        showToast('重訓失敗：' + (data.error || '未知錯誤'), 'error');
+      }
+    } catch (e) {
+      clearInterval(interval);
+      if (status) {
+        status.textContent = '輪詢進度失敗：' + e.message;
+        status.style.color = '#e07b54';
+      }
+      const btn = document.getElementById('diagStartRetrainBtn');
+      if (btn) btn.style.display = 'block';
+    }
+  }, 2000);
+}
+
+function renderDiagRetrainResult(data) {
+  document.getElementById('diagStep2').style.display = 'none';
+  const step3 = document.getElementById('diagStep3');
+  if (step3) step3.style.display = 'block';
+  
+  document.getElementById('diagDroppedColsNote').textContent =
+    `排除特徵（${(data.dropped_columns||[]).length} 個）：${(data.dropped_columns||[]).join(' · ') || '無'}`;
+
+  const metricKeys = ['roc_auc', 'f1', 'precision', 'recall'];
+  const metricLabels = { roc_auc: 'ROC-AUC', f1: 'F1', precision: '精準率', recall: '召回率' };
+
+  function renderMetricGrid(elId, metrics, compareMetrics) {
+    const el = document.getElementById(elId);
+    if (!el || !metrics) return;
+    el.innerHTML = metricKeys.map(k => {
+      const v    = metrics[k]     != null ? (+metrics[k]).toFixed(4)     : '—';
+      const vCmp = compareMetrics && compareMetrics[k] != null ? +compareMetrics[k] : null;
+      const vNum = metrics[k] != null ? +metrics[k] : null;
+      let delta = '';
+      if (vNum != null && vCmp != null) {
+        const diff = ((vNum - vCmp) * 100).toFixed(2);
+        const isUp = vNum >= vCmp;
+        delta = `<span style="font-size:10px; margin-left:2px; color:${isUp?'#16a34a':'#e07b54'};">${isUp?'▲':'▼'} ${Math.abs(diff)}%</span>`;
+      }
+      return `<div class="stat-box" style="padding:6px 8px;"><div class="stat-label" style="font-size:9px;">${metricLabels[k]}</div><div class="stat-value" style="font-size:13px; font-weight:700;">${v}${delta}</div></div>`;
+    }).join('');
+  }
+
+  renderMetricGrid('diagOldMetricsGrid', data.old_metrics, data.new_metrics);
+  renderMetricGrid('diagNewMetricsGrid', data.new_metrics, data.old_metrics);
+}
+
+async function diagAdoptNewModel() {
+  if (!pendingRetrainSession) return;
+  const xRole = currentRole === 'manager' ? 'Logistics_Manager' : 'Viewer';
+  const btn = document.getElementById('diagAdoptBtn');
+  if (btn) { btn.disabled = true; btn.textContent = '採用中...'; }
+  try {
+    const res = await fetch(`${API_BASE}/api/retrain/adopt`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Role': xRole },
+      body: JSON.stringify({ session_id: pendingRetrainSession })
+    });
+    
+    if (!res.ok) {
+      const e = await res.json().catch(()=>({}));
+      throw new Error(e.detail || res.status);
+    }
+    
+    pendingRetrainSession = null;
+    document.getElementById('diagStep3').style.display = 'none';
+    closeDiagnoseModal();
+    showToast('新模型已採用並就地更新。', 'success');
+    
+    await loadMonthlyChart();
+    await refreshDashboard();
+  } catch(e) {
+    showToast('採用失敗：' + e.message, 'error');
+    if (btn) { btn.disabled = false; btn.textContent = '✓ 採用新模型'; }
+  }
+}
+
+async function diagDiscardNewModel() {
+  if (!pendingRetrainSession) return;
+  const xRole = currentRole === 'manager' ? 'Logistics_Manager' : 'Viewer';
+  const btn = document.getElementById('diagDiscardBtn');
+  if (btn) { btn.disabled = true; btn.textContent = '捨棄中...'; }
+  try {
+    await fetch(`${API_BASE}/api/retrain/discard`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Role': xRole },
+      body: JSON.stringify({ session_id: pendingRetrainSession })
+    });
+  } catch(e) {}
+  
+  pendingRetrainSession = null;
+  document.getElementById('diagStep3').style.display = 'none';
+  closeDiagnoseModal();
+  showToast('已捨棄新模型，保留現有模型。', 'info');
+  
+  if (btn) { btn.disabled = false; btn.textContent = '✗ 捨棄，保留舊模型'; }
+}
+
 
 // ── 重訓比對結果 ────────────────────────────────────────────────────────────────
 function renderRetrainResult(data) {
@@ -2675,12 +3076,16 @@ async function submitLogin() {
       body: JSON.stringify({ username, password })
     });
     if (res.ok) {
+      const data = await res.json();
+      sessionStorage.setItem('edis_token', data.token);
+      sessionStorage.setItem('edis_session_id', data.session_id);
       document.getElementById('loginModal').classList.remove('show');
       window._managerAuthenticated = true;
       await setRole('manager');
     } else {
       errEl.classList.add('show');
     }
+
   } catch(e) {
     errEl.classList.add('show');
   }
@@ -2693,7 +3098,7 @@ document.addEventListener('keydown', function(e) {
 </script>
 
 <!-- Modal for Local Attribution Explanation -->
-<div id="explainModal" class="hidden" style="position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:999; display:none; align-items:center; justify-content:center; padding:20px;">
+<div id="explainModal" style="position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:999; display:none; align-items:center; justify-content:center; padding:20px;">
   <div style="background:white; border-radius:10px; width:100%; max-width:600px; padding:24px; box-shadow:0 10px 25px rgba(0,0,0,0.1); display:flex; flex-direction:column; gap:16px; position:relative;">
     <button onclick="closeExplainModal()" style="position:absolute; top:16px; right:20px; border:none; background:transparent; font-size:24px; cursor:pointer; color:var(--muted); line-height:1;">&times;</button>
     <div style="font-size:16px; font-weight:700; color:var(--text); display:flex; align-items:center; gap:8px; margin-bottom:4px;">🔎 訂單延遲原因詳細分析 (LIME-style)</div>

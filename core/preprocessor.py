@@ -147,6 +147,31 @@ def predict_uploaded_csv(file_path_or_buffer, mapping_path: Path, model_path: Pa
     ).astype(str)
     
     active_df["expected_penalty"] = (active_df["p_late"] * 250.0).round(2)
-    active_df["upgrade_cost"] = 80.0
+    
+    # 實作 SSOT Rate Card 動態運費計費
+    shipping_base_costs = {
+        "Standard Class": 50.0,
+        "Second Class": 80.0,
+        "First Class": 120.0,
+        "Same Day": 180.0,
+    }
+    region_multipliers = {
+        "Western Europe": 1.1,
+        "Central America": 0.9,
+        "South America": 0.95,
+        "Northern Europe": 1.25,
+        "Eastern Europe": 1.05,
+        "North America": 1.15,
+        "East Asia": 1.2,
+        "Oceania": 1.3,
+    }
+    def get_dynamic_upgrade_cost(row):
+        mode = row.get("shipping_mode", "Standard Class")
+        region = row.get("order_region", "Unknown")
+        base = shipping_base_costs.get(mode, 80.0)
+        mult = region_multipliers.get(region, 1.0)
+        return round(base * mult, 2)
+        
+    active_df["upgrade_cost"] = active_df.apply(get_dynamic_upgrade_cost, axis=1)
     
     return active_df

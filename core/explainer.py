@@ -61,7 +61,29 @@ class ManagerExplainer:
     def explain_order(self, order: dict) -> dict:
         p_late = float(order.get("p_late", 0.0))
         expected_penalty = float(order.get("expected_penalty", p_late * 250.0))
-        upgrade_cost = float(order.get("upgrade_cost", 80.0))
+        shipping_base_costs = {
+            "Standard Class": 50.0,
+            "Second Class": 80.0,
+            "First Class": 120.0,
+            "Same Day": 180.0,
+        }
+        region_multipliers = {
+            "Western Europe": 1.1,
+            "Central America": 0.9,
+            "South America": 0.95,
+            "Northern Europe": 1.25,
+            "Eastern Europe": 1.05,
+            "North America": 1.15,
+            "East Asia": 1.2,
+            "Oceania": 1.3,
+        }
+        mode_val = order.get("shipping_mode", "Standard Class")
+        region_val = order.get("order_region", "Unknown")
+        base = shipping_base_costs.get(mode_val, 80.0)
+        mult = region_multipliers.get(region_val, 1.0)
+        default_dynamic_cost = round(base * mult, 2)
+        
+        upgrade_cost = float(order.get("upgrade_cost", default_dynamic_cost))
         net_benefit = float(order.get("net_benefit", expected_penalty - upgrade_cost))
         risk_bucket = str(order.get("risk_bucket", self._risk_bucket(p_late)))
         shipping_mode = str(order.get("shipping_mode", "Unknown"))

@@ -198,9 +198,41 @@ class ShippingOptimizer:
         df = pd.read_csv(path)
         print(f"  共 {len(df):,} 筆預測")
 
-        # 每次都用當前參數覆寫（CSV 裡的舊值不可信）
-        df["upgrade_cost"] = self.upgrade_cost
+        # 1. 補全 expected_penalty：每次用當前 delay_penalty 覆寫以確保與最新參數對齊
         df["expected_penalty"] = df["p_late"] * self.delay_penalty
+        
+        # 2. 如果 CSV 中已有 upgrade_cost 且包含多樣費率，則依調整比例縮放，否則動態計算
+        # 預設基準是 80.0，若用戶調整了 upgrade_cost，則進行比例縮放 (例如 80 變 100 -> 縮放 1.25 倍)
+        ratio = self.upgrade_cost / 80.0 if self.upgrade_cost else 1.0
+        
+        if "upgrade_cost" in df.columns and (df["upgrade_cost"] != 80.0).any():
+            df["upgrade_cost"] = (df["upgrade_cost"] * ratio).round(2)
+        else:
+            # 實作 SSOT Rate Card 動態運費計費
+            shipping_base_costs = {
+                "Standard Class": 50.0,
+                "Second Class": 80.0,
+                "First Class": 120.0,
+                "Same Day": 180.0,
+            }
+            region_multipliers = {
+                "Western Europe": 1.1,
+                "Central America": 0.9,
+                "South America": 0.95,
+                "Northern Europe": 1.25,
+                "Eastern Europe": 1.05,
+                "North America": 1.15,
+                "East Asia": 1.2,
+                "Oceania": 1.3,
+            }
+            def get_dynamic_upgrade_cost(row):
+                mode = row.get("shipping_mode", "Standard Class")
+                region = row.get("order_region", "Unknown")
+                base = shipping_base_costs.get(mode, 80.0)
+                mult = region_multipliers.get(region, 1.0)
+                return round(base * mult * ratio, 2)
+                
+            df["upgrade_cost"] = df.apply(get_dynamic_upgrade_cost, axis=1)
         if "order_id_hash" in df.columns:
             before = len(df)
             df = (
