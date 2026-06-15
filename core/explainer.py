@@ -57,6 +57,17 @@ class ManagerExplainer:
         self.predictions = predictions.copy()
         self.metrics = metrics or {}
         self.feature_importance = self.metrics.get("feature_importance", {}) or {}
+        
+        # 效能優化：預先計算全球與各區域平均延遲率，避免對每筆訂單重複執行 O(N) 字串掃描
+        self.global_mean = float(self.predictions["p_late"].mean()) if "p_late" in self.predictions.columns else 0.0
+        self.region_means = {}
+        if "order_region" in self.predictions.columns and "p_late" in self.predictions.columns:
+            try:
+                self.region_means = self.predictions.groupby(
+                    self.predictions["order_region"].astype(str).str.strip()
+                )["p_late"].mean().to_dict()
+            except Exception:
+                pass
 
     def explain_order(self, order: dict) -> dict:
         p_late = float(order.get("p_late", 0.0))
@@ -235,12 +246,9 @@ class ManagerExplainer:
         }
 
     def _region_average(self, order_region: str) -> float:
-        if not order_region or "order_region" not in self.predictions.columns:
-            return float(self.predictions["p_late"].mean()) if "p_late" in self.predictions.columns else 0.0
-        rows = self.predictions[self.predictions["order_region"].astype(str).str.strip() == order_region]
-        if rows.empty:
-            return float(self.predictions["p_late"].mean())
-        return float(rows["p_late"].mean())
+        if not order_region:
+            return self.global_mean
+        return self.region_means.get(order_region.strip(), self.global_mean)
 
     def _recommended_action(self, risk_bucket: str, net_benefit: float) -> str:
         if risk_bucket == "High" and net_benefit > 0:
