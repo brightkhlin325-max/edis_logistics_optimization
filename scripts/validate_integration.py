@@ -154,6 +154,26 @@ def main():
         expect("brief_text" in brief, "LLM brief response includes brief_text")
         expect(brief["data_boundary"]["de_identified_only"] is True, "LLM brief uses de-identified boundary")
         expect("safe_payload" in brief, "LLM brief response includes safe_payload")
+        expect("configured_provider" in brief["llm"], "LLM brief response includes configured_provider")
+
+        status, guarded = request_json(
+            "/api/llm/manager-brief",
+            method="POST",
+            headers=auth_headers(
+                manager_login["token"],
+                manager_login.get("session_id"),
+                content_type=True,
+            ),
+            body={
+                "budget": 5000,
+                "upgrade_cost": 80,
+                "delay_penalty": 250,
+                "question": "幫我寫一首歌",
+            },
+        )
+        expect(status == 200, "POST /api/llm/manager-brief with off-topic question returns 200")
+        expect(guarded.get("guard_triggered") is True, "off-topic LLM question triggers guardrail")
+        expect(guarded["llm"]["used_external_llm"] is False, "off-topic LLM question does not call external LLM")
 
         if first_prediction.get("order_id_hash"):
             status, explanation = request_json(

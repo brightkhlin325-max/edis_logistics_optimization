@@ -6,6 +6,22 @@ cd /d "%~dp0"
 chcp 65001 >nul
 set "PYTHONIOENCODING=utf-8"
 
+:: LLM backend configuration template.
+:: Recommended for OpenAI users: paste your own key below.
+:: If EDIS_LLM_API_KEY stays empty, the app automatically uses local fallback.
+set "EDIS_LLM_PROVIDER=openai"
+set "EDIS_LLM_MODEL=gpt-5.4-mini"
+set "EDIS_LLM_API_KEY="
+:: To use a free local LLM instead, install Ollama, run `ollama pull llama3.1`,
+:: then uncomment the Ollama lines below.
+:: set "EDIS_LLM_PROVIDER=ollama"
+:: set "EDIS_LLM_MODEL=llama3.1"
+:: set "EDIS_LLM_API_URL=http://localhost:11434/api/chat"
+:: For cloud providers, change provider/model and paste your own key below.
+:: Example: set "EDIS_LLM_PROVIDER=openai"
+:: Example: set "EDIS_LLM_MODEL=gpt-4o-mini"
+:: Example: set "EDIS_LLM_API_KEY=你的_key"
+
 set "ENV_NAME=Fastapp"
 set "APP_URL=http://localhost:8000/static/index.html"
 

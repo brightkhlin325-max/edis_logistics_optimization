@@ -501,6 +501,30 @@ def build_llm_prompt(safe_payload: dict, language: str = "zh-TW", question: str 
     )
 
 
+def is_logistics_question(question: str) -> bool:
+    """Return True when the user asks about EDIS logistics decision context."""
+    text = (question or "").strip().lower()
+    if not text:
+        return True
+
+    allowed_terms = [
+        "物流", "訂單", "延遲", "準時", "配送", "運送", "調度", "升級", "風險",
+        "預測", "機率", "模型", "門檻", "預算", "成本", "罰金", "損失", "效益",
+        "roi", "sla", "x因子", "x 因子", "lime", "region", "shipping", "budget",
+        "risk", "delay", "late", "delivery", "shipment", "order", "optimize",
+        "optimization", "predict", "prediction", "model", "threshold", "penalty",
+        "cost", "route", "dispatch", "upgrade",
+    ]
+    return any(term in text for term in allowed_terms)
+
+
+def off_topic_llm_response(question: str) -> str:
+    return (
+        "我只能回答與目前訂單預測、延遲風險、物流調度、預算最佳化、模型門檻與 X 因子解釋相關的問題。\n"
+        "請改問例如：「這批訂單哪些最該優先處理？」、「為什麼延遲風險高？」或「預算有限時該怎麼調度？」"
+    )
+
+
 def local_llm_fallback(safe_payload: dict) -> str:
     opt = safe_payload.get("optimization", {})
     analysis = safe_payload.get("manager_analysis", {})
@@ -514,64 +538,214 @@ def local_llm_fallback(safe_payload: dict) -> str:
     )
 
 
+def get_llm_config() -> dict:
+    """
+    Read the backend-wide LLM provider settings.
+
+    Configure before starting uvicorn:
+      EDIS_LLM_PROVIDER=local|openai|openai_compatible|gemini|claude|ollama
+      EDIS_LLM_MODEL=<provider model name>
+      EDIS_LLM_API_KEY=<provider API key>
+      EDIS_LLM_API_URL=<optional custom endpoint>
+    """
+    provider = os.environ.get("EDIS_LLM_PROVIDER", "").strip().lower()
+    if not provider:
+        provider = "openai" if (os.environ.get("EDIS_LLM_API_KEY") or os.environ.get("OPENAI_API_KEY")) else "local"
+
+    provider_keys = {
+        "openai": os.environ.get("OPENAI_API_KEY"),
+        "openai_compatible": os.environ.get("OPENAI_API_KEY"),
+        "gemini": os.environ.get("GEMINI_API_KEY"),
+        "claude": os.environ.get("ANTHROPIC_API_KEY"),
+        "ollama": "",
+        "local": "",
+    }
+    api_key = os.environ.get("EDIS_LLM_API_KEY") or provider_keys.get(provider, "")
+
+    default_models = {
+        "openai": "gpt-4o-mini",
+        "openai_compatible": "gpt-4o-mini",
+        "gemini": "gemini-1.5-flash",
+        "claude": "claude-3-haiku-20240307",
+        "ollama": "llama3.1",
+        "local": None,
+    }
+    default_urls = {
+        "openai": "https://api.openai.com/v1/responses",
+        "openai_compatible": "https://api.openai.com/v1/chat/completions",
+        "gemini": None,
+        "claude": "https://api.anthropic.com/v1/messages",
+        "ollama": "http://localhost:11434/api/chat",
+        "local": None,
+    }
+
+    return {
+        "provider": provider,
+        "api_key": api_key,
+        "api_url": os.environ.get("EDIS_LLM_API_URL") or default_urls.get(provider),
+        "model": os.environ.get("EDIS_LLM_MODEL") or default_models.get(provider),
+    }
+
+
+def _llm_fallback(provider: str, model: str | None, fallback_text: str, error: str | None = None) -> dict:
+    return {
+        "used_external_llm": False,
+        "provider": "local_fallback",
+        "configured_provider": provider,
+        "model": model,
+        "brief_text": fallback_text,
+        "error": error,
+    }
+
+
 def call_configured_llm(prompt: str, fallback_text: str) -> dict:
-    api_key = os.environ.get("EDIS_LLM_API_KEY") or os.environ.get("OPENAI_API_KEY")
-    api_url = os.environ.get("EDIS_LLM_API_URL")
-    model = os.environ.get("EDIS_LLM_MODEL", "gpt-4o-mini")
+    config = get_llm_config()
+    provider = config["provider"]
+    api_key = config["api_key"]
+    api_url = config["api_url"]
+    model = config["model"]
 
-    if not api_key:
-        return {
-            "used_external_llm": False,
-            "provider": "local_fallback",
-            "model": None,
-            "brief_text": fallback_text,
-            "error": None,
-        }
-
-    if not api_url:
-        api_url = "https://api.openai.com/v1/chat/completions"
+    if provider == "local":
+        return _llm_fallback(provider, model, fallback_text)
+    if provider not in {"openai", "openai_compatible", "gemini", "claude", "ollama"}:
+        return _llm_fallback(provider, model, fallback_text, f"不支援的 LLM provider：{provider}")
+    if provider != "ollama" and not api_key:
+        return _llm_fallback(provider, model, fallback_text, f"{provider} 未設定 API key，已使用本地摘要 fallback。")
 
     try:
+        from urllib.parse import quote
         from urllib.request import Request as UrlRequest, urlopen
 
-        body = json.dumps({
-            "model": model,
-            "messages": [
-                {
-                    "role": "system",
-                    "content": "You produce concise logistics executive briefs from de-identified data only.",
+        if provider == "openai":
+            body = json.dumps({
+                "model": model,
+                "input": [
+                    {
+                        "role": "system",
+                        "content": "You produce concise logistics executive briefs from de-identified data only.",
+                    },
+                    {"role": "user", "content": prompt},
+                ],
+                "reasoning": {"effort": "low"},
+                "text": {"verbosity": "low"},
+            }).encode("utf-8")
+            req = UrlRequest(
+                api_url,
+                data=body,
+                method="POST",
+                headers={
+                    "Authorization": f"Bearer {api_key}",
+                    "Content-Type": "application/json",
                 },
-                {"role": "user", "content": prompt},
-            ],
-            "temperature": 0.2,
-        }).encode("utf-8")
-        req = UrlRequest(
-            api_url,
-            data=body,
-            method="POST",
-            headers={
-                "Authorization": f"Bearer {api_key}",
-                "Content-Type": "application/json",
-            },
-        )
-        with urlopen(req, timeout=20) as response:
-            payload = json.loads(response.read().decode("utf-8"))
-        text = payload["choices"][0]["message"]["content"].strip()
+            )
+            with urlopen(req, timeout=20) as response:
+                payload = json.loads(response.read().decode("utf-8"))
+            text = payload.get("output_text", "").strip()
+            if not text:
+                output = payload.get("output", [])
+                chunks = []
+                for item in output:
+                    for content in item.get("content", []):
+                        if content.get("type") in {"output_text", "text"}:
+                            chunks.append(content.get("text", ""))
+                text = "".join(chunks).strip()
+
+        elif provider == "openai_compatible":
+            body = json.dumps({
+                "model": model,
+                "messages": [
+                    {
+                        "role": "system",
+                        "content": "You produce concise logistics executive briefs from de-identified data only.",
+                    },
+                    {"role": "user", "content": prompt},
+                ],
+                "temperature": 0.2,
+            }).encode("utf-8")
+            req = UrlRequest(
+                api_url,
+                data=body,
+                method="POST",
+                headers={
+                    "Authorization": f"Bearer {api_key}",
+                    "Content-Type": "application/json",
+                },
+            )
+            with urlopen(req, timeout=20) as response:
+                payload = json.loads(response.read().decode("utf-8"))
+            text = payload["choices"][0]["message"]["content"].strip()
+
+        elif provider == "gemini":
+            gemini_url = api_url or f"https://generativelanguage.googleapis.com/v1beta/models/{quote(model)}:generateContent?key={api_key}"
+            body = json.dumps({
+                "contents": [
+                    {"parts": [{"text": prompt}]}
+                ],
+                "generationConfig": {"temperature": 0.2},
+            }).encode("utf-8")
+            req = UrlRequest(
+                gemini_url,
+                data=body,
+                method="POST",
+                headers={"Content-Type": "application/json"},
+            )
+            with urlopen(req, timeout=20) as response:
+                payload = json.loads(response.read().decode("utf-8"))
+            text = payload["candidates"][0]["content"]["parts"][0]["text"].strip()
+
+        elif provider == "claude":
+            body = json.dumps({
+                "model": model,
+                "max_tokens": 800,
+                "temperature": 0.2,
+                "messages": [{"role": "user", "content": prompt}],
+            }).encode("utf-8")
+            req = UrlRequest(
+                api_url,
+                data=body,
+                method="POST",
+                headers={
+                    "x-api-key": api_key,
+                    "anthropic-version": os.environ.get("EDIS_LLM_ANTHROPIC_VERSION", "2023-06-01"),
+                    "Content-Type": "application/json",
+                },
+            )
+            with urlopen(req, timeout=20) as response:
+                payload = json.loads(response.read().decode("utf-8"))
+            text = "".join(block.get("text", "") for block in payload.get("content", [])).strip()
+
+        else:  # ollama
+            body = json.dumps({
+                "model": model,
+                "messages": [
+                    {
+                        "role": "system",
+                        "content": "You produce concise logistics executive briefs from de-identified data only.",
+                    },
+                    {"role": "user", "content": prompt},
+                ],
+                "stream": False,
+            }).encode("utf-8")
+            req = UrlRequest(
+                api_url,
+                data=body,
+                method="POST",
+                headers={"Content-Type": "application/json"},
+            )
+            with urlopen(req, timeout=30) as response:
+                payload = json.loads(response.read().decode("utf-8"))
+            text = payload["message"]["content"].strip()
+
         return {
             "used_external_llm": True,
-            "provider": "openai_compatible",
+            "provider": provider,
+            "configured_provider": provider,
             "model": model,
             "brief_text": text,
             "error": None,
         }
     except Exception as e:
-        return {
-            "used_external_llm": False,
-            "provider": "local_fallback",
-            "model": model,
-            "brief_text": fallback_text,
-            "error": f"LLM 呼叫失敗，已使用本地摘要 fallback：{str(e)}",
-        }
+        return _llm_fallback(provider, model, fallback_text, f"LLM 呼叫失敗，已使用本地摘要 fallback：{str(e)}")
 
 
 
@@ -1313,11 +1487,43 @@ def generate_manager_llm_brief(
     """
     [Manager 限定] 以去識別化最佳化結果產生 LLM 主管摘要。
 
-    若設定 EDIS_LLM_API_KEY 或 OPENAI_API_KEY，會呼叫 OpenAI-compatible
-    chat endpoint；未設定或呼叫失敗時，回傳本地規則摘要作為 demo-safe fallback。
+    使用 EDIS_LLM_PROVIDER / EDIS_LLM_MODEL / EDIS_LLM_API_KEY 後台設定。
+    未設定、呼叫失敗，或 provider=local 時，回傳本地規則摘要作為 demo-safe fallback。
     """
     role = get_role(x_role, authorization)
     require_manager(role)
+
+    if not is_logistics_question(request.question):
+        config = get_llm_config()
+        brief_text = off_topic_llm_response(request.question)
+        return {
+            "role": role,
+            "data_boundary": {
+                "de_identified_only": True,
+                "sent_fields": [],
+                "excluded_fields": [
+                    "customer_name",
+                    "email",
+                    "phone",
+                    "address",
+                    "raw_order_id",
+                    "payment_info",
+                    "password",
+                ],
+            },
+            "llm": {
+                "used_external_llm": False,
+                "provider": "guardrail",
+                "configured_provider": config["provider"],
+                "model": config["model"],
+                "error": None,
+            },
+            "guard_triggered": True,
+            "brief_text": brief_text,
+            "safe_prompt": "",
+            "safe_payload": {},
+            "manager_analysis": {},
+        }
 
     pred_path = get_predictions_path(x_session_id)
     optimization_result = build_optimization_result(request, pred_path, save_results=False)
@@ -1349,6 +1555,7 @@ def generate_manager_llm_brief(
         "llm": {
             "used_external_llm": llm_result["used_external_llm"],
             "provider": llm_result["provider"],
+            "configured_provider": llm_result.get("configured_provider", llm_result["provider"]),
             "model": llm_result["model"],
             "error": llm_result["error"],
         },

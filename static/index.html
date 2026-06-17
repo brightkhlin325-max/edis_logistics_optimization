@@ -2048,7 +2048,9 @@ async function generateAIBrief() {
       throw new Error(detail);
     }
     const data = await res.json();
-    mode.textContent = data.llm?.used_external_llm ? `LLM: ${data.llm.model || 'external'}` : 'local fallback';
+    mode.textContent = data.llm?.used_external_llm
+      ? `${data.llm.configured_provider || data.llm.provider}: ${data.llm.model || 'external'}`
+      : `${data.llm?.configured_provider || 'local'} → fallback`;
     appendAIMessage('assistant', data.brief_text || '沒有產生摘要。');
     document.getElementById('aiQuestionInput').value = '';
   } catch (e) {
