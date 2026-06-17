@@ -1251,8 +1251,8 @@ body {
                 <th>地區</th>
                 <th>延遲機率</th>
                 <th>風險等級</th>
-                <th>實際結果 (Y)</th>
-                <th>預測正確？(Ŷ)</th>
+                <th>實際結果 (有 Y 時)</th>
+                <th>預測正確？(有 Y 時)</th>
               </tr>
             </thead>
             <tbody id="riskListTableBody">
@@ -2062,7 +2062,9 @@ async function generateAIBrief() {
 // ══ Render KPI & Dashboard ══
 function renderMetrics(d) {
   document.getElementById('kpiTotalOrders').textContent = totalPredictionsCount.toLocaleString();
-  document.getElementById('kpiTotalDesc').textContent = d.is_active ? "已載入匯入資料" : "預設驗證集";
+  document.getElementById('kpiTotalDesc').textContent = d.is_active
+    ? (d.has_ground_truth ? "已載入回填資料" : "已載入待預測資料（尚未回填 Y）")
+    : "預設驗證集";
 }
 
 function formatTuneMetrics(row) {
@@ -2132,7 +2134,8 @@ function renderThresholdTuning(data) {
   panel.style.display = 'block';
 
   document.getElementById('thresholdTuningNote').textContent =
-    `${data.row_count.toLocaleString()} 筆資料 · 升級成本 $${data.cost_model.upgrade_cost} · 漏判成本 $${data.cost_model.delay_penalty}`;
+    `${data.row_count.toLocaleString()} 筆資料 · 升級成本 $${data.cost_model.upgrade_cost} · 漏判成本 $${data.cost_model.delay_penalty}`
+    + (data.basis_note ? ` · ${data.basis_note}` : '');
 
   document.getElementById('tuneCurrentThreshold').textContent = data.current.threshold.toFixed(2);
   document.getElementById('tuneCurrentMetrics').textContent = formatTuneMetrics(data.current);
