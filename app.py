@@ -750,10 +750,19 @@ async def get_metrics(
     if pred_path.exists():
         try:
             df = pd.read_csv(pred_path)
+            if "p_late" in df.columns:
+                probability = pd.to_numeric(df["p_late"], errors="coerce").fillna(0.0)
+                predicted = (probability >= threshold).astype(int)
+                high_risk_orders = int(predicted.sum())
+                expected_penalty_sum = (
+                    float(df.loc[predicted == 1, "expected_penalty"].sum())
+                    if "expected_penalty" in df.columns
+                    else 0.0
+                )
+                total_orders = int(len(df))
 
             if "true_label" in df.columns and "p_late" in df.columns:
                 actual = df["true_label"].astype(int)
-                predicted = (df["p_late"] >= threshold).astype(int)
 
                 tn = int(((actual == 0) & (predicted == 0)).sum())
                 fp = int(((actual == 0) & (predicted == 1)).sum())
@@ -770,9 +779,6 @@ async def get_metrics(
                     else 0.0
                 )
                 late_rate = float(predicted.mean())
-                high_risk_orders = int((df["p_late"] >= threshold).sum())
-                expected_penalty_sum = float(df[df["p_late"] >= threshold]["expected_penalty"].sum())
-                total_orders = len(df)
 
                 # 每月趨勢與誤差資料 (Y vs Yhat)
                 monthly_trends = []
@@ -805,6 +811,25 @@ async def get_metrics(
                     "confusion_matrix": confusion_matrix,
                     "monthly_trends": monthly_trends,
                     "feature_importance": metrics.get("feature_importance"),
+                    "has_ground_truth": True,
+                    "is_active": pred_path != PREDICTIONS_PATH,
+                }
+            if "p_late" in df.columns:
+                return {
+                    "roc_auc": metrics.get("roc_auc", 0.803),
+                    "f1": metrics.get("f1", 0.0),
+                    "recall": metrics.get("recall", 0.0),
+                    "precision": metrics.get("precision", 0.0),
+                    "late_rate": round(float(predicted.mean()), 4),
+                    "high_risk_orders": high_risk_orders,
+                    "expected_penalty_sum": round(expected_penalty_sum, 2),
+                    "total_orders": total_orders,
+                    "confusion_matrix": None,
+                    "monthly_trends": [],
+                    "feature_importance": metrics.get("feature_importance"),
+                    "has_ground_truth": False,
+                    "is_active": pred_path != PREDICTIONS_PATH,
+                    "metric_note": "目前 session 資料尚未回填真實 Y；Precision/Recall/F1 顯示基準模型指標，營運 KPI 以預測機率計算。",
                 }
         except Exception:
             pass
@@ -819,6 +844,8 @@ async def get_metrics(
         "high_risk_orders": metrics.get("high_risk_orders", 128),
         "confusion_matrix": metrics.get("confusion_matrix"),
         "feature_importance": metrics.get("feature_importance"),
+        "has_ground_truth": True,
+        "is_active": False,
     }
 
 
@@ -840,14 +867,15 @@ async def get_threshold_tuning(
     if start < 0 or stop > 1 or start > stop:
         raise HTTPException(status_code=400, detail="threshold range must stay within 0..1.")
     
-    pred_path = get_predictions_path(x_session_id)
+    pred_path = PREDICTIONS_PATH
     if not pred_path.exists():
         raise HTTPException(status_code=404, detail="predictions.csv not found.")
 
     df = pd.read_csv(pred_path)
+    data_basis = "default_validation"
 
     if "true_label" not in df.columns or "p_late" not in df.columns:
-        raise HTTPException(status_code=400, detail="predictions.csv must include true_label and p_late.")
+        raise HTTPException(status_code=400, detail="threshold tuning requires labeled validation predictions.")
 
     actual = df["true_label"].astype(int)
     probability = pd.to_numeric(df["p_late"], errors="coerce").fillna(0.0)
@@ -872,6 +900,8 @@ async def get_threshold_tuning(
         "best_f1": best_f1,
         "best_expected_cost": best_expected_cost,
         "thresholds": rows,
+        "data_basis": data_basis,
+        "basis_note": "門檻建議固定使用預設驗證集計算；回填已知結果並採用新模型後才會更新基準。",
         "cost_model": {
             "upgrade_cost": upgrade_cost,
             "delay_penalty": delay_penalty,
@@ -948,7 +978,8 @@ def get_predictions(
             df["actual_late"] = df["true_label"].astype(int)
             df["is_correct"] = (df["actual_late"] == df["predicted_late"])
         else:
-            df["is_correct"] = True
+            df["actual_late"] = None
+            df["is_correct"] = None
 
     # 應用過濾器
     if search:
@@ -969,7 +1000,10 @@ def get_predictions(
     if threshold is not None:
         df = df[df["p_late"] >= threshold]
     if error_only:
-        df = df[~df["is_correct"]]
+        if "true_label" in df.columns:
+            df = df[df["is_correct"] == False]
+        else:
+            df = df.iloc[0:0]
 
     total_count = len(df)
 
@@ -1428,30 +1462,37 @@ def get_monthly_chart(
         raise HTTPException(status_code=500, detail="predictions.csv 缺少 p_late 欄位。")
 
     df, period_mode = add_analysis_period(df)
-    if "true_label" in df.columns:
+    has_ground_truth = "true_label" in df.columns
+    if has_ground_truth:
         df["actual_late"] = df["true_label"].astype(int)
 
-    grouped = df.groupby("month").agg(
-        avg_p_late=("p_late", "mean"),
-        actual_late_rate=("actual_late", "mean") if "actual_late" in df.columns else ("p_late", "mean"),
-        total_orders=("p_late", "count"),
-    ).reset_index().sort_values("month")
+    agg_map = {
+        "avg_p_late": ("p_late", "mean"),
+        "total_orders": ("p_late", "count"),
+    }
+    if has_ground_truth:
+        agg_map["actual_late_rate"] = ("actual_late", "mean")
+    grouped = df.groupby("month").agg(**agg_map).reset_index().sort_values("month")
 
     records = []
     for _, row in grouped.iterrows():
         records.append({
             "month":            row["month"],
             "avg_p_late":       round(float(row["avg_p_late"]), 4),
-            "actual_late_rate": round(float(row["actual_late_rate"]), 4),
+            "actual_late_rate": round(float(row["actual_late_rate"]), 4) if has_ground_truth else None,
             "total_orders":     int(row["total_orders"]),
+            "has_ground_truth":  has_ground_truth,
         })
     return {
         "data": records,
         "period_mode": period_mode,
+        "has_ground_truth": has_ground_truth,
         "period_note": (
             "依原始訂單日期彙整月份。"
+            if period_mode == "calendar_month" and has_ground_truth
+            else "目前資料尚未回填真實 Y；此圖僅顯示預測延遲率，Y 與誤差診斷需等待實際配送結果。"
             if period_mode == "calendar_month"
-            else "目前預測檔未包含訂單日期，改以固定資料批次呈現；重新產生含 order_date 的預測檔後會自動切回月份。"
+            else "目前預測檔未包含訂單日期，改以固定資料批次呈現；若尚未回填真實 Y，僅顯示預測延遲率。"
         ),
     }
 
@@ -1477,17 +1518,18 @@ def diagnose_monthly(
         raise HTTPException(status_code=404, detail=f"找不到 {month} 的資料。")
 
     threshold_val = 0.5
-    if "true_label" in month_df.columns:
+    has_ground_truth = "true_label" in month_df.columns
+    if has_ground_truth:
         month_df["actual_late"]    = month_df["true_label"].astype(int)
         month_df["predicted_late"] = (month_df["p_late"] >= threshold_val).astype(int)
         month_df["is_correct"]     = month_df["actual_late"] == month_df["predicted_late"]
     else:
-        month_df["is_correct"] = True
+        month_df["is_correct"] = None
 
     avg_p_late        = float(month_df["p_late"].mean())
-    actual_late_rate  = float(month_df["actual_late"].mean()) if "actual_late" in month_df.columns else avg_p_late
-    error             = abs(avg_p_late - actual_late_rate)
-    error_orders      = month_df[month_df["is_correct"] == False]
+    actual_late_rate  = float(month_df["actual_late"].mean()) if has_ground_truth else None
+    error             = abs(avg_p_late - actual_late_rate) if has_ground_truth else None
+    error_orders      = month_df[month_df["is_correct"] == False] if has_ground_truth else month_df.iloc[0:0]
 
     # Use saved model importance for an immediate aggregate diagnosis. Running
     # per-order explanation repeatedly here can block the single API worker.
@@ -1523,14 +1565,15 @@ def diagnose_monthly(
     return {
         "month":                 month,
         "avg_p_late":            round(avg_p_late, 4),
-        "actual_late_rate":      round(actual_late_rate, 4),
-        "error":                 round(error, 4),
-        "error_exceeds_threshold": error > error_threshold,
+        "actual_late_rate":      round(actual_late_rate, 4) if has_ground_truth else None,
+        "error":                 round(error, 4) if has_ground_truth else None,
+        "error_exceeds_threshold": error > error_threshold if has_ground_truth else False,
         "total_orders":          len(month_df),
         "error_orders_count":    len(error_orders),
         "top_factors":           top_factors,
         "event_flag":            event_flag,
         "period_mode":           period_mode,
+        "has_ground_truth":      has_ground_truth,
     }
 
 
