@@ -169,6 +169,143 @@ body {
   overflow: hidden;
 }
 
+/* ── AI assistant chat ── */
+.ai-chat-shell {
+  min-height: calc(100vh - 170px);
+  display: grid;
+  grid-template-rows: 1fr auto;
+  gap: 18px;
+}
+
+.ai-chat-log {
+  min-height: 420px;
+  padding: 8px 4px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  overflow: auto;
+}
+
+.ai-message {
+  max-width: 760px;
+  padding: 13px 15px;
+  border-radius: 14px;
+  font-size: 14px;
+  line-height: 1.7;
+  white-space: pre-wrap;
+  box-shadow: 0 4px 14px rgba(45,51,64,0.06);
+}
+
+.ai-message.assistant {
+  align-self: flex-start;
+  background: white;
+  border: 1px solid var(--border);
+}
+
+.ai-message.user {
+  align-self: flex-end;
+  background: var(--navy);
+  color: white;
+}
+
+.ai-message.system {
+  align-self: center;
+  max-width: 680px;
+  background: #f6f9fb;
+  border: 1px solid var(--border);
+  color: var(--muted);
+  font-size: 13px;
+  text-align: center;
+}
+
+.ai-composer-wrap {
+  position: sticky;
+  bottom: 18px;
+  display: flex;
+  justify-content: center;
+  padding-bottom: 2px;
+}
+
+.ai-composer {
+  width: min(760px, 100%);
+  min-height: 108px;
+  background: white;
+  border: 1px solid #d9dee5;
+  border-radius: 24px;
+  box-shadow: 0 10px 30px rgba(45,51,64,0.12);
+  display: grid;
+  grid-template-rows: 1fr auto;
+  padding: 16px 18px 12px;
+}
+
+.ai-composer textarea {
+  width: 100%;
+  min-height: 42px;
+  max-height: 130px;
+  border: 0;
+  outline: none;
+  resize: none;
+  background: transparent;
+  color: var(--text);
+  font-family: inherit;
+  font-size: 15px;
+  line-height: 1.55;
+}
+
+.ai-composer-actions {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+}
+
+.ai-icon-btn {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  border: 0;
+  background: #f1f3f5;
+  color: #111827;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 24px;
+  line-height: 1;
+  cursor: pointer;
+  transition: background 0.15s, transform 0.15s;
+}
+
+.ai-icon-btn:hover {
+  background: #e7eaee;
+  transform: translateY(-1px);
+}
+
+.ai-send-btn {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  border: 0;
+  background: transparent;
+  color: #111827;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 22px;
+  cursor: pointer;
+}
+
+.ai-send-btn:disabled,
+.ai-icon-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.ai-file-chip {
+  font-size: 12px;
+  color: var(--muted);
+}
+
 .role-btn {
   padding: 5px 16px;
   border: none;
@@ -708,6 +845,9 @@ body {
     <a class="nav-item" id="nav-optimization" onclick="showPage('optimization')">
       <i class="nav-icon">◉</i> 最佳化調度
     </a>
+    <a class="nav-item" id="nav-ai-assistant" onclick="showPage('ai-assistant')">
+      <i class="nav-icon">✦</i> AI 助理
+    </a>
     <div class="nav-section">分析</div>
     <a class="nav-item" id="nav-model-perf" onclick="showPage('model-perf')">
       <i class="nav-icon">◇</i> 模型效能
@@ -788,18 +928,18 @@ body {
           </div>
         </div>
         <div style="display: flex; gap: 12px; align-items: center;">
-          <input type="file" id="csvFileInput" accept=".csv" style="display:none;" onchange="uploadCSV(this)">
+          <input type="file" id="csvFileInput" accept=".csv" style="display:none;" onchange="uploadTrainingCSV(this)">
           <a href="/static/template.csv" download="template.csv" class="run-btn" id="downloadTemplateBtn" style="width:auto; padding: 8px 16px; background: var(--steel); border-radius: 6px; font-size:12px; display:flex; align-items:center; gap:6px; text-decoration:none; color:white;">
-            📥 下載範本 CSV
+            📥 下載回填範本 CSV
           </a>
           <button class="run-btn" id="uploadCsvBtn" onclick="document.getElementById('csvFileInput').click()" style="width:auto; padding: 8px 16px; background: var(--navy); border-radius: 6px; font-size:12px; display:flex; align-items:center; gap:6px;">
-            📤 匯入待調度訂單 (CSV)
+            📤 回填已知結果 CSV
           </button>
           <button class="run-btn hidden" id="resetCsvBtn" onclick="resetCSV()" style="width:auto; padding: 8px 16px; background: #e07b54; border-radius: 6px; font-size:12px; display:none;">
             🔄 還原驗證集
           </button>
           <span id="lockedUploadBox" class="locked-box" style="font-size:11px; padding:6px 12px; border-radius:6px; margin:0;">
-            🔒 需 Manager 權限以匯入 CSV
+            🔒 需 Manager 權限以回填訓練資料
           </span>
         </div>
       </div>
@@ -1017,6 +1157,39 @@ body {
                 <div style="font-size:11px;color:var(--muted);font-weight:500;margin-bottom:8px;text-transform:uppercase;letter-spacing:0.5px;font-family:'DM Mono',monospace">建議升級訂單</div>
                 <div class="ord-list" id="ordList"></div>
               </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- B. AI ASSISTANT PANEL -->
+    <div class="page-section hidden" id="page-ai-assistant">
+      <div class="page-header fade-in">
+        <div class="page-title">AI 物流決策助理</div>
+        <div class="page-sub">上傳尚未知道實際結果的訂單 CSV，先做延遲預測，再用去識別化資料產生主管摘要</div>
+      </div>
+
+      <div class="ai-chat-shell fade-in">
+        <div class="ai-chat-log" id="aiChatLog">
+          <div class="ai-message assistant">
+            你好，我是 EDIS AI 物流決策助理。你可以直接問我這批訂單的延遲風險、最佳化調度建議，或按左下角 + 上傳尚未知道實際結果的訂單 CSV 進行預測。
+          </div>
+          <div class="ai-message system" id="aiUploadStatus">尚未上傳待預測檔案。沒有外部 LLM API key 時會使用本地摘要 fallback。</div>
+        </div>
+
+        <div class="ai-composer-wrap">
+          <div class="ai-composer">
+            <textarea id="aiQuestionInput" rows="2" placeholder="提出任何問題"></textarea>
+            <div class="ai-composer-actions">
+              <div style="display:flex;align-items:center;gap:10px;">
+                <input type="file" id="aiPredictCsvInput" accept=".csv" style="display:none;" onchange="uploadPredictionCSV(this)">
+                <button class="ai-icon-btn" id="aiUploadPredictBtn" type="button" onclick="document.getElementById('aiPredictCsvInput').click()" title="上傳待預測 CSV">+</button>
+                <span class="ai-file-chip" id="aiLlmMode">local fallback</span>
+                <span id="aiLockedBox" class="ai-file-chip" style="display:none;">需要 Manager 權限</span>
+                <button class="ai-file-chip" id="aiResetPredictBtn" onclick="resetCSV()" style="display:none;border:0;background:transparent;cursor:pointer;color:#e07b54;">還原預設驗證集</button>
+              </div>
+              <button class="ai-send-btn" id="aiGenerateBriefBtn" type="button" onclick="generateAIBrief()" title="送出問題">↑</button>
             </div>
           </div>
         </div>
@@ -1735,39 +1908,37 @@ function updateThreshold(val) {
 }
 
 // ══ CSV Import & Reset Handlers ══
-async function uploadCSV(input) {
+async function uploadTrainingCSV(input) {
   const file = input.files[0];
   if (!file) return;
   
   const uploadBtn = document.getElementById('uploadCsvBtn');
   const originalHtml = uploadBtn.innerHTML;
-  uploadBtn.innerHTML = '<span class="spinner"></span>匯入中...';
+  uploadBtn.innerHTML = '<span class="spinner"></span>回填中...';
   uploadBtn.disabled = true;
   
   const formData = new FormData();
   formData.append('file', file);
   
   try {
-    const res = await fetch(`${API_BASE}/api/upload`, {
+    const res = await fetch(`${API_BASE}/api/upload-training`, {
       method: 'POST',
       body: formData
     });
     
     if (!res.ok) {
       const err = await res.json();
-      throw new Error(err.detail || '上傳失敗');
+      throw new Error(err.detail || '回填失敗');
     }
     
     const data = await res.json();
     alert(data.message);
-    document.getElementById('resetCsvBtn').style.display = 'inline-flex';
-    refreshDashboard();
   } catch (e) {
-    alert('上傳失敗: ' + e.message);
+    alert('訓練資料回填失敗: ' + e.message);
   } finally {
     uploadBtn.innerHTML = originalHtml;
     uploadBtn.disabled = false;
-    input.value = ''; // Reset file input
+    input.value = '';
   }
 }
 
@@ -1781,6 +1952,11 @@ async function resetCSV() {
     });
     if (res.ok) {
       resetBtn.style.display = 'none';
+      const aiResetBtn = document.getElementById('aiResetPredictBtn');
+      if (aiResetBtn) aiResetBtn.style.display = 'none';
+      const aiStatus = document.getElementById('aiUploadStatus');
+      if (aiStatus) aiStatus.textContent = '已還原為預設驗證集。';
+      appendAIMessage('system', '已還原為預設驗證集。');
       refreshDashboard();
     } else {
       const err = await res.json();
@@ -1790,6 +1966,96 @@ async function resetCSV() {
     alert('重設失敗: ' + e.message);
   } finally {
     resetBtn.disabled = false;
+  }
+}
+
+function appendAIMessage(type, text) {
+  const log = document.getElementById('aiChatLog');
+  if (!log) return;
+  const msg = document.createElement('div');
+  msg.className = `ai-message ${type}`;
+  msg.textContent = text;
+  log.appendChild(msg);
+  log.scrollTop = log.scrollHeight;
+}
+
+async function uploadPredictionCSV(input) {
+  const file = input.files[0];
+  if (!file) return;
+
+  const btn = document.getElementById('aiUploadPredictBtn');
+  const status = document.getElementById('aiUploadStatus');
+  const originalText = btn.textContent;
+  btn.textContent = '...';
+  btn.disabled = true;
+  status.textContent = '正在上傳並產生延遲預測...';
+  appendAIMessage('user', `上傳檔案：${file.name}`);
+  appendAIMessage('system', '正在上傳並產生延遲預測...');
+
+  const formData = new FormData();
+  formData.append('file', file);
+
+  try {
+    const res = await fetch(`${API_BASE}/api/upload`, {
+      method: 'POST',
+      body: formData
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || '預測上傳失敗');
+    }
+    const data = await res.json();
+    status.textContent = `${data.message} 目前 Dashboard 與風險清單已切換到此 session 的預測結果。`;
+    appendAIMessage('assistant', `${data.message}\n目前 Dashboard 與風險清單已切換到此 session 的預測結果。你可以接著問我這批訂單的延遲風險或最佳化調度建議。`);
+    document.getElementById('aiResetPredictBtn').style.display = 'inline-flex';
+    document.getElementById('resetCsvBtn').style.display = 'inline-flex';
+    await refreshDashboard();
+  } catch (e) {
+    status.textContent = '預測上傳失敗：' + e.message;
+    appendAIMessage('system', '預測上傳失敗：' + e.message);
+  } finally {
+    btn.textContent = originalText;
+    btn.disabled = false;
+    input.value = '';
+  }
+}
+
+async function generateAIBrief() {
+  const btn = document.getElementById('aiGenerateBriefBtn');
+  const mode = document.getElementById('aiLlmMode');
+  const question = document.getElementById('aiQuestionInput').value.trim();
+  const originalText = btn.textContent;
+  btn.textContent = '...';
+  btn.disabled = true;
+  appendAIMessage('user', question || '請產生本批物流調度的主管摘要。');
+  appendAIMessage('system', '正在整理去識別化預測結果與最佳化摘要...');
+
+  try {
+    const res = await fetch(`${API_BASE}/api/llm/manager-brief`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        budget: parseFloat(document.getElementById('budgetInput')?.value) || 5000,
+        upgrade_cost: 80,
+        delay_penalty: 250,
+        risk_threshold: threshold,
+        question
+      })
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      const detail = err.detail?.message || err.detail || 'AI 摘要產生失敗';
+      throw new Error(detail);
+    }
+    const data = await res.json();
+    mode.textContent = data.llm?.used_external_llm ? `LLM: ${data.llm.model || 'external'}` : 'local fallback';
+    appendAIMessage('assistant', data.brief_text || '沒有產生摘要。');
+    document.getElementById('aiQuestionInput').value = '';
+  } catch (e) {
+    appendAIMessage('system', 'AI 摘要產生失敗：' + e.message);
+  } finally {
+    btn.textContent = originalText;
+    btn.disabled = false;
   }
 }
 
@@ -2207,14 +2473,29 @@ async function setRole(role) {
   // Lock/Unlock Uploading for Manager
   document.getElementById('uploadCsvBtn').style.display = isM ? 'inline-flex' : 'none';
   document.getElementById('lockedUploadBox').style.display = isM ? 'none' : 'inline-flex';
+  const aiUploadBtn = document.getElementById('aiUploadPredictBtn');
+  const aiBriefBtn = document.getElementById('aiGenerateBriefBtn');
+  const aiLockedBox = document.getElementById('aiLockedBox');
+  const aiRoleBadge = document.getElementById('aiRoleBadge');
+  if (aiUploadBtn) aiUploadBtn.style.display = isM ? 'inline-flex' : 'none';
+  if (aiBriefBtn) aiBriefBtn.disabled = !isM;
+  if (aiLockedBox) aiLockedBox.style.display = isM ? 'none' : 'inline-flex';
+  if (aiRoleBadge) {
+    aiRoleBadge.className = isM ? 'role-badge badge-manager' : 'role-badge badge-viewer';
+    aiRoleBadge.textContent = isM ? 'Manager' : 'Viewer';
+  }
   
   if (!isM) {
     document.getElementById('resetCsvBtn').style.display = 'none';
+    const aiResetBtn = document.getElementById('aiResetPredictBtn');
+    if (aiResetBtn) aiResetBtn.style.display = 'none';
   } else {
     // Check if active file exists by fetching metrics
     const m = await fetchMetrics();
     if (m.is_active) {
       document.getElementById('resetCsvBtn').style.display = 'inline-flex';
+      const aiResetBtn = document.getElementById('aiResetPredictBtn');
+      if (aiResetBtn) aiResetBtn.style.display = 'inline-flex';
     }
   }
 
@@ -2554,6 +2835,12 @@ async function init() {
     const isM = currentRole === 'manager';
     document.getElementById('uploadCsvBtn').style.display = isM ? 'inline-flex' : 'none';
     document.getElementById('lockedUploadBox').style.display = isM ? 'none' : 'inline-flex';
+    const aiUploadBtn = document.getElementById('aiUploadPredictBtn');
+    const aiBriefBtn = document.getElementById('aiGenerateBriefBtn');
+    const aiLockedBox = document.getElementById('aiLockedBox');
+    if (aiUploadBtn) aiUploadBtn.style.display = isM ? 'inline-flex' : 'none';
+    if (aiBriefBtn) aiBriefBtn.disabled = !isM;
+    if (aiLockedBox) aiLockedBox.style.display = isM ? 'none' : 'inline-flex';
 
     await refreshDashboard();
     await loadMonthlyChart();
@@ -3112,6 +3399,13 @@ async function submitLogin() {
 document.addEventListener('keydown', function(e) {
   if (e.key === 'Enter' && document.getElementById('loginModal').classList.contains('show')) {
     submitLogin();
+  }
+});
+document.addEventListener('keydown', function(e) {
+  const input = document.getElementById('aiQuestionInput');
+  if (e.key === 'Enter' && !e.shiftKey && document.activeElement === input) {
+    e.preventDefault();
+    generateAIBrief();
   }
 });
 </script>

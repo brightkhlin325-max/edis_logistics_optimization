@@ -186,6 +186,12 @@ class OptimizeRequest(BaseModel):
     risk_threshold: float = 0.3
 
 
+class LLMBriefRequest(OptimizeRequest):
+    language: str = "zh-TW"
+    max_sample_orders: int = 3
+    question: str = ""
+
+
 class FlagEventRequest(BaseModel):
     month: str
     event_type: str
@@ -360,6 +366,212 @@ def require_manager(role: str) -> None:
                 "your_role": role,
             },
         )
+
+
+def load_model_metrics() -> dict:
+    if not METRICS_PATH.exists():
+        return {}
+    try:
+        with open(METRICS_PATH, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except Exception:
+        return {}
+
+
+def attach_manager_analysis(result_dict: dict, pred_path: Path) -> dict:
+    """Attach de-identified manager-facing analysis to an optimization result."""
+    try:
+        from explainer import ManagerExplainer
+
+        df = load_cached_predictions(pred_path)
+        explainer = ManagerExplainer(df, load_model_metrics())
+        result_dict["manager_analysis"] = explainer.summarize_optimization(result_dict)
+    except Exception as e:
+        result_dict["manager_analysis"] = {
+            "headline": f"最佳化建議（無法載入分析器：{str(e)}）",
+            "recommended_policy": "優先處理高風險與正淨效益訂單",
+            "sample_order_explanations": [],
+            "llm_ready_prompt": "",
+        }
+    return result_dict
+
+
+def build_optimization_result(request: OptimizeRequest, pred_path: Path, save_results: bool) -> dict:
+    if not pred_path.exists():
+        return {
+            "budget": request.budget,
+            "selected_count": 12,
+            "total_cost": 960.0,
+            "expected_total_saving": 2850.0,
+            "selected_orders": [
+                {
+                    "order_id_hash": "a8f3c2d1" * 8,
+                    "p_late": 0.88,
+                    "upgrade_cost": 80.0,
+                    "expected_saving": 220.0,
+                    "risk_bucket": "High",
+                    "decision": "Upgrade",
+                }
+            ],
+            "manager_analysis": {
+                "headline": "示範資料：建議主管核准高風險且淨效益為正的訂單升級。",
+                "recommended_policy": "優先升級高風險與正淨效益訂單。",
+                "sample_order_explanations": [],
+                "llm_ready_prompt": "請根據示範最佳化結果產生主管摘要。",
+            },
+            "note": "示範資料（請先執行 model_pipeline.py）",
+        }
+
+    if ShippingOptimizer is None:
+        raise HTTPException(
+            status_code=500,
+            detail="optimizer.py 載入失敗，請確認 core/ 目錄存在。",
+        )
+
+    optimizer = ShippingOptimizer(
+        budget=request.budget,
+        upgrade_cost=request.upgrade_cost,
+        delay_penalty=request.delay_penalty,
+        risk_threshold=request.risk_threshold,
+    )
+    result = optimizer.run(
+        predictions_path_or_df=str(pred_path),
+        output_dir=str(DATA_DIR),
+        save_results=save_results,
+    )
+    return attach_manager_analysis(result.to_dict(), pred_path)
+
+
+def build_llm_safe_payload(optimization_result: dict, max_sample_orders: int = 3) -> dict:
+    """Keep the LLM boundary limited to de-identified and aggregate fields."""
+    manager_analysis = optimization_result.get("manager_analysis", {}) or {}
+    samples = []
+    for item in manager_analysis.get("sample_order_explanations", [])[:max(0, max_sample_orders)]:
+        samples.append({
+            "order_id_hash": item.get("order_id_hash"),
+            "risk_bucket": item.get("risk_bucket"),
+            "p_late": item.get("p_late"),
+            "recommended_action": item.get("recommended_action"),
+            "expected_penalty": item.get("expected_penalty"),
+            "upgrade_cost": item.get("upgrade_cost"),
+            "net_benefit": item.get("net_benefit"),
+            "top_x_factors": item.get("top_x_factors", [])[:3],
+            "manager_summary": item.get("manager_summary"),
+        })
+
+    return {
+        "data_policy": {
+            "de_identified_only": True,
+            "excluded_fields": [
+                "customer_name",
+                "email",
+                "phone",
+                "address",
+                "raw_order_id",
+                "payment_info",
+                "password",
+            ],
+        },
+        "optimization": {
+            "budget": optimization_result.get("budget"),
+            "selected_count": optimization_result.get("selected_count"),
+            "total_cost": optimization_result.get("total_cost"),
+            "expected_total_saving": optimization_result.get("expected_total_saving"),
+            "expected_total_penalty_avoided": optimization_result.get("expected_total_penalty_avoided"),
+            "solver": optimization_result.get("solver"),
+        },
+        "manager_analysis": {
+            "headline": manager_analysis.get("headline"),
+            "recommended_policy": manager_analysis.get("recommended_policy"),
+            "budget_usage_pct": manager_analysis.get("budget_usage_pct"),
+            "sample_order_explanations": samples,
+        },
+    }
+
+
+def build_llm_prompt(safe_payload: dict, language: str = "zh-TW", question: str = "") -> str:
+    question_text = question.strip() or "請產生本批物流調度的主管摘要。"
+    return (
+        "你是物流決策助理。請只根據下列去識別化資料，產出主管可直接閱讀的摘要。"
+        "不得推測或要求任何個資，也不得還原雜湊識別碼。"
+        f"輸出語言：{language}。"
+        f"使用者問題：{question_text}。"
+        "請用三段：1. 決策建議 2. 主要風險原因 3. 預算與下一步。"
+        f"\n\n資料：{json.dumps(safe_payload, ensure_ascii=False, default=str)}"
+    )
+
+
+def local_llm_fallback(safe_payload: dict) -> str:
+    opt = safe_payload.get("optimization", {})
+    analysis = safe_payload.get("manager_analysis", {})
+    return (
+        f"決策建議：{analysis.get('headline') or '建議優先處理高風險且淨效益為正的訂單。'}\n"
+        f"主要風險原因：{analysis.get('recommended_policy') or '延遲機率、運送模式與區域風險是主要判斷依據。'}\n"
+        f"預算與下一步：本次預算 USD ${float(opt.get('budget') or 0):,.0f}，"
+        f"選出 {int(opt.get('selected_count') or 0)} 筆訂單，"
+        f"預估淨效益 USD ${float(opt.get('expected_total_saving') or 0):,.0f}；"
+        "若無外部 LLM API key，系統會使用此本地摘要作為安全 fallback。"
+    )
+
+
+def call_configured_llm(prompt: str, fallback_text: str) -> dict:
+    api_key = os.environ.get("EDIS_LLM_API_KEY") or os.environ.get("OPENAI_API_KEY")
+    api_url = os.environ.get("EDIS_LLM_API_URL")
+    model = os.environ.get("EDIS_LLM_MODEL", "gpt-4o-mini")
+
+    if not api_key:
+        return {
+            "used_external_llm": False,
+            "provider": "local_fallback",
+            "model": None,
+            "brief_text": fallback_text,
+            "error": None,
+        }
+
+    if not api_url:
+        api_url = "https://api.openai.com/v1/chat/completions"
+
+    try:
+        from urllib.request import Request as UrlRequest, urlopen
+
+        body = json.dumps({
+            "model": model,
+            "messages": [
+                {
+                    "role": "system",
+                    "content": "You produce concise logistics executive briefs from de-identified data only.",
+                },
+                {"role": "user", "content": prompt},
+            ],
+            "temperature": 0.2,
+        }).encode("utf-8")
+        req = UrlRequest(
+            api_url,
+            data=body,
+            method="POST",
+            headers={
+                "Authorization": f"Bearer {api_key}",
+                "Content-Type": "application/json",
+            },
+        )
+        with urlopen(req, timeout=20) as response:
+            payload = json.loads(response.read().decode("utf-8"))
+        text = payload["choices"][0]["message"]["content"].strip()
+        return {
+            "used_external_llm": True,
+            "provider": "openai_compatible",
+            "model": model,
+            "brief_text": text,
+            "error": None,
+        }
+    except Exception as e:
+        return {
+            "used_external_llm": False,
+            "provider": "local_fallback",
+            "model": model,
+            "brief_text": fallback_text,
+            "error": f"LLM 呼叫失敗，已使用本地摘要 fallback：{str(e)}",
+        }
 
 
 
@@ -1049,70 +1261,67 @@ def run_optimization(
     # ─────────────────────────────────────────────────────────────────────
 
     pred_path = get_predictions_path(x_session_id)
-    if not pred_path.exists():
-
-        # 示範回傳
-        return {
-            "role": role,
-            "budget": request.budget,
-            "selected_count": 12,
-            "total_cost": 960.0,
-            "expected_total_saving": 2850.0,
-            "selected_orders": [
-                {
-                    "order_id_hash": "a8f3c2d1" * 8,
-                    "p_late": 0.88,
-                    "upgrade_cost": 80.0,
-                    "expected_saving": 220.0,
-                    "risk_bucket": "High",
-                    "decision": "Upgrade",
-                }
-            ],
-            "note": "示範資料（請先執行 model_pipeline.py）",
-        }
-
-    if ShippingOptimizer is None:
-        raise HTTPException(
-            status_code=500,
-            detail="optimizer.py 載入失敗，請確認 core/ 目錄存在。",
-        )
-
-    optimizer = ShippingOptimizer(
-        budget=request.budget,
-        upgrade_cost=request.upgrade_cost,
-        delay_penalty=request.delay_penalty,
-        risk_threshold=request.risk_threshold,
-    )
-    result = optimizer.run(
-        predictions_path_or_df=str(pred_path),
-        output_dir=str(DATA_DIR),
-        save_results=True,
-    )
-
-
-    result_dict = result.to_dict()
-    
-    # 執行 ManagerExplainer 產出對應的管理報告以通過系統合約驗證與提供前端數據
-    try:
-        from explainer import ManagerExplainer
-        df = load_cached_predictions(pred_path)
-        metrics = {}
-        if METRICS_PATH.exists():
-            with open(METRICS_PATH, "r", encoding="utf-8") as f:
-                metrics = json.load(f)
-        explainer = ManagerExplainer(df, metrics)
-        result_dict["manager_analysis"] = explainer.summarize_optimization(result_dict)
-
-    except Exception as e:
-        result_dict["manager_analysis"] = {
-            "headline": f"最佳化建議（無法載入分析器：{str(e)}）",
-            "recommended_policy": "優先處理高風險與正淨效益訂單",
-            "sample_order_explanations": []
-        }
+    result_dict = build_optimization_result(request, pred_path, save_results=True)
 
     return {
         "role": role,
         **result_dict,
+    }
+
+
+@app.post("/api/llm/manager-brief")
+def generate_manager_llm_brief(
+    request: LLMBriefRequest,
+    x_role: Optional[str] = Header(default=None),
+    authorization: Optional[str] = Header(default=None),
+    x_session_id: Optional[str] = Header(default=None),
+):
+    """
+    [Manager 限定] 以去識別化最佳化結果產生 LLM 主管摘要。
+
+    若設定 EDIS_LLM_API_KEY 或 OPENAI_API_KEY，會呼叫 OpenAI-compatible
+    chat endpoint；未設定或呼叫失敗時，回傳本地規則摘要作為 demo-safe fallback。
+    """
+    role = get_role(x_role, authorization)
+    require_manager(role)
+
+    pred_path = get_predictions_path(x_session_id)
+    optimization_result = build_optimization_result(request, pred_path, save_results=False)
+    safe_payload = build_llm_safe_payload(
+        optimization_result,
+        max_sample_orders=request.max_sample_orders,
+    )
+    prompt = build_llm_prompt(safe_payload, language=request.language, question=request.question)
+    fallback_text = local_llm_fallback(safe_payload)
+    llm_result = call_configured_llm(prompt, fallback_text)
+
+    return {
+        "role": role,
+        "data_boundary": {
+            "de_identified_only": True,
+            "sent_fields": [
+                "order_id_hash",
+                "risk_bucket",
+                "p_late",
+                "recommended_action",
+                "expected_penalty",
+                "upgrade_cost",
+                "net_benefit",
+                "top_x_factors",
+                "aggregate_optimization_metrics",
+            ],
+            "excluded_fields": safe_payload["data_policy"]["excluded_fields"],
+        },
+        "llm": {
+            "used_external_llm": llm_result["used_external_llm"],
+            "provider": llm_result["provider"],
+            "model": llm_result["model"],
+            "error": llm_result["error"],
+        },
+        "brief_text": llm_result["brief_text"],
+        "safe_prompt": prompt,
+        "safe_payload": safe_payload,
+        "manager_analysis": optimization_result.get("manager_analysis", {}),
     }
 
 
