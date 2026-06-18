@@ -859,6 +859,9 @@ body {
     <a class="nav-item" id="nav-rbac" onclick="showPage('rbac')">
       <i class="nav-icon">○</i> RBAC 權限
     </a>
+    <a class="nav-item" id="nav-llm-settings" onclick="showPage('llm-settings')">
+      <i class="nav-icon">⚙</i> LLM 設定
+    </a>
   </nav>
 
   <div class="sidebar-footer">
@@ -1175,7 +1178,7 @@ body {
           <div class="ai-message assistant">
             你好，我是 EDIS AI 物流決策助理。你可以直接問我這批訂單的延遲風險、最佳化調度建議，或按左下角 + 上傳尚未知道實際結果的訂單 CSV 進行預測。
           </div>
-          <div class="ai-message system" id="aiUploadStatus">尚未上傳待預測檔案。沒有外部 LLM API key 時會使用本地摘要 fallback。</div>
+          <div class="ai-message system" id="aiUploadStatus">尚未上傳待預測檔案。你可以先上傳 CSV，或直接詢問目前資料的風險與調度建議。</div>
         </div>
 
         <div class="ai-composer-wrap">
@@ -1185,7 +1188,7 @@ body {
               <div style="display:flex;align-items:center;gap:10px;">
                 <input type="file" id="aiPredictCsvInput" accept=".csv" style="display:none;" onchange="uploadPredictionCSV(this)">
                 <button class="ai-icon-btn" id="aiUploadPredictBtn" type="button" onclick="document.getElementById('aiPredictCsvInput').click()" title="上傳待預測 CSV">+</button>
-                <span class="ai-file-chip" id="aiLlmMode">local fallback</span>
+                <span class="ai-file-chip" id="aiLlmMode">AI ready</span>
                 <span id="aiLockedBox" class="ai-file-chip" style="display:none;">需要 Manager 權限</span>
                 <button class="ai-file-chip" id="aiResetPredictBtn" onclick="resetCSV()" style="display:none;border:0;background:transparent;cursor:pointer;color:#e07b54;">還原預設驗證集</button>
               </div>
@@ -1738,6 +1741,64 @@ body {
       </div>
     </div>
 
+    <!-- G. LLM SETTINGS PANEL -->
+    <div class="page-section hidden" id="page-llm-settings">
+      <div class="page-header fade-in">
+        <div class="page-title">LLM 設定</div>
+        <div class="page-sub">Manager 可設定 AI 助理使用的 Provider、模型與 API Key</div>
+      </div>
+
+      <div class="panel fade-in" style="max-width:760px;">
+        <div class="panel-head">
+          <div>
+            <div class="panel-title">AI 助理連線設定</div>
+            <div class="panel-subtitle">設定會加密儲存在本機專案資料夾，重啟服務後仍會套用。</div>
+          </div>
+          <span class="role-badge badge-viewer" id="llmSettingsRoleBadge">Viewer</span>
+        </div>
+
+        <div id="llmSettingsLocked" class="locked-box" style="margin-bottom:16px;">
+          🔒 需要 Manager 權限才能查看與修改 LLM 設定
+        </div>
+
+        <div id="llmSettingsForm" style="display:none;grid-template-columns:1fr 1fr;gap:16px;">
+          <div>
+            <label class="field-label">Provider</label>
+            <select id="llmProviderInput" class="budget-input" style="width:100%;" onchange="handleLLMProviderChange()">
+              <option value="local">local</option>
+              <option value="openai">openai</option>
+              <option value="openai_compatible">openai_compatible</option>
+              <option value="gemini">gemini</option>
+              <option value="claude">claude</option>
+              <option value="ollama">ollama</option>
+            </select>
+          </div>
+          <div>
+            <label class="field-label">Model</label>
+            <select id="llmModelInput" class="budget-input" style="width:100%;" onchange="updateLLMCustomModelState()"></select>
+            <input id="llmCustomModelInput" class="budget-input" style="width:100%;display:none;margin-top:8px;" placeholder="輸入自訂模型 ID，例如 gpt-5.4-mini 或 llama3.1:8b">
+          </div>
+          <div style="grid-column:1 / -1;">
+            <label class="field-label">API URL（選填）</label>
+            <input id="llmApiUrlInput" class="budget-input" style="width:100%;" placeholder="使用 provider 預設端點">
+          </div>
+          <div style="grid-column:1 / -1;">
+            <label class="field-label">API Key</label>
+            <input id="llmApiKeyInput" class="budget-input" type="password" style="width:100%;" placeholder="貼上新的 API Key，或勾選下方保留目前金鑰">
+            <label id="llmKeepKeyRow" style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--muted);margin-top:8px;">
+              <input type="checkbox" id="llmKeepKeyInput" style="accent-color:var(--navy);" onchange="updateLLMKeyInputState()">
+              保留目前已儲存的 API Key
+            </label>
+            <div id="llmKeyHint" style="font-size:11px;color:var(--muted);margin-top:6px;">若要更換 Key，取消勾選後貼上新的 API Key。</div>
+          </div>
+          <div style="grid-column:1 / -1;display:flex;justify-content:space-between;gap:12px;align-items:center;flex-wrap:wrap;">
+            <div id="llmSettingsStatus" style="font-size:12px;color:var(--muted);">尚未讀取設定。</div>
+            <button class="run-btn" id="llmSaveBtn" onclick="saveLLMSettings()" style="width:auto;padding:9px 18px;">儲存設定</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
   </div>
 </div>
 
@@ -1806,6 +1867,8 @@ function showPage(pageId) {
     loadModelPerformance();
   } else if (pageId === 'region-map') {
     loadRegionalRisk();
+  } else if (pageId === 'llm-settings') {
+    loadLLMSettings();
   }
 }
 
@@ -2050,11 +2113,342 @@ async function generateAIBrief() {
     const data = await res.json();
     mode.textContent = data.llm?.used_external_llm
       ? `${data.llm.configured_provider || data.llm.provider}: ${data.llm.model || 'external'}`
-      : `${data.llm?.configured_provider || 'local'} → fallback`;
+      : 'local answer';
+    if (!data.llm?.used_external_llm && data.llm?.error) {
+      appendAIMessage('system', formatLLMUnavailableMessage(data.llm));
+    }
     appendAIMessage('assistant', data.brief_text || '沒有產生摘要。');
     document.getElementById('aiQuestionInput').value = '';
   } catch (e) {
     appendAIMessage('system', 'AI 摘要產生失敗：' + e.message);
+  } finally {
+    btn.textContent = originalText;
+    btn.disabled = false;
+  }
+}
+
+function formatLLMError(errorText) {
+  const text = String(errorText || '');
+  if (text.includes('insufficient_quota') || text.includes('exceeded your current quota')) {
+    return 'OpenAI API 額度或帳單狀態不足，請到 OpenAI Billing 檢查方案與用量。';
+  }
+  if (text.includes('401') || text.toLowerCase().includes('unauthorized')) {
+    return 'API Key 無效或沒有授權，請到 LLM 設定重新貼上正確 key。';
+  }
+  if (text.includes('400')) {
+    return '模型或 API 端點參數不相容，請確認 Provider、Model 與 API URL。';
+  }
+  return text.slice(0, 180);
+}
+
+function formatLLMUnavailableMessage(llm) {
+  const provider = llm?.configured_provider || llm?.provider || 'local';
+  const errorText = String(llm?.error || '');
+  if (provider === 'ollama') {
+    if (errorText.includes('10061') || errorText.toLowerCase().includes('connection refused')) {
+      return '本機 Ollama 未連線：請先啟動 Ollama，確認 http://localhost:11434/api/chat 可連線，並已 pull 所選模型。';
+    }
+    return `本機 Ollama 暫時不可用：${formatLLMError(errorText)}`;
+  }
+  if (provider === 'local') {
+    return '目前使用系統內建摘要。';
+  }
+  return `外部 LLM 未使用：${formatLLMError(errorText)}`;
+}
+
+const LLM_MODEL_OPTIONS = {
+  local: [
+    { value: '', label: '不使用外部模型' }
+  ],
+  openai: [
+    { value: 'gpt-5.5', label: 'gpt-5.5' },
+    { value: 'gpt-5.4', label: 'gpt-5.4' },
+    { value: 'gpt-5.4-mini', label: 'gpt-5.4-mini' },
+    { value: 'gpt-5.4-nano', label: 'gpt-5.4-nano' },
+    { value: 'gpt-4.1', label: 'gpt-4.1' },
+    { value: 'gpt-4.1-mini', label: 'gpt-4.1-mini' },
+    { value: 'gpt-4.1-nano', label: 'gpt-4.1-nano' },
+    { value: 'gpt-4o', label: 'gpt-4o' },
+    { value: 'gpt-4o-mini', label: 'gpt-4o-mini' },
+    { value: 'gpt-4-turbo', label: 'gpt-4-turbo' },
+    { value: 'gpt-4', label: 'gpt-4' },
+    { value: 'gpt-3.5-turbo', label: 'gpt-3.5-turbo' },
+    { value: '__custom__', label: '自訂模型...' }
+  ],
+  openai_compatible: [
+    { value: 'gpt-4o-mini', label: 'gpt-4o-mini' },
+    { value: 'gpt-4o', label: 'gpt-4o' },
+    { value: 'gpt-4.1-mini', label: 'gpt-4.1-mini' },
+    { value: 'gpt-4.1', label: 'gpt-4.1' },
+    { value: 'deepseek-chat', label: 'deepseek-chat' },
+    { value: 'deepseek-reasoner', label: 'deepseek-reasoner' },
+    { value: 'qwen-plus', label: 'qwen-plus' },
+    { value: 'qwen-max', label: 'qwen-max' },
+    { value: 'llama-3.1-8b-instruct', label: 'llama-3.1-8b-instruct' },
+    { value: '__custom__', label: '自訂模型...' }
+  ],
+  gemini: [
+    { value: 'gemini-2.5-pro', label: 'gemini-2.5-pro' },
+    { value: 'gemini-2.5-flash', label: 'gemini-2.5-flash' },
+    { value: 'gemini-1.5-flash', label: 'gemini-1.5-flash' },
+    { value: 'gemini-1.5-pro', label: 'gemini-1.5-pro' },
+    { value: 'gemini-2.0-flash', label: 'gemini-2.0-flash' },
+    { value: '__custom__', label: '自訂模型...' }
+  ],
+  claude: [
+    { value: 'claude-opus-4-1-20250805', label: 'claude-opus-4-1-20250805' },
+    { value: 'claude-opus-4-20250514', label: 'claude-opus-4-20250514' },
+    { value: 'claude-sonnet-4-20250514', label: 'claude-sonnet-4-20250514' },
+    { value: 'claude-3-haiku-20240307', label: 'claude-3-haiku-20240307' },
+    { value: 'claude-3-5-haiku-20241022', label: 'claude-3-5-haiku-20241022' },
+    { value: 'claude-3-5-sonnet-20241022', label: 'claude-3-5-sonnet-20241022' },
+    { value: 'claude-3-opus-20240229', label: 'claude-3-opus-20240229' },
+    { value: 'claude-3-sonnet-20240229', label: 'claude-3-sonnet-20240229' },
+    { value: '__custom__', label: '自訂模型...' }
+  ],
+  ollama: [
+    { value: 'llama3.1', label: 'llama3.1' },
+    { value: 'llama3.2', label: 'llama3.2' },
+    { value: 'llama3.3', label: 'llama3.3' },
+    { value: 'mistral', label: 'mistral' },
+    { value: 'qwen2.5', label: 'qwen2.5' },
+    { value: 'qwen3', label: 'qwen3' },
+    { value: 'gemma3', label: 'gemma3' },
+    { value: 'deepseek-r1', label: 'deepseek-r1' },
+    { value: '__custom__', label: '自訂模型...' }
+  ]
+};
+
+const LLM_PROVIDER_DEFAULT_URLS = {
+  local: '',
+  openai: 'https://api.openai.com/v1/responses',
+  openai_compatible: 'https://api.openai.com/v1/chat/completions',
+  gemini: '',
+  claude: 'https://api.anthropic.com/v1/messages',
+  ollama: 'http://localhost:11434/api/chat'
+};
+
+let savedLLMProvider = null;
+
+function providerNeedsApiKey(provider) {
+  return !['local', 'ollama'].includes(provider);
+}
+
+function handleLLMProviderChange() {
+  const providerInput = document.getElementById('llmProviderInput');
+  const apiUrlInput = document.getElementById('llmApiUrlInput');
+  const keep = document.getElementById('llmKeepKeyInput');
+  const keyInput = document.getElementById('llmApiKeyInput');
+  updateLLMModelOptions('', false);
+  if (providerInput && apiUrlInput) {
+    apiUrlInput.value = LLM_PROVIDER_DEFAULT_URLS[providerInput.value] || '';
+  }
+  if (keep) keep.checked = false;
+  if (keyInput) keyInput.value = '';
+  updateLLMKeyInputState();
+}
+
+function updateLLMModelOptions(selectedModel = '', allowCustomFallback = true) {
+  const providerInput = document.getElementById('llmProviderInput');
+  const modelInput = document.getElementById('llmModelInput');
+  const customInput = document.getElementById('llmCustomModelInput');
+  if (!providerInput || !modelInput) return;
+
+  const provider = providerInput.value || 'local';
+  const options = LLM_MODEL_OPTIONS[provider] || LLM_MODEL_OPTIONS.local;
+  const previous = selectedModel || '';
+  modelInput.innerHTML = '';
+
+  options.forEach(item => {
+    const opt = document.createElement('option');
+    opt.value = item.value;
+    opt.textContent = item.label;
+    modelInput.appendChild(opt);
+  });
+
+  const matched = options.some(item => item.value === previous);
+  if (matched) {
+    modelInput.value = previous;
+    if (customInput) customInput.value = '';
+  } else if (allowCustomFallback && previous && options.some(item => item.value === '__custom__')) {
+    modelInput.value = '__custom__';
+    if (customInput) customInput.value = previous;
+  } else {
+    modelInput.value = options[0].value;
+    if (customInput) customInput.value = '';
+  }
+  updateLLMCustomModelState();
+}
+
+function updateLLMCustomModelState() {
+  const modelInput = document.getElementById('llmModelInput');
+  const customInput = document.getElementById('llmCustomModelInput');
+  if (!modelInput || !customInput) return;
+  const isCustom = modelInput.value === '__custom__';
+  customInput.style.display = isCustom ? 'block' : 'none';
+  customInput.disabled = !isCustom;
+  if (isCustom) customInput.focus();
+}
+
+function getSelectedLLMModel() {
+  const modelInput = document.getElementById('llmModelInput');
+  const customInput = document.getElementById('llmCustomModelInput');
+  if (!modelInput) return '';
+  if (modelInput.value === '__custom__') {
+    return (customInput?.value || '').trim();
+  }
+  return modelInput.value.trim();
+}
+
+function updateLLMKeyInputState() {
+  const keep = document.getElementById('llmKeepKeyInput');
+  const keepRow = document.getElementById('llmKeepKeyRow');
+  const input = document.getElementById('llmApiKeyInput');
+  const hint = document.getElementById('llmKeyHint');
+  const provider = document.getElementById('llmProviderInput')?.value || 'local';
+  if (!keep || !input) return;
+
+  if (!providerNeedsApiKey(provider)) {
+    if (keepRow) keepRow.style.display = 'none';
+    keep.checked = false;
+    keep.disabled = true;
+    input.value = '';
+    input.disabled = true;
+    input.placeholder = provider === 'ollama'
+      ? 'Ollama 為本機服務，不需要 API Key'
+      : 'Local 模式不需要 API Key';
+    input.style.opacity = '0.72';
+    if (hint) hint.textContent = provider === 'ollama'
+      ? '請確認本機 Ollama 已啟動，並已 pull 所選模型。'
+      : 'Local 模式會使用系統內建摘要，不呼叫外部模型。';
+  } else if (keep.checked) {
+    if (keepRow) keepRow.style.display = 'flex';
+    keep.disabled = false;
+    input.value = '';
+    input.disabled = true;
+    input.placeholder = '已保留目前儲存的 API Key';
+    input.style.opacity = '0.72';
+    if (hint) hint.textContent = '儲存時會沿用目前已加密保存的 API Key。';
+  } else {
+    if (keepRow) keepRow.style.display = 'flex';
+    keep.disabled = savedLLMProvider !== provider;
+    input.disabled = false;
+    input.placeholder = savedLLMProvider === provider
+      ? '貼上新的 API Key；留空儲存會清除目前 Key'
+      : '請貼上此 Provider 的 API Key';
+    input.style.opacity = '1';
+    if (hint) hint.textContent = savedLLMProvider === provider
+      ? '若要更換 Key，取消勾選後貼上新的 API Key。'
+      : '切換 Provider 後不會沿用其他 Provider 的 API Key。';
+  }
+}
+
+function formatLLMSettingsStatus(prefix, settings, model) {
+  const provider = settings.provider || 'local';
+  const modelText = model || '未指定模型';
+  if (!providerNeedsApiKey(provider)) {
+    const keyText = provider === 'ollama' ? '不需 API Key' : '不使用 API Key';
+    return `${prefix}：${provider} / ${modelText}，${keyText}`;
+  }
+  return settings.api_key_set
+    ? `${prefix}：${provider} / ${modelText}，API Key ${settings.api_key_masked}`
+    : `${prefix}：${provider} / ${modelText}，尚未設定 API Key`;
+}
+
+function updateLLMSettingsAccess() {
+  const isM = currentRole === 'manager';
+  const badge = document.getElementById('llmSettingsRoleBadge');
+  const locked = document.getElementById('llmSettingsLocked');
+  const form = document.getElementById('llmSettingsForm');
+  if (badge) {
+    badge.className = isM ? 'role-badge badge-manager' : 'role-badge badge-viewer';
+    badge.textContent = isM ? 'Manager' : 'Viewer';
+  }
+  if (locked) locked.style.display = isM ? 'none' : 'block';
+  if (form) form.style.display = isM ? 'grid' : 'none';
+}
+
+async function loadLLMSettings() {
+  updateLLMSettingsAccess();
+  if (currentRole !== 'manager') return;
+
+  const status = document.getElementById('llmSettingsStatus');
+  status.textContent = '讀取設定中...';
+  try {
+    const res = await fetch(`${API_BASE}/api/llm/settings`, {
+      headers: { 'X-Role': 'Logistics_Manager' }
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail?.message || err.detail || '讀取失敗');
+    }
+    const data = await res.json();
+    const s = data.settings || {};
+    savedLLMProvider = s.api_key_set ? (s.provider || null) : null;
+    document.getElementById('llmProviderInput').value = s.provider || 'local';
+    updateLLMModelOptions(s.model || '');
+    const selectedModel = getSelectedLLMModel();
+    document.getElementById('llmApiUrlInput').value = s.api_url || '';
+    document.getElementById('llmApiKeyInput').value = '';
+    document.getElementById('llmKeepKeyInput').checked = !!s.api_key_set && providerNeedsApiKey(s.provider || 'local');
+    updateLLMKeyInputState();
+    status.textContent = formatLLMSettingsStatus('目前設定', s, selectedModel);
+  } catch (e) {
+    status.textContent = '讀取設定失敗：' + e.message;
+  }
+}
+
+async function saveLLMSettings() {
+  if (currentRole !== 'manager') return;
+
+  const btn = document.getElementById('llmSaveBtn');
+  const status = document.getElementById('llmSettingsStatus');
+  const originalText = btn.textContent;
+  btn.textContent = '儲存中...';
+  btn.disabled = true;
+
+  const keepKey = document.getElementById('llmKeepKeyInput').checked;
+  const apiKeyInput = document.getElementById('llmApiKeyInput').value.trim();
+  const selectedModel = getSelectedLLMModel();
+  const selectedProvider = document.getElementById('llmProviderInput').value;
+  if (document.getElementById('llmModelInput').value === '__custom__' && !selectedModel) {
+    status.textContent = '請輸入自訂模型 ID。';
+    btn.textContent = originalText;
+    btn.disabled = false;
+    return;
+  }
+  try {
+    const res = await fetch(`${API_BASE}/api/llm/settings`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Role': 'Logistics_Manager'
+      },
+      body: JSON.stringify({
+        provider: selectedProvider,
+        model: selectedModel,
+        api_url: document.getElementById('llmApiUrlInput').value.trim(),
+        api_key: providerNeedsApiKey(selectedProvider)
+          ? (keepKey && savedLLMProvider === selectedProvider && !apiKeyInput ? '__KEEP_EXISTING__' : apiKeyInput)
+          : ''
+      })
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || '儲存失敗');
+    }
+    const data = await res.json();
+    const s = data.settings || {};
+    savedLLMProvider = s.api_key_set ? (s.provider || null) : null;
+    document.getElementById('llmProviderInput').value = s.provider || 'local';
+    updateLLMModelOptions(s.model || '');
+    const savedModel = getSelectedLLMModel();
+    document.getElementById('llmApiKeyInput').value = '';
+    document.getElementById('llmKeepKeyInput').checked = !!s.api_key_set && providerNeedsApiKey(s.provider || 'local');
+    updateLLMKeyInputState();
+    status.textContent = formatLLMSettingsStatus('已儲存', s, savedModel);
+  } catch (e) {
+    status.textContent = '儲存失敗：' + e.message;
   } finally {
     btn.textContent = originalText;
     btn.disabled = false;
@@ -2488,6 +2882,10 @@ async function setRole(role) {
   if (aiRoleBadge) {
     aiRoleBadge.className = isM ? 'role-badge badge-manager' : 'role-badge badge-viewer';
     aiRoleBadge.textContent = isM ? 'Manager' : 'Viewer';
+  }
+  updateLLMSettingsAccess();
+  if (isM && !document.getElementById('page-llm-settings').classList.contains('hidden')) {
+    loadLLMSettings();
   }
   
   if (!isM) {

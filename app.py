@@ -23,6 +23,10 @@ EDIS — DataCo 物流延遲預測與最佳化調度系統
 """
 
 import io
+import base64
+import ctypes
+import hashlib
+import hmac
 import json
 import os
 import re
@@ -66,6 +70,7 @@ BASE_DIR = Path(__file__).parent
 DATA_DIR = BASE_DIR / "data" / "processed"
 METRICS_PATH = DATA_DIR / "model_metrics.json"
 PREDICTIONS_PATH = DATA_DIR / "predictions.csv"
+LLM_RUNTIME_CONFIG_PATH = DATA_DIR / "llm_runtime_config.json"
 
 # DataFrame 快取機制
 PREDICTIONS_CACHE = {}
@@ -190,6 +195,13 @@ class LLMBriefRequest(OptimizeRequest):
     language: str = "zh-TW"
     max_sample_orders: int = 3
     question: str = ""
+
+
+class LLMSettingsRequest(BaseModel):
+    provider: str = "openai"
+    model: str = "gpt-4o-mini"
+    api_key: str = ""
+    api_url: str = ""
 
 
 class FlagEventRequest(BaseModel):
@@ -442,7 +454,47 @@ def build_optimization_result(request: OptimizeRequest, pred_path: Path, save_re
     return attach_manager_analysis(result.to_dict(), pred_path)
 
 
-def build_llm_safe_payload(optimization_result: dict, max_sample_orders: int = 3) -> dict:
+def display_order_id(order_id_hash: str) -> str:
+    raw = re.sub(r"[^a-zA-Z0-9]", "", str(order_id_hash or "")).upper()
+    return f"ORD-{raw[:8]}" if raw else "ORD-UNKNOWN"
+
+
+def find_order_context_for_question(question: str, pred_path: Path) -> dict | None:
+    """Return one de-identified order row when the user names an order hash/display ID."""
+    text = (question or "").upper()
+    if not text or not pred_path.exists():
+        return None
+
+    try:
+        df = load_cached_predictions(pred_path)
+    except Exception:
+        return None
+
+    for _, row in df.iterrows():
+        order_hash = str(row.get("order_id_hash", ""))
+        display_id = display_order_id(order_hash)
+        hash_token = re.sub(r"[^a-zA-Z0-9]", "", order_hash).upper()
+        if display_id in text or (hash_token and hash_token[:8] in text):
+            p_late = float(row.get("p_late") or 0)
+            return {
+                "order_id_hash": order_hash,
+                "display_order_id": display_id,
+                "shipping_mode": row.get("shipping_mode"),
+                "order_region": row.get("order_region"),
+                "order_date": row.get("order_date"),
+                "p_late": p_late,
+                "risk_bucket": row.get("risk_bucket"),
+                "expected_penalty": float(row.get("expected_penalty") or 0),
+                "upgrade_cost": float(row.get("upgrade_cost") or 0),
+            }
+    return None
+
+
+def build_llm_safe_payload(
+    optimization_result: dict,
+    max_sample_orders: int = 3,
+    order_context: dict | None = None,
+) -> dict:
     """Keep the LLM boundary limited to de-identified and aggregate fields."""
     manager_analysis = optimization_result.get("manager_analysis", {}) or {}
     samples = []
@@ -486,20 +538,31 @@ def build_llm_safe_payload(optimization_result: dict, max_sample_orders: int = 3
             "budget_usage_pct": manager_analysis.get("budget_usage_pct"),
             "sample_order_explanations": samples,
         },
+        "requested_order": order_context,
     }
 
 
-def build_llm_prompt(safe_payload: dict, language: str = "zh-TW", question: str = "") -> str:
-    question_text = question.strip() or "請產生本批物流調度的主管摘要。"
-    return (
-        "你是物流決策助理。請只根據下列去識別化資料，產出主管可直接閱讀的摘要。"
-        "不得推測或要求任何個資，也不得還原雜湊識別碼。"
-        f"輸出語言：{language}。"
-        f"使用者問題：{question_text}。"
-        "請用三段：1. 決策建議 2. 主要風險原因 3. 預算與下一步。"
-        f"\n\n資料：{json.dumps(safe_payload, ensure_ascii=False, default=str)}"
-    )
+EDIS_LLM_SYSTEM_PROMPT = """
+你正在角色扮演 EDIS 物流延遲預測與最佳化調度系統裡的 AI 助理。
 
+你熟悉這個介面：Dashboard、風險訂單列表、最佳化調度、AI 助理、模型效能、區域風險地圖、RBAC 權限、LLM 設定。使用者問怎麼操作時，你就像坐在旁邊帶他用系統一樣回答。
+
+你也熟悉物流主管會關心的問題：哪些訂單可能延遲、為什麼風險高、預算有限時要先救哪些訂單、是否升級運送、單筆訂單目前狀況如何、模型和 X 因子代表什麼。
+
+回答時請自然一點，不要每次固定三段式，也不要像文件。可以先簡短寒暄，再根據使用者問題給出清楚、可執行的說明。使用繁體中文。
+
+若提供的資料裡有 requested_order 或 sample_order_explanations，就用它們回答單筆訂單或範例訂單；若資料不足，就用系統操作角度告訴使用者下一步可以去哪裡看或先做什麼。
+""".strip()
+
+
+def build_llm_prompt(safe_payload: dict, language: str = "zh-TW", question: str = "") -> str:
+    question_text = question.strip() or "請用自然的方式說明目前這批訂單可以怎麼判讀。"
+    return (
+        "請進入 EDIS AI 助理角色，直接回答使用者。"
+        f"請使用語言：{language}。\n"
+        f"使用者問題：{question_text}\n\n"
+        f"目前可參考的系統資料：{json.dumps(safe_payload, ensure_ascii=False, default=str)}"
+    )
 
 def is_logistics_question(question: str) -> bool:
     """Return True when the user asks about EDIS logistics decision context."""
@@ -510,10 +573,13 @@ def is_logistics_question(question: str) -> bool:
     allowed_terms = [
         "物流", "訂單", "延遲", "準時", "配送", "運送", "調度", "升級", "風險",
         "預測", "機率", "模型", "門檻", "預算", "成本", "罰金", "損失", "效益",
+        "介面", "頁面", "使用", "操作", "設定", "權限", "助理", "儀表板",
+        "風險清單", "模型效能", "區域風險", "地圖", "rbac",
         "roi", "sla", "x因子", "x 因子", "lime", "region", "shipping", "budget",
         "risk", "delay", "late", "delivery", "shipment", "order", "optimize",
         "optimization", "predict", "prediction", "model", "threshold", "penalty",
-        "cost", "route", "dispatch", "upgrade",
+        "cost", "route", "dispatch", "upgrade", "dashboard", "settings", "permission",
+        "viewer", "manager", "interface", "page",
     ]
     return any(term in text for term in allowed_terms)
 
@@ -525,17 +591,200 @@ def off_topic_llm_response(question: str) -> str:
     )
 
 
-def local_llm_fallback(safe_payload: dict) -> str:
+def local_llm_fallback(safe_payload: dict, question: str = "") -> str:
     opt = safe_payload.get("optimization", {})
     analysis = safe_payload.get("manager_analysis", {})
+    requested_order = safe_payload.get("requested_order") or {}
+    q = (question or "").strip().lower()
+    budget = float(opt.get("budget") or 0)
+    selected_count = int(opt.get("selected_count") or 0)
+    saving = float(opt.get("expected_total_saving") or 0)
+    total_cost = float(opt.get("total_cost") or 0)
+
+    if q in {"你好", "嗨", "hi", "hello", "哈囉"}:
+        return (
+            "嗨，我在。你可以直接問我這批訂單怎麼看、預算有限時怎麼排，"
+            "或貼一個訂單編號，我會用目前系統裡的預測與最佳化結果幫你判斷。"
+        )
+
+    if requested_order:
+        return (
+            f"這筆 {requested_order.get('display_order_id')} 我會先看成需要留意的訂單。它目前預測延遲機率約 "
+            f"{float(requested_order.get('p_late') or 0) * 100:.1f}%，"
+            f"風險分級是 {requested_order.get('risk_bucket') or '未分級'}。"
+            f"運送模式為 {requested_order.get('shipping_mode') or '未知'}，"
+            f"目的地區域是 {requested_order.get('order_region') or '未知'}。"
+            f"如果要不要升級，關鍵是拿預估延遲罰金 USD ${float(requested_order.get('expected_penalty') or 0):,.0f} "
+            f"去和升級成本 USD ${float(requested_order.get('upgrade_cost') or 0):,.0f} 比；"
+            "建議你再點開這筆訂單的 X 因子，看它是被運送模式、區域還是其他因素拉高。"
+        )
+
+    if any(term in q for term in ["預算", "budget", "有限", "調度", "怎麼排", "怎麼調"]):
+        return (
+            f"如果預算有限，我會先把錢放在「高延遲風險，而且升級後淨效益為正」的訂單上。"
+            f"以目前設定來看，預算大約 USD ${budget:,.0f}，系統挑出 {selected_count} 筆可升級訂單，"
+            f"會把預算用到約 USD ${total_cost:,.0f}，預估淨效益約 USD ${saving:,.0f}。\n\n"
+            f"實務上我會建議你先不要平均分配，而是照延遲機率、預估罰金、升級成本三個條件排序；"
+            f"如果預算再縮小，就從淨效益最低的訂單往後砍，保留最能保護 SLA 的那一批。"
+        )
+
     return (
-        f"決策建議：{analysis.get('headline') or '建議優先處理高風險且淨效益為正的訂單。'}\n"
-        f"主要風險原因：{analysis.get('recommended_policy') or '延遲機率、運送模式與區域風險是主要判斷依據。'}\n"
-        f"預算與下一步：本次預算 USD ${float(opt.get('budget') or 0):,.0f}，"
-        f"選出 {int(opt.get('selected_count') or 0)} 筆訂單，"
-        f"預估淨效益 USD ${float(opt.get('expected_total_saving') or 0):,.0f}；"
-        "若無外部 LLM API key，系統會使用此本地摘要作為安全 fallback。"
+        f"目前這批訂單的方向是：{analysis.get('headline') or '先處理高風險且淨效益為正的訂單'}。"
+        f"以 USD ${budget:,.0f} 的預算來看，系統會挑出 {selected_count} 筆訂單，"
+        f"預估淨效益約 USD ${saving:,.0f}。"
+        f"{analysis.get('recommended_policy') or '你可以接著到最佳化調度頁調整預算，看看少一點或多一點預算時名單怎麼變。'}"
     )
+
+
+class _WinDataBlob(ctypes.Structure):
+    _fields_ = [
+        ("cbData", ctypes.c_ulong),
+        ("pbData", ctypes.POINTER(ctypes.c_ubyte)),
+    ]
+
+
+def _dpapi_protect(secret: str) -> str:
+    data = secret.encode("utf-8")
+    in_buffer = ctypes.create_string_buffer(data)
+    in_blob = _WinDataBlob(len(data), ctypes.cast(in_buffer, ctypes.POINTER(ctypes.c_ubyte)))
+    out_blob = _WinDataBlob()
+
+    ok = ctypes.windll.crypt32.CryptProtectData(
+        ctypes.byref(in_blob),
+        "EDIS LLM API key",
+        None,
+        None,
+        None,
+        0,
+        ctypes.byref(out_blob),
+    )
+    if not ok:
+        raise RuntimeError("Windows DPAPI 加密失敗。")
+    try:
+        protected = ctypes.string_at(out_blob.pbData, out_blob.cbData)
+        return base64.b64encode(protected).decode("ascii")
+    finally:
+        ctypes.windll.kernel32.LocalFree(out_blob.pbData)
+
+
+def _dpapi_unprotect(protected_b64: str) -> str:
+    protected = base64.b64decode(protected_b64.encode("ascii"))
+    in_buffer = ctypes.create_string_buffer(protected)
+    in_blob = _WinDataBlob(len(protected), ctypes.cast(in_buffer, ctypes.POINTER(ctypes.c_ubyte)))
+    out_blob = _WinDataBlob()
+
+    ok = ctypes.windll.crypt32.CryptUnprotectData(
+        ctypes.byref(in_blob),
+        None,
+        None,
+        None,
+        None,
+        0,
+        ctypes.byref(out_blob),
+    )
+    if not ok:
+        raise RuntimeError("Windows DPAPI 解密失敗。")
+    try:
+        data = ctypes.string_at(out_blob.pbData, out_blob.cbData)
+        return data.decode("utf-8")
+    finally:
+        ctypes.windll.kernel32.LocalFree(out_blob.pbData)
+
+
+def _derive_secret_stream(secret: str, salt: bytes, length: int) -> bytes:
+    stream = bytearray()
+    counter = 0
+    key = hashlib.sha256(secret.encode("utf-8")).digest()
+    while len(stream) < length:
+        counter_bytes = counter.to_bytes(4, "big")
+        stream.extend(hmac.new(key, salt + counter_bytes, hashlib.sha256).digest())
+        counter += 1
+    return bytes(stream[:length])
+
+
+def _env_secret_protect(secret: str) -> str:
+    config_secret = os.environ.get("EDIS_LLM_CONFIG_SECRET", "")
+    if not config_secret:
+        raise RuntimeError("非 Windows 環境需設定 EDIS_LLM_CONFIG_SECRET 才能加密儲存 API key。")
+    salt = os.urandom(16)
+    data = secret.encode("utf-8")
+    stream = _derive_secret_stream(config_secret, salt, len(data))
+    cipher = bytes(a ^ b for a, b in zip(data, stream))
+    tag = hmac.new(hashlib.sha256(config_secret.encode("utf-8")).digest(), salt + cipher, hashlib.sha256).digest()
+    return base64.b64encode(salt + tag + cipher).decode("ascii")
+
+
+def _env_secret_unprotect(protected_b64: str) -> str:
+    config_secret = os.environ.get("EDIS_LLM_CONFIG_SECRET", "")
+    if not config_secret:
+        raise RuntimeError("缺少 EDIS_LLM_CONFIG_SECRET，無法解密 API key。")
+    raw = base64.b64decode(protected_b64.encode("ascii"))
+    salt, tag, cipher = raw[:16], raw[16:48], raw[48:]
+    key = hashlib.sha256(config_secret.encode("utf-8")).digest()
+    expected_tag = hmac.new(key, salt + cipher, hashlib.sha256).digest()
+    if not hmac.compare_digest(tag, expected_tag):
+        raise RuntimeError("API key 加密資料驗證失敗。")
+    stream = _derive_secret_stream(config_secret, salt, len(cipher))
+    return bytes(a ^ b for a, b in zip(cipher, stream)).decode("utf-8")
+
+
+def protect_api_key(api_key: str) -> dict:
+    api_key = str(api_key or "").strip()
+    if not api_key:
+        return {}
+    if os.name == "nt":
+        return {
+            "api_key_storage": "windows_dpapi_user",
+            "api_key_protected": _dpapi_protect(api_key),
+        }
+    return {
+        "api_key_storage": "env_secret_v1",
+        "api_key_protected": _env_secret_protect(api_key),
+    }
+
+
+def unprotect_api_key(config: dict) -> str:
+    protected = config.get("api_key_protected")
+    storage = config.get("api_key_storage")
+    if protected and storage == "windows_dpapi_user":
+        return _dpapi_unprotect(str(protected))
+    if protected and storage == "env_secret_v1":
+        return _env_secret_unprotect(str(protected))
+    return str(config.get("api_key") or "").strip()
+
+
+def read_llm_runtime_config() -> dict:
+    if not LLM_RUNTIME_CONFIG_PATH.exists():
+        return {}
+    try:
+        with open(LLM_RUNTIME_CONFIG_PATH, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        if not isinstance(data, dict):
+            return {}
+        data["api_key"] = unprotect_api_key(data)
+        if data.get("api_key") and not data.get("api_key_protected"):
+            write_llm_runtime_config(data)
+        return data
+    except Exception:
+        return {}
+
+
+def write_llm_runtime_config(config: dict) -> None:
+    DATA_DIR.mkdir(parents=True, exist_ok=True)
+    allowed = {"provider", "model", "api_url"}
+    clean = {k: str(v or "").strip() for k, v in config.items() if k in allowed}
+    clean.update(protect_api_key(str(config.get("api_key") or "")))
+    with open(LLM_RUNTIME_CONFIG_PATH, "w", encoding="utf-8") as f:
+        json.dump(clean, f, ensure_ascii=False, indent=2)
+
+
+def mask_secret(value: str) -> str:
+    value = str(value or "")
+    if not value:
+        return ""
+    if len(value) <= 8:
+        return "*" * len(value)
+    return f"{value[:4]}...{value[-4:]}"
 
 
 def get_llm_config() -> dict:
@@ -548,7 +797,8 @@ def get_llm_config() -> dict:
       EDIS_LLM_API_KEY=<provider API key>
       EDIS_LLM_API_URL=<optional custom endpoint>
     """
-    provider = os.environ.get("EDIS_LLM_PROVIDER", "").strip().lower()
+    runtime_config = read_llm_runtime_config()
+    provider = (runtime_config.get("provider") or os.environ.get("EDIS_LLM_PROVIDER", "")).strip().lower()
     if not provider:
         provider = "openai" if (os.environ.get("EDIS_LLM_API_KEY") or os.environ.get("OPENAI_API_KEY")) else "local"
 
@@ -560,7 +810,7 @@ def get_llm_config() -> dict:
         "ollama": "",
         "local": "",
     }
-    api_key = os.environ.get("EDIS_LLM_API_KEY") or provider_keys.get(provider, "")
+    api_key = runtime_config.get("api_key") or os.environ.get("EDIS_LLM_API_KEY") or provider_keys.get(provider, "")
 
     default_models = {
         "openai": "gpt-4o-mini",
@@ -579,11 +829,29 @@ def get_llm_config() -> dict:
         "local": None,
     }
 
+    configured_api_url = runtime_config.get("api_url") or os.environ.get("EDIS_LLM_API_URL") or default_urls.get(provider)
+    if provider == "openai" and configured_api_url == "https://api.openai.com/v1/chat/completions":
+        configured_api_url = default_urls["openai"]
+
     return {
         "provider": provider,
         "api_key": api_key,
-        "api_url": os.environ.get("EDIS_LLM_API_URL") or default_urls.get(provider),
-        "model": os.environ.get("EDIS_LLM_MODEL") or default_models.get(provider),
+        "api_url": configured_api_url,
+        "model": runtime_config.get("model") or os.environ.get("EDIS_LLM_MODEL") or default_models.get(provider),
+        "source": "manager_ui" if runtime_config else "environment",
+    }
+
+
+def get_public_llm_config() -> dict:
+    config = get_llm_config()
+    api_key_set = bool(config["api_key"]) and config["provider"] not in {"local", "ollama"}
+    return {
+        "provider": config["provider"],
+        "model": config["model"],
+        "api_url": config["api_url"] or "",
+        "api_key_set": api_key_set,
+        "api_key_masked": mask_secret(config["api_key"]) if api_key_set else "",
+        "source": config.get("source", "environment"),
     }
 
 
@@ -593,6 +861,7 @@ def _llm_fallback(provider: str, model: str | None, fallback_text: str, error: s
         "provider": "local_fallback",
         "configured_provider": provider,
         "model": model,
+        "response_id": None,
         "brief_text": fallback_text,
         "error": error,
     }
@@ -610,24 +879,24 @@ def call_configured_llm(prompt: str, fallback_text: str) -> dict:
     if provider not in {"openai", "openai_compatible", "gemini", "claude", "ollama"}:
         return _llm_fallback(provider, model, fallback_text, f"不支援的 LLM provider：{provider}")
     if provider != "ollama" and not api_key:
-        return _llm_fallback(provider, model, fallback_text, f"{provider} 未設定 API key，已使用本地摘要 fallback。")
+        return _llm_fallback(provider, model, fallback_text, f"{provider} 未設定 API key。")
 
     try:
         from urllib.parse import quote
         from urllib.request import Request as UrlRequest, urlopen
 
         if provider == "openai":
+            response_id = None
             body = json.dumps({
                 "model": model,
                 "input": [
                     {
                         "role": "system",
-                        "content": "You produce concise logistics executive briefs from de-identified data only.",
+                        "content": EDIS_LLM_SYSTEM_PROMPT,
                     },
                     {"role": "user", "content": prompt},
                 ],
-                "reasoning": {"effort": "low"},
-                "text": {"verbosity": "low"},
+                "temperature": 0.7,
             }).encode("utf-8")
             req = UrlRequest(
                 api_url,
@@ -640,23 +909,24 @@ def call_configured_llm(prompt: str, fallback_text: str) -> dict:
             )
             with urlopen(req, timeout=20) as response:
                 payload = json.loads(response.read().decode("utf-8"))
+            response_id = payload.get("id")
             text = payload.get("output_text", "").strip()
             if not text:
-                output = payload.get("output", [])
                 chunks = []
-                for item in output:
+                for item in payload.get("output", []):
                     for content in item.get("content", []):
                         if content.get("type") in {"output_text", "text"}:
                             chunks.append(content.get("text", ""))
                 text = "".join(chunks).strip()
 
         elif provider == "openai_compatible":
+            response_id = None
             body = json.dumps({
                 "model": model,
                 "messages": [
                     {
                         "role": "system",
-                        "content": "You produce concise logistics executive briefs from de-identified data only.",
+                        "content": EDIS_LLM_SYSTEM_PROMPT,
                     },
                     {"role": "user", "content": prompt},
                 ],
@@ -673,11 +943,14 @@ def call_configured_llm(prompt: str, fallback_text: str) -> dict:
             )
             with urlopen(req, timeout=20) as response:
                 payload = json.loads(response.read().decode("utf-8"))
+            response_id = payload.get("id")
             text = payload["choices"][0]["message"]["content"].strip()
 
         elif provider == "gemini":
+            response_id = None
             gemini_url = api_url or f"https://generativelanguage.googleapis.com/v1beta/models/{quote(model)}:generateContent?key={api_key}"
             body = json.dumps({
+                "systemInstruction": {"parts": [{"text": EDIS_LLM_SYSTEM_PROMPT}]},
                 "contents": [
                     {"parts": [{"text": prompt}]}
                 ],
@@ -694,10 +967,12 @@ def call_configured_llm(prompt: str, fallback_text: str) -> dict:
             text = payload["candidates"][0]["content"]["parts"][0]["text"].strip()
 
         elif provider == "claude":
+            response_id = None
             body = json.dumps({
                 "model": model,
                 "max_tokens": 800,
                 "temperature": 0.2,
+                "system": EDIS_LLM_SYSTEM_PROMPT,
                 "messages": [{"role": "user", "content": prompt}],
             }).encode("utf-8")
             req = UrlRequest(
@@ -712,15 +987,17 @@ def call_configured_llm(prompt: str, fallback_text: str) -> dict:
             )
             with urlopen(req, timeout=20) as response:
                 payload = json.loads(response.read().decode("utf-8"))
+            response_id = payload.get("id")
             text = "".join(block.get("text", "") for block in payload.get("content", [])).strip()
 
         else:  # ollama
+            response_id = None
             body = json.dumps({
                 "model": model,
                 "messages": [
                     {
                         "role": "system",
-                        "content": "You produce concise logistics executive briefs from de-identified data only.",
+                        "content": EDIS_LLM_SYSTEM_PROMPT,
                     },
                     {"role": "user", "content": prompt},
                 ],
@@ -741,11 +1018,20 @@ def call_configured_llm(prompt: str, fallback_text: str) -> dict:
             "provider": provider,
             "configured_provider": provider,
             "model": model,
+            "response_id": response_id,
             "brief_text": text,
             "error": None,
         }
     except Exception as e:
-        return _llm_fallback(provider, model, fallback_text, f"LLM 呼叫失敗，已使用本地摘要 fallback：{str(e)}")
+        error_text = str(e)
+        if hasattr(e, "read"):
+            try:
+                body_text = e.read().decode("utf-8", errors="replace")
+                if body_text:
+                    error_text = f"{error_text} | {body_text[:600]}"
+            except Exception:
+                pass
+        return _llm_fallback(provider, model, fallback_text, f"LLM 呼叫失敗：{error_text}")
 
 
 
@@ -1477,6 +1763,57 @@ def run_optimization(
     }
 
 
+@app.get("/api/llm/settings")
+def get_llm_settings(
+    x_role: Optional[str] = Header(default=None),
+    authorization: Optional[str] = Header(default=None),
+):
+    """[Manager 限定] 讀取目前 LLM 設定摘要，不回傳完整 API key。"""
+    role = get_role(x_role, authorization)
+    require_manager(role)
+    return {
+        "role": role,
+        "settings": get_public_llm_config(),
+        "providers": ["local", "openai", "openai_compatible", "gemini", "claude", "ollama"],
+    }
+
+
+@app.put("/api/llm/settings")
+def update_llm_settings(
+    request: LLMSettingsRequest,
+    x_role: Optional[str] = Header(default=None),
+    authorization: Optional[str] = Header(default=None),
+):
+    """[Manager 限定] 儲存 runtime LLM provider/model/API key 設定。"""
+    role = get_role(x_role, authorization)
+    require_manager(role)
+
+    provider = request.provider.strip().lower()
+    if provider not in {"local", "openai", "openai_compatible", "gemini", "claude", "ollama"}:
+        raise HTTPException(status_code=400, detail=f"不支援的 LLM provider：{request.provider}")
+
+    current = read_llm_runtime_config()
+    api_key = request.api_key.strip()
+    if provider in {"local", "ollama"}:
+        api_key = ""
+    elif api_key == "__KEEP_EXISTING__" and current.get("provider") == provider:
+        api_key = current.get("api_key", "")
+    elif api_key == "__KEEP_EXISTING__":
+        api_key = ""
+
+    write_llm_runtime_config({
+        "provider": provider,
+        "model": request.model.strip(),
+        "api_key": api_key,
+        "api_url": request.api_url.strip(),
+    })
+    return {
+        "role": role,
+        "message": "LLM 設定已儲存。",
+        "settings": get_public_llm_config(),
+    }
+
+
 @app.post("/api/llm/manager-brief")
 def generate_manager_llm_brief(
     request: LLMBriefRequest,
@@ -1487,52 +1824,21 @@ def generate_manager_llm_brief(
     """
     [Manager 限定] 以去識別化最佳化結果產生 LLM 主管摘要。
 
-    使用 EDIS_LLM_PROVIDER / EDIS_LLM_MODEL / EDIS_LLM_API_KEY 後台設定。
-    未設定、呼叫失敗，或 provider=local 時，回傳本地規則摘要作為 demo-safe fallback。
+    使用 Manager UI runtime 設定；若未設定則讀取 EDIS_LLM_* 環境變數。
     """
     role = get_role(x_role, authorization)
     require_manager(role)
 
-    if not is_logistics_question(request.question):
-        config = get_llm_config()
-        brief_text = off_topic_llm_response(request.question)
-        return {
-            "role": role,
-            "data_boundary": {
-                "de_identified_only": True,
-                "sent_fields": [],
-                "excluded_fields": [
-                    "customer_name",
-                    "email",
-                    "phone",
-                    "address",
-                    "raw_order_id",
-                    "payment_info",
-                    "password",
-                ],
-            },
-            "llm": {
-                "used_external_llm": False,
-                "provider": "guardrail",
-                "configured_provider": config["provider"],
-                "model": config["model"],
-                "error": None,
-            },
-            "guard_triggered": True,
-            "brief_text": brief_text,
-            "safe_prompt": "",
-            "safe_payload": {},
-            "manager_analysis": {},
-        }
-
     pred_path = get_predictions_path(x_session_id)
     optimization_result = build_optimization_result(request, pred_path, save_results=False)
+    order_context = find_order_context_for_question(request.question, pred_path)
     safe_payload = build_llm_safe_payload(
         optimization_result,
         max_sample_orders=request.max_sample_orders,
+        order_context=order_context,
     )
     prompt = build_llm_prompt(safe_payload, language=request.language, question=request.question)
-    fallback_text = local_llm_fallback(safe_payload)
+    fallback_text = local_llm_fallback(safe_payload, request.question)
     llm_result = call_configured_llm(prompt, fallback_text)
 
     return {
@@ -1549,6 +1855,7 @@ def generate_manager_llm_brief(
                 "net_benefit",
                 "top_x_factors",
                 "aggregate_optimization_metrics",
+                "requested_order_when_user_names_order",
             ],
             "excluded_fields": safe_payload["data_policy"]["excluded_fields"],
         },
@@ -1557,6 +1864,7 @@ def generate_manager_llm_brief(
             "provider": llm_result["provider"],
             "configured_provider": llm_result.get("configured_provider", llm_result["provider"]),
             "model": llm_result["model"],
+            "response_id": llm_result.get("response_id"),
             "error": llm_result["error"],
         },
         "brief_text": llm_result["brief_text"],
