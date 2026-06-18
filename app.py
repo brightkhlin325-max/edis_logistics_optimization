@@ -761,7 +761,12 @@ def read_llm_runtime_config() -> dict:
             data = json.load(f)
         if not isinstance(data, dict):
             return {}
-        data["api_key"] = unprotect_api_key(data)
+        try:
+            data["api_key"] = unprotect_api_key(data)
+        except Exception as e:
+            print(f"[LLM Config] API Key 解密失敗（可能是 Windows 使用者帳號不同）：{e}")
+            data["api_key"] = ""
+            data["api_key_decrypt_error"] = str(e)
         if data.get("api_key") and not data.get("api_key_protected"):
             write_llm_runtime_config(data)
         return data

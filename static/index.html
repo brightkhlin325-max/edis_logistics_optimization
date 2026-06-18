@@ -2287,7 +2287,7 @@ function updateLLMCustomModelState() {
   const isCustom = modelInput.value === '__custom__';
   customInput.style.display = isCustom ? 'block' : 'none';
   customInput.disabled = !isCustom;
-  if (isCustom) customInput.focus();
+  if (isCustom && document.activeElement === modelInput) customInput.focus();
 }
 
 function getSelectedLLMModel() {
@@ -2416,6 +2416,13 @@ async function saveLLMSettings() {
     btn.textContent = originalText;
     btn.disabled = false;
     return;
+  }
+  if (providerNeedsApiKey(selectedProvider) && !keepKey && !apiKeyInput && savedLLMProvider === selectedProvider) {
+    if (!confirm('API Key 欄位為空，儲存後將清除目前已儲存的 Key，確定繼續嗎？')) {
+      btn.textContent = originalText;
+      btn.disabled = false;
+      return;
+    }
   }
   try {
     const res = await fetch(`${API_BASE}/api/llm/settings`, {
@@ -3862,5 +3869,167 @@ document.addEventListener('keydown', function(e) {
     </div>
   </div>
 </div>
+
+<!-- ── Onboarding Tour ── -->
+<style>
+#tourOverlay{position:fixed;top:0;left:0;width:100%;height:100%;z-index:9000;pointer-events:none;display:none;}
+#tourOverlay.active{display:block;pointer-events:all;}
+#tourBackdrop{position:absolute;inset:0;background:rgba(0,0,0,0.62);}
+#tourSpotlight{
+  position:absolute;border-radius:10px;
+  box-shadow:0 0 0 9999px rgba(0,0,0,0.62);
+  border:2.5px solid rgba(255,255,255,0.6);
+  transition:all 0.35s cubic-bezier(.4,0,.2,1);
+  pointer-events:none;z-index:9001;display:none;
+}
+#tourCard{
+  position:absolute;background:white;border-radius:14px;
+  padding:22px 24px 18px;width:292px;
+  box-shadow:0 16px 48px rgba(0,0,0,0.22);
+  z-index:9002;transition:all 0.3s ease;display:none;
+}
+#tourCardCenter{
+  position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);
+  background:white;border-radius:18px;padding:38px 34px 30px;width:380px;
+  box-shadow:0 20px 60px rgba(0,0,0,0.28);z-index:9002;text-align:center;display:none;
+}
+.t-icon{font-size:38px;margin-bottom:10px;line-height:1;}
+.t-title{font-size:16px;font-weight:700;color:#2d3340;margin-bottom:8px;}
+.t-desc{font-size:13px;line-height:1.68;color:#555d6a;white-space:pre-line;}
+.t-step{font-size:10.5px;color:#8a939e;font-family:'DM Mono',monospace;margin-bottom:12px;}
+.t-dots{display:flex;gap:6px;justify-content:center;margin:14px 0 16px;}
+.t-dot{width:7px;height:7px;border-radius:50%;background:#dde0de;transition:background 0.2s;}
+.t-dot.on{background:#437096;}
+.t-btns{display:flex;align-items:center;justify-content:space-between;margin-top:16px;}
+.t-skip{font-size:12px;color:#9aa2ac;background:none;border:none;cursor:pointer;padding:4px 2px;}
+.t-skip:hover{color:#5a6370;}
+.t-nav{display:flex;gap:8px;}
+.t-prev{padding:8px 15px;font-size:13px;border-radius:7px;background:#f0f2f0;border:none;cursor:pointer;color:#5a6370;}
+.t-prev:hover{background:#e4e7e4;}
+.t-next{padding:8px 18px;font-size:13px;font-weight:600;border-radius:7px;background:#437096;border:none;cursor:pointer;color:white;}
+.t-next:hover{background:#335a7a;}
+#tourHelpBtn{
+  position:fixed;bottom:28px;right:28px;width:42px;height:42px;
+  background:#437096;color:white;border:none;border-radius:50%;
+  font-size:19px;font-weight:700;cursor:pointer;
+  box-shadow:0 4px 14px rgba(67,112,150,0.45);z-index:8000;
+  display:flex;align-items:center;justify-content:center;
+  transition:background 0.15s;
+}
+#tourHelpBtn:hover{background:#335a7a;}
+</style>
+
+<div id="tourOverlay">
+  <div id="tourBackdrop" onclick="tourSkip()"></div>
+  <div id="tourSpotlight"></div>
+
+  <!-- 步驟卡（靠右顯示） -->
+  <div id="tourCard">
+    <div class="t-step" id="tStepLabel"></div>
+    <div class="t-icon" id="tIcon"></div>
+    <div class="t-title" id="tTitle"></div>
+    <div class="t-desc" id="tDesc"></div>
+    <div class="t-dots" id="tDots"></div>
+    <div class="t-btns">
+      <button class="t-skip" onclick="tourSkip()">跳過導覽</button>
+      <div class="t-nav">
+        <button class="t-prev" id="tPrev" onclick="tourPrev()">← 上一步</button>
+        <button class="t-next" id="tNext" onclick="tourNext()">下一步 →</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 歡迎卡（置中） -->
+  <div id="tourCardCenter">
+    <div class="t-icon" id="tIconC" style="font-size:52px;margin-bottom:16px;"></div>
+    <div class="t-title" id="tTitleC" style="font-size:20px;margin-bottom:12px;"></div>
+    <div class="t-desc" id="tDescC"></div>
+    <div class="t-dots" id="tDotsC" style="margin:20px 0 24px;"></div>
+    <div style="display:flex;justify-content:center;gap:12px;">
+      <button class="t-skip" onclick="tourSkip()">跳過</button>
+      <button class="t-next" onclick="tourNext()" style="padding:11px 30px;font-size:14px;">開始導覽 →</button>
+    </div>
+  </div>
+</div>
+
+<button id="tourHelpBtn" onclick="startTour()" title="操作說明">?</button>
+
+<script>
+const _TOUR = [
+  { center:true,  icon:'🚀', title:'歡迎使用 EDIS',     desc:'這是一套物流延遲預測與最佳化調度系統。\n只需 1 分鐘，帶你快速認識各功能。' },
+  { target:'nav-dashboard',    icon:'📊', title:'Dashboard 總覽',  desc:'查看模型 KPI、延遲風險指標與趨勢，\n快速掌握整體物流狀況。' },
+  { target:'nav-risk-list',    icon:'⚠️', title:'風險訂單列表',    desc:'瀏覽高風險訂單，支援搜尋與篩選，\n點擊訂單可查看延遲原因分析。' },
+  { target:'nav-optimization', icon:'⚡', title:'最佳化調度',      desc:'設定預算，系統自動找出 ROI 最佳的升級方案，\n降低延遲罰款。（需 Manager 權限）' },
+  { target:'nav-ai-assistant', icon:'✦',  title:'AI 助理',         desc:'用中文詢問物流決策建議，\nAI 根據去識別化資料回答。（需 Manager 權限）' },
+  { target:'nav-model-perf',   icon:'📈', title:'模型效能',        desc:'監控 AUC、F1、Precision、Recall，\n並可調整決策門檻值。' },
+  { target:'nav-region-map',   icon:'🗺️', title:'區域風險地圖',    desc:'全球熱力圖顯示各地區延遲風險，\n快速識別高風險配送區域。' },
+  { target:'nav-rbac',         icon:'🔐', title:'角色與權限',      desc:'Viewer 可查看報告，Manager 可執行調度。\n點右上角可切換角色或登入。' },
+];
+
+let _tourStep = 0;
+
+function startTour() {
+  _tourStep = 0;
+  document.getElementById('tourOverlay').classList.add('active');
+  _renderTour();
+}
+
+function _dots(current) {
+  return _TOUR.map((_,i) => `<div class="t-dot${i===current?' on':''}"></div>`).join('');
+}
+
+function _renderTour() {
+  const s = _TOUR[_tourStep];
+  const card   = document.getElementById('tourCard');
+  const cardC  = document.getElementById('tourCardCenter');
+  const spot   = document.getElementById('tourSpotlight');
+
+  if (s.center) {
+    card.style.display = 'none'; spot.style.display = 'none';
+    cardC.style.display = 'block';
+    document.getElementById('tIconC').textContent  = s.icon;
+    document.getElementById('tTitleC').textContent = s.title;
+    document.getElementById('tDescC').textContent  = s.desc;
+    document.getElementById('tDotsC').innerHTML    = _dots(_tourStep);
+  } else {
+    cardC.style.display = 'none';
+    card.style.display = 'block'; spot.style.display = 'block';
+
+    const total = _TOUR.length - 1;
+    document.getElementById('tStepLabel').textContent = `步驟 ${_tourStep} / ${total}`;
+    document.getElementById('tIcon').textContent  = s.icon;
+    document.getElementById('tTitle').textContent = s.title;
+    document.getElementById('tDesc').textContent  = s.desc;
+    document.getElementById('tDots').innerHTML    = _dots(_tourStep);
+    document.getElementById('tPrev').style.visibility = _tourStep <= 1 ? 'hidden' : 'visible';
+    document.getElementById('tNext').textContent  = _tourStep === _TOUR.length-1 ? '完成 ✓' : '下一步 →';
+
+    const el = document.getElementById(s.target);
+    if (el) {
+      const r = el.getBoundingClientRect(), p = 7;
+      spot.style.cssText += `left:${r.left-p}px;top:${r.top-p}px;width:${r.width+p*2}px;height:${r.height+p*2}px;`;
+      const cardTop = Math.min(Math.max(r.top - 10, 80), window.innerHeight - 260);
+      card.style.left = '248px';
+      card.style.top  = cardTop + 'px';
+    }
+  }
+}
+
+function tourNext() {
+  _tourStep >= _TOUR.length - 1 ? _tourEnd() : (++_tourStep, _renderTour());
+}
+function tourPrev() {
+  _tourStep > 1 && (--_tourStep, _renderTour());
+}
+function tourSkip() { _tourEnd(); }
+function _tourEnd() {
+  document.getElementById('tourOverlay').classList.remove('active');
+  localStorage.setItem('edis_tour','1');
+}
+
+window.addEventListener('load', function() {
+  if (!localStorage.getItem('edis_tour')) setTimeout(startTour, 900);
+});
+</script>
 </body>
 </html>
