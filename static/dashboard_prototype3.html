@@ -1,0 +1,534 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Dashboard 試做版 3 — 右側面板</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&family=Noto+Sans+TC:wght@400;500;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root {
+  --navy:    #437096;
+  --navy-dk: #2d5269;
+  --bg:      #eef0ed;
+  --card:    #ffffff;
+  --border:  #dde0de;
+  --text:    #2d3340;
+  --muted:   #8a939e;
+  --sidebar: #1e2d3d;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: 'DM Sans','Noto Sans TC',sans-serif; background: var(--bg); display: flex; min-height: 100vh; overflow: hidden; }
+
+/* ════════════════════════
+   左側導覽列（固定，不收折）
+════════════════════════ */
+.sidebar {
+  width: 200px; flex-shrink: 0;
+  background: var(--sidebar);
+  display: flex; flex-direction: column;
+  padding: 20px 0;
+}
+.sidebar-logo { padding: 0 20px 20px; font-size: 15px; font-weight: 700; color: white; border-bottom: 1px solid rgba(255,255,255,0.08); margin-bottom: 12px; }
+.sidebar-logo span { font-size: 11px; display: block; color: rgba(255,255,255,0.4); font-weight: 400; margin-top: 2px; }
+.nav-item { padding: 10px 20px; font-size: 13px; color: rgba(255,255,255,0.55); cursor: pointer; display: flex; align-items: center; gap: 10px; }
+.nav-item.active { background: rgba(67,112,150,0.35); color: white; font-weight: 600; }
+.nav-item:hover:not(.active) { background: rgba(255,255,255,0.05); color: rgba(255,255,255,0.8); }
+
+/* ════════════════════════
+   主內容
+════════════════════════ */
+.main {
+  flex: 1; overflow-y: auto;
+  padding: 32px 36px;
+  min-width: 0;
+}
+.page-title { font-size: 20px; font-weight: 700; color: var(--text); margin-bottom: 4px; }
+.page-sub { font-size: 12.5px; color: var(--muted); margin-bottom: 28px; }
+.proto-tag { display: inline-block; background: #fef3c7; border: 1px solid #fcd34d; color: #92400e; font-size: 10.5px; font-weight: 600; padding: 2px 8px; border-radius: 20px; margin-left: 8px; vertical-align: middle; }
+
+.kpi-row { display: grid; grid-template-columns: repeat(3,1fr); gap: 14px; margin-bottom: 16px; }
+.kpi-card { background: white; border-radius: 10px; padding: 18px 20px; border: 1px solid var(--border); }
+.kpi-label { font-size: 11px; color: var(--muted); margin-bottom: 6px; font-weight: 500; }
+.kpi-val { font-size: 24px; font-weight: 700; color: var(--text); font-family: 'DM Mono',monospace; }
+.kpi-sub { font-size: 11px; color: var(--muted); margin-top: 4px; }
+.exec-row { display: grid; grid-template-columns: repeat(4,1fr); gap: 14px; margin-bottom: 16px; }
+.exec-card { background: white; border-radius: 10px; padding: 14px 18px; border: 1px solid var(--border); }
+.exec-label { font-size: 10px; color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: .5px; margin-bottom: 6px; }
+.exec-val { font-size: 16px; font-weight: 700; color: var(--text); }
+.exec-note { font-size: 10.5px; color: var(--muted); margin-top: 4px; }
+.chart-card { background: white; border-radius: 10px; padding: 18px 20px; border: 1px solid var(--border); height: 130px; display: flex; align-items: center; justify-content: center; margin-bottom: 16px; }
+.chart-placeholder { color: var(--muted); font-size: 12px; }
+
+/* ════════════════════════
+   右側行動面板
+════════════════════════ */
+#right-panel {
+  flex-shrink: 0;
+  width: 360px;
+  background: var(--card);
+  border-left: 1px solid var(--border);
+  display: flex; flex-direction: column;
+  position: relative;
+  transition: width .28s cubic-bezier(.4,0,.2,1);
+  overflow: hidden;
+}
+#right-panel.collapsed { width: 44px; }
+
+/* 收折按鈕（貼在面板左緣） */
+.rp-toggle {
+  position: absolute;
+  top: 50%; left: 0;
+  transform: translateY(-50%);
+  width: 20px; height: 56px;
+  background: var(--border);
+  border: none; border-radius: 0 8px 8px 0;
+  cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  color: var(--muted); font-size: 11px;
+  transition: background .15s, color .15s;
+  z-index: 10;
+}
+.rp-toggle:hover { background: var(--navy); color: white; }
+.rp-toggle-arrow {
+  transition: transform .28s cubic-bezier(.4,0,.2,1);
+  display: inline-block;
+}
+#right-panel.collapsed .rp-toggle-arrow { transform: rotate(180deg); }
+
+/* 收合狀態：垂直標題 */
+.rp-collapsed-label {
+  position: absolute;
+  top: 0; left: 0; right: 0; bottom: 0;
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  gap: 8px;
+  opacity: 0;
+  transition: opacity .2s;
+  pointer-events: none;
+}
+#right-panel.collapsed .rp-collapsed-label { opacity: 1; pointer-events: all; cursor: pointer; }
+.rp-collapsed-label:hover ~ * { background: var(--bg); }
+.rp-badge {
+  background: #ef4444; color: white;
+  font-size: 11px; font-weight: 700;
+  width: 22px; height: 22px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-family: 'DM Mono', monospace;
+}
+.rp-vtxt {
+  writing-mode: vertical-rl;
+  text-orientation: mixed;
+  font-size: 11px; font-weight: 600;
+  color: var(--muted);
+  letter-spacing: 1px;
+}
+
+/* 展開狀態：全部內容 */
+.rp-content {
+  flex: 1; display: flex; flex-direction: column;
+  padding-left: 20px;
+  overflow: hidden;
+  opacity: 1;
+  transition: opacity .2s;
+  min-width: 340px;
+}
+#right-panel.collapsed .rp-content { opacity: 0; pointer-events: none; }
+
+/* 面板標題 */
+.rp-header {
+  padding: 20px 16px 14px 0;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 12px;
+}
+.rp-header-top {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 6px;
+}
+.rp-title { font-size: 14px; font-weight: 700; color: var(--text); display: flex; align-items: center; gap: 7px; }
+.rp-header-right { display: flex; align-items: center; gap: 6px; }
+.rp-update { font-size: 10px; color: var(--muted); }
+.rp-refresh {
+  width: 22px; height: 22px; border-radius: 50%;
+  border: 1px solid var(--border); background: transparent;
+  cursor: pointer; display: flex; align-items: center; justify-content: center;
+  font-size: 11px; color: var(--muted);
+}
+.rp-refresh:hover { background: var(--bg); color: var(--navy); }
+.rp-refresh.spinning { animation: spin .7s linear; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* 角色切換 */
+.role-bar {
+  display: flex; align-items: center; justify-content: space-between;
+  background: #f8f9fa; border: 1px solid var(--border);
+  border-radius: 8px; padding: 5px 10px;
+  margin: 0 0 12px;
+}
+.role-label-txt { font-size: 10.5px; color: var(--muted); }
+.role-toggle { display: flex; background: var(--border); border-radius: 6px; padding: 2px; gap: 2px; }
+.role-btn { font-size: 10.5px; font-weight: 600; padding: 3px 10px; border-radius: 4px; border: none; cursor: pointer; background: transparent; color: var(--muted); }
+.role-btn.active { background: white; color: var(--navy-dk); box-shadow: 0 1px 3px rgba(0,0,0,.1); }
+
+/* 行動列表 */
+.rp-list { display: flex; flex-direction: column; gap: 10px; padding-right: 16px; overflow-y: auto; flex: 1; }
+
+.rp-item {
+  border-radius: 12px;
+  cursor: pointer;
+  transition: box-shadow .15s, transform .12s;
+  border: 1px solid transparent;
+  overflow: hidden;
+  position: relative;
+}
+.rp-item:hover { transform: translateY(-1px); box-shadow: 0 4px 14px rgba(0,0,0,.08); }
+.rp-item.red    { background: #fff5f5; border-color: #fecaca; }
+.rp-item.yellow { background: #fffbf0; border-color: #fde68a; }
+.rp-item.green  { background: #f0fdf4; border-color: #bbf7d0; cursor: default; }
+.rp-item.green:hover { transform: none; box-shadow: none; }
+
+/* 左側色條 */
+.rp-item::before {
+  content: '';
+  position: absolute; left: 0; top: 0; bottom: 0;
+  width: 4px; border-radius: 12px 0 0 12px;
+}
+.rp-item.red::before    { background: #ef4444; }
+.rp-item.yellow::before { background: #f59e0b; }
+.rp-item.green::before  { background: #10b981; }
+
+.rp-item-inner { padding: 13px 14px 13px 18px; }
+
+/* 上半：數字 + 標題 */
+.rp-item-top {
+  display: flex; align-items: center;
+  justify-content: space-between; gap: 10px;
+  margin-bottom: 8px;
+}
+.rp-item-left { flex: 1; min-width: 0; }
+.rp-item-label {
+  font-size: 13.5px; font-weight: 700; line-height: 1.3;
+  margin-bottom: 3px;
+}
+.red    .rp-item-label { color: #b91c1c; }
+.yellow .rp-item-label { color: #92400e; }
+.green  .rp-item-label { color: #065f46; }
+.rp-item-desc { font-size: 11px; color: var(--muted); }
+
+/* 大數字 */
+.rp-item-count { text-align: right; flex-shrink: 0; }
+.rp-count-val {
+  font-size: 32px; font-weight: 700;
+  font-family: 'DM Mono',monospace;
+  line-height: 1;
+}
+.red    .rp-count-val { color: #ef4444; }
+.yellow .rp-count-val { color: #f59e0b; }
+.green  .rp-count-val { color: #10b981; }
+.rp-count-unit { font-size: 10px; color: var(--muted); text-align: right; margin-top: 1px; }
+
+/* 下半：趨勢 + 截止日 + 按鈕 */
+.rp-item-footer {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 8px;
+  padding-top: 8px;
+  border-top: 1px solid rgba(0,0,0,.06);
+}
+.rp-item-tags { display: flex; align-items: center; gap: 5px; flex-wrap: wrap; }
+
+/* 趨勢標籤 */
+.rp-trend-tag {
+  display: inline-flex; align-items: center; gap: 3px;
+  font-size: 10.5px; font-weight: 600;
+  padding: 2px 7px; border-radius: 20px;
+}
+.trend-up   { background: #fef2f2; color: #ef4444; }
+.trend-down { background: #f0fdf4; color: #10b981; }
+.trend-same { background: #f3f4f6; color: var(--muted); }
+
+/* 截止日標籤 */
+.rp-due-tag {
+  display: inline-flex; align-items: center; gap: 3px;
+  font-size: 10.5px; font-weight: 500;
+  padding: 2px 7px; border-radius: 20px;
+  background: rgba(0,0,0,.05); color: var(--text);
+}
+.rp-due-tag b { font-weight: 700; }
+
+.rp-btn {
+  padding: 6px 14px; border-radius: 7px; border: none;
+  font-size: 12px; font-weight: 600; cursor: pointer;
+  white-space: nowrap; flex-shrink: 0;
+}
+.red    .rp-btn { background: #ef4444; color: white; }
+.yellow .rp-btn { background: #f59e0b; color: white; }
+.green  .rp-btn { background: #e5e7eb; color: #9ca3af; cursor: default; }
+.rp-btn.locked  { background: #e5e7eb; color: #9ca3af; cursor: not-allowed; }
+
+/* 建議橫幅 */
+.rp-hint {
+  margin: 12px 16px 20px 0;
+  background: linear-gradient(135deg, var(--navy-dk), var(--navy));
+  border-radius: 10px; padding: 12px 14px;
+  flex-shrink: 0;
+}
+.rp-hint-title { font-size: 12px; font-weight: 700; color: white; margin-bottom: 4px; }
+.rp-hint-desc  { font-size: 10.5px; color: rgba(255,255,255,.7); margin-bottom: 10px; }
+.rp-hint-btn {
+  width: 100%; background: rgba(255,255,255,.18);
+  border: 1px solid rgba(255,255,255,.3); color: white;
+  border-radius: 7px; padding: 7px; font-size: 12px; font-weight: 600;
+  cursor: pointer;
+}
+.rp-hint-btn:hover { background: rgba(255,255,255,.28); }
+.rp-hint-btn.locked { opacity: .5; cursor: not-allowed; }
+
+/* 載入 skeleton */
+.skeleton-list { display: flex; flex-direction: column; gap: 8px; padding-right: 16px; }
+.skeleton-item {
+  height: 90px; border-radius: 10px;
+  background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.4s infinite;
+}
+@keyframes shimmer { 0%{background-position:200% 0} 100%{background-position:-200% 0} }
+
+/* 空狀態 */
+.empty-state { text-align: center; padding: 28px 16px; }
+.empty-icon  { font-size: 32px; margin-bottom: 8px; }
+.empty-title { font-size: 13px; font-weight: 700; color: #065f46; margin-bottom: 4px; }
+.empty-desc  { font-size: 11px; color: var(--muted); }
+</style>
+</head>
+<body>
+
+<!-- 左側導覽列 -->
+<div class="sidebar">
+  <div class="sidebar-logo">EDIS <span>物流延遲預測系統</span></div>
+  <div class="nav-item active">📊 今日總覽</div>
+  <div class="nav-item">⚠️ 風險訂單</div>
+  <div class="nav-item">⚡ 最佳化調度</div>
+  <div class="nav-item">✦ AI 助理</div>
+  <div class="nav-item">📈 模型效能</div>
+  <div class="nav-item">🗺️ 區域地圖</div>
+  <div class="nav-item">🔐 權限管理</div>
+</div>
+
+<!-- 主內容 -->
+<div class="main">
+  <div class="page-title">今日總覽 <span class="proto-tag">試做版 3</span></div>
+  <div class="page-sub">2026 年 6 月 18 日 · 物流延遲預測與最佳化調度</div>
+  <div class="kpi-row">
+    <div class="kpi-card"><div class="kpi-label">待處理訂單總數</div><div class="kpi-val">500</div><div class="kpi-sub">今日載入</div></div>
+    <div class="kpi-card"><div class="kpi-label">預估延遲訂單數</div><div class="kpi-val" style="color:#f59e0b">64</div><div class="kpi-sub">佔 12.8%</div></div>
+    <div class="kpi-card"><div class="kpi-label">預期延遲罰金損失</div><div class="kpi-val">$8,950</div><div class="kpi-sub">若不處理</div></div>
+  </div>
+  <div class="chart-card"><div class="chart-placeholder">📈 月度延遲趨勢圖（原有圖表）</div></div>
+  <div class="exec-row">
+    <div class="exec-card"><div class="exec-label">SLA Risk</div><div class="exec-val" style="color:#ef4444">HIGH</div><div class="exec-note">高風險比例偏高</div></div>
+    <div class="exec-card"><div class="exec-label">Penalty Exposure</div><div class="exec-val">$5,750</div><div class="exec-note">高風險訂單預估罰金</div></div>
+    <div class="exec-card"><div class="exec-label">Budget Ask</div><div class="exec-val">$1,840</div><div class="exec-note">ROI 為正的建議預算</div></div>
+    <div class="exec-card"><div class="exec-label">Primary Driver</div><div class="exec-val">地區</div><div class="exec-note">主要風險來源</div></div>
+  </div>
+</div>
+
+<!-- 右側行動面板 -->
+<div id="right-panel">
+
+  <!-- 收折按鈕 -->
+  <button class="rp-toggle" onclick="toggleRightPanel()" title="收合行動面板">
+    <span class="rp-toggle-arrow">›</span>
+  </button>
+
+  <!-- 收合狀態顯示 -->
+  <div class="rp-collapsed-label" onclick="toggleRightPanel()">
+    <div class="rp-badge">23</div>
+    <div class="rp-vtxt">今日待辦</div>
+  </div>
+
+  <!-- 展開內容 -->
+  <div class="rp-content">
+
+    <!-- 標題 -->
+    <div class="rp-header">
+      <div class="rp-header-top">
+        <div class="rp-title">🎯 今天要做什麼？</div>
+        <div class="rp-header-right">
+          <span class="rp-update" id="rp-update">更新中...</span>
+          <button class="rp-refresh" id="rp-refresh" onclick="doRefresh()" title="重新整理">↻</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 角色切換 -->
+    <div class="role-bar">
+      <span class="role-label-txt">目前身份：</span>
+      <div class="role-toggle">
+        <button class="role-btn active" id="role-manager" onclick="setRole('manager')">Manager</button>
+        <button class="role-btn"        id="role-viewer"  onclick="setRole('viewer')">Viewer</button>
+      </div>
+    </div>
+
+    <!-- skeleton -->
+    <div id="rp-skeleton" class="skeleton-list" style="display:none">
+      <div class="skeleton-item"></div>
+      <div class="skeleton-item"></div>
+      <div class="skeleton-item"></div>
+    </div>
+
+    <!-- 空狀態 -->
+    <div class="empty-state" id="rp-empty" style="display:none">
+      <div class="empty-icon">✅</div>
+      <div class="empty-title">今天所有訂單都正常！</div>
+      <div class="empty-desc">沒有高風險或需要留意的訂單</div>
+    </div>
+
+    <!-- 行動列表 -->
+    <div class="rp-list" id="rp-list">
+
+      <!-- 紅 -->
+      <div class="rp-item red" onclick="handleItemClick('red')">
+        <div class="rp-item-inner">
+          <div class="rp-item-top">
+            <div class="rp-item-left">
+              <div class="rp-item-label">🔴 立刻處理</div>
+              <div class="rp-item-desc">延遲風險高，需升級出貨方式</div>
+            </div>
+            <div class="rp-item-count">
+              <div class="rp-count-val">23</div>
+              <div class="rp-count-unit">筆待處理</div>
+            </div>
+          </div>
+          <div class="rp-item-footer">
+            <div class="rp-item-tags">
+              <span class="rp-trend-tag trend-up">▲ 比昨天多 5 筆</span>
+              <span class="rp-due-tag">今截止 <b>14</b> 筆</span>
+            </div>
+            <button class="rp-btn" id="red-btn">查看 →</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- 黃 -->
+      <div class="rp-item yellow" onclick="handleItemClick('yellow')">
+        <div class="rp-item-inner">
+          <div class="rp-item-top">
+            <div class="rp-item-left">
+              <div class="rp-item-label">🟡 需要留意</div>
+              <div class="rp-item-desc">有風險，建議持續追蹤</div>
+            </div>
+            <div class="rp-item-count">
+              <div class="rp-count-val">41</div>
+              <div class="rp-count-unit">筆留意中</div>
+            </div>
+          </div>
+          <div class="rp-item-footer">
+            <div class="rp-item-tags">
+              <span class="rp-trend-tag trend-down">▼ 比昨天少 3 筆</span>
+              <span class="rp-due-tag">今截止 <b>18</b> 筆</span>
+            </div>
+            <button class="rp-btn" id="yellow-btn">查看 →</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- 綠 -->
+      <div class="rp-item green">
+        <div class="rp-item-inner">
+          <div class="rp-item-top">
+            <div class="rp-item-left">
+              <div class="rp-item-label">🟢 目前正常</div>
+              <div class="rp-item-desc">不需特別處理</div>
+            </div>
+            <div class="rp-item-count">
+              <div class="rp-count-val">436</div>
+              <div class="rp-count-unit">筆正常</div>
+            </div>
+          </div>
+          <div class="rp-item-footer">
+            <div class="rp-item-tags">
+              <span class="rp-trend-tag trend-same">— 與昨天相同</span>
+            </div>
+            <button class="rp-btn">無需動作</button>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- 建議橫幅 -->
+    <div class="rp-hint">
+      <div class="rp-hint-title">💡 花 $1,840 可省 $5,750</div>
+      <div class="rp-hint-desc">系統已找出最佳升級方案，平均每筆花 $80 省 $250</div>
+      <button class="rp-hint-btn" id="hint-btn" onclick="handleUpgrade()">立刻執行升級調度 →</button>
+    </div>
+  </div>
+</div>
+
+<script>
+let role = 'manager';
+
+// ── 右側面板收折 ──────────────────────────────────
+function toggleRightPanel() {
+  const p = document.getElementById('right-panel');
+  const collapsed = p.classList.toggle('collapsed');
+  localStorage.setItem('rp_collapsed', collapsed ? '1' : '0');
+}
+if (localStorage.getItem('rp_collapsed') === '1') {
+  document.getElementById('right-panel').classList.add('collapsed');
+}
+
+// ── 角色切換 ──────────────────────────────────────
+function setRole(r) {
+  role = r;
+  document.getElementById('role-manager').classList.toggle('active', r === 'manager');
+  document.getElementById('role-viewer').classList.toggle('active', r === 'viewer');
+  renderRole();
+}
+function renderRole() {
+  const isManager = role === 'manager';
+  ['red-btn','yellow-btn'].forEach(id => {
+    const b = document.getElementById(id);
+    b.classList.toggle('locked', !isManager);
+    b.title = isManager ? '' : '需要 Manager 權限';
+  });
+  const hb = document.getElementById('hint-btn');
+  hb.classList.toggle('locked', !isManager);
+  hb.title = isManager ? '' : '需要 Manager 權限';
+}
+
+// ── 按鈕動作 ──────────────────────────────────────
+function handleItemClick(type) {
+  if (role !== 'manager') { alert('此操作需要 Manager 權限，請聯繫管理員。'); return; }
+  alert('前往風險訂單列表（' + (type === 'red' ? '高風險' : '中風險') + '）');
+}
+function handleUpgrade() {
+  if (role !== 'manager') { alert('此操作需要 Manager 權限，請聯繫管理員。'); return; }
+  alert('前往最佳化調度');
+}
+
+// ── 重新整理 ──────────────────────────────────────
+function doRefresh() {
+  const btn = document.getElementById('rp-refresh');
+  btn.classList.add('spinning'); btn.disabled = true;
+  document.getElementById('rp-update').textContent = '更新中...';
+  document.getElementById('rp-skeleton').style.display = 'flex';
+  document.getElementById('rp-list').style.display = 'none';
+  setTimeout(() => {
+    btn.classList.remove('spinning'); btn.disabled = false;
+    document.getElementById('rp-skeleton').style.display = 'none';
+    document.getElementById('rp-list').style.display = 'flex';
+    setUpdateTime();
+  }, 1200);
+}
+function setUpdateTime() {
+  const now = new Date();
+  document.getElementById('rp-update').textContent =
+    `更新於 ${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
+}
+
+// ── 初始化 ────────────────────────────────────────
+setUpdateTime();
+renderRole();
+</script>
+</body>
+</html>

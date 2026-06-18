@@ -1,0 +1,335 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Dashboard 試做版</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&family=Noto+Sans+TC:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root {
+  --navy:    #437096;
+  --navy-dk: #335a7a;
+  --bg:      #eef0ed;
+  --card:    #ffffff;
+  --border:  #dde0de;
+  --text:    #2d3340;
+  --muted:   #8a939e;
+  --red:     #ef4444;
+  --red-bg:  #fef2f2;
+  --red-bd:  #fecaca;
+  --yellow:  #f59e0b;
+  --yel-bg:  #fffbeb;
+  --yel-bd:  #fde68a;
+  --green:   #10b981;
+  --grn-bg:  #f0fdf4;
+  --grn-bd:  #bbf7d0;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: 'DM Sans', 'Noto Sans TC', sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  padding: 32px;
+  max-width: 960px;
+  margin: 0 auto;
+}
+
+/* ── 頁面標題 ── */
+.page-header { margin-bottom: 28px; }
+.page-date { font-size: 12px; color: var(--muted); margin-bottom: 6px; font-family: 'DM Mono', monospace; }
+.page-title { font-size: 22px; font-weight: 700; color: var(--text); }
+.page-sub { font-size: 13px; color: var(--muted); margin-top: 4px; }
+
+/* ── 今日摘要大卡 ── */
+.summary-card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 24px 28px;
+  margin-bottom: 24px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+}
+.summary-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  margin-bottom: 18px;
+}
+.status-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 18px;
+  border-radius: 10px;
+  margin-bottom: 10px;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.status-row:last-child { margin-bottom: 0; }
+.status-row.red    { background: var(--red-bg);  border: 1px solid var(--red-bd); }
+.status-row.yellow { background: var(--yel-bg);  border: 1px solid var(--yel-bd); }
+.status-row.green  { background: var(--grn-bg);  border: 1px solid var(--grn-bd); }
+
+.status-left { display: flex; align-items: center; gap: 12px; }
+.status-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+.red    .status-dot { background: var(--red); }
+.yellow .status-dot { background: var(--yellow); }
+.green  .status-dot { background: var(--green); }
+
+.status-label { font-size: 14px; font-weight: 600; }
+.red    .status-label { color: #b91c1c; }
+.yellow .status-label { color: #92400e; }
+.green  .status-label { color: #065f46; }
+
+.status-desc { font-size: 12px; color: var(--muted); margin-top: 2px; }
+
+.status-right { display: flex; align-items: center; gap: 20px; }
+.status-count { font-size: 22px; font-weight: 700; font-family: 'DM Mono', monospace; }
+.red    .status-count { color: var(--red); }
+.yellow .status-count { color: var(--yellow); }
+.green  .status-count { color: var(--green); }
+
+.status-meta { text-align: right; }
+.status-meta-val { font-size: 13px; font-weight: 600; color: var(--text); }
+.status-meta-lbl { font-size: 11px; color: var(--muted); }
+
+.status-action-btn {
+  padding: 8px 16px;
+  border-radius: 8px;
+  border: none;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.red    .status-action-btn { background: var(--red);    color: white; }
+.yellow .status-action-btn { background: var(--yellow); color: white; }
+.green  .status-action-btn { background: #e5e7eb; color: var(--muted); cursor: default; }
+
+/* ── KPI 三格 ── */
+.kpi-row {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+  margin-bottom: 24px;
+}
+.kpi-card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 20px 22px;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.03);
+}
+.kpi-icon { font-size: 20px; margin-bottom: 10px; }
+.kpi-label { font-size: 12px; color: var(--muted); font-weight: 500; margin-bottom: 4px; }
+.kpi-value { font-size: 26px; font-weight: 700; color: var(--text); font-family: 'DM Mono', monospace; }
+.kpi-explain {
+  font-size: 11.5px;
+  color: var(--muted);
+  margin-top: 8px;
+  line-height: 1.5;
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
+}
+.kpi-explain b { color: var(--text); font-weight: 600; }
+
+/* ── 建議動作橫幅 ── */
+.action-banner {
+  background: linear-gradient(90deg, var(--navy-dk) 0%, var(--navy) 100%);
+  border-radius: 12px;
+  padding: 20px 24px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 24px;
+  flex-wrap: wrap;
+}
+.action-banner-left { display: flex; align-items: flex-start; gap: 14px; }
+.action-banner-icon { font-size: 26px; flex-shrink: 0; }
+.action-banner-title { font-size: 14px; font-weight: 700; color: white; margin-bottom: 4px; }
+.action-banner-desc { font-size: 12.5px; color: rgba(255,255,255,0.8); line-height: 1.55; }
+.action-banner-btn {
+  background: white;
+  color: var(--navy-dk);
+  border: none;
+  border-radius: 8px;
+  padding: 10px 20px;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+}
+.action-banner-btn:hover { background: #f0f4f8; }
+
+/* ── 注意事項提示 ── */
+.notice {
+  background: #fff7ed;
+  border: 1px solid #fed7aa;
+  border-radius: 10px;
+  padding: 14px 18px;
+  font-size: 13px;
+  color: #9a3412;
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin-bottom: 24px;
+}
+.notice-icon { font-size: 16px; flex-shrink: 0; margin-top: 1px; }
+.notice-text b { font-weight: 700; }
+
+/* ── 試做提示 ── */
+.prototype-badge {
+  display: inline-block;
+  background: #fef3c7;
+  border: 1px solid #fcd34d;
+  color: #92400e;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 3px 10px;
+  border-radius: 20px;
+  margin-bottom: 20px;
+}
+</style>
+</head>
+<body>
+
+<div class="prototype-badge">🧪 試做版 — 僅供確認視覺方向，資料為模擬值</div>
+
+<div class="page-header">
+  <div class="page-date">2026 年 6 月 18 日　星期三</div>
+  <div class="page-title">今天有哪些訂單要注意？</div>
+  <div class="page-sub">系統已掃描 500 筆訂單，根據 AI 預測整理出以下行動清單。</div>
+</div>
+
+<!-- 今日摘要 -->
+<div class="summary-card">
+  <div class="summary-title">今日訂單狀況</div>
+
+  <!-- 紅：立刻處理 -->
+  <div class="status-row red">
+    <div class="status-left">
+      <div class="status-dot"></div>
+      <div>
+        <div class="status-label">🔴 需要立刻處理</div>
+        <div class="status-desc">延遲機率很高，若不升級出貨方式，很可能會超時並產生罰金。</div>
+      </div>
+    </div>
+    <div class="status-right">
+      <div>
+        <div class="status-count">23</div>
+        <div style="font-size:11px; color:#b91c1c;">筆訂單</div>
+      </div>
+      <div class="status-meta">
+        <div class="status-meta-val">$5,750</div>
+        <div class="status-meta-lbl">預估罰金損失</div>
+      </div>
+      <button class="status-action-btn" onclick="alert('前往風險訂單列表（試做版）')">查看這些訂單 →</button>
+    </div>
+  </div>
+
+  <!-- 黃：留意 -->
+  <div class="status-row yellow">
+    <div class="status-left">
+      <div class="status-dot"></div>
+      <div>
+        <div class="status-label">🟡 建議留意</div>
+        <div class="status-desc">有一定延遲風險，建議追蹤，若情況惡化再考慮升級。</div>
+      </div>
+    </div>
+    <div class="status-right">
+      <div>
+        <div class="status-count">41</div>
+        <div style="font-size:11px; color:#92400e;">筆訂單</div>
+      </div>
+      <div class="status-meta">
+        <div class="status-meta-val">$3,200</div>
+        <div class="status-meta-lbl">潛在風險損失</div>
+      </div>
+      <button class="status-action-btn" onclick="alert('前往風險訂單列表（試做版）')">查看這些訂單 →</button>
+    </div>
+  </div>
+
+  <!-- 綠：正常 -->
+  <div class="status-row green">
+    <div class="status-left">
+      <div class="status-dot"></div>
+      <div>
+        <div class="status-label">🟢 目前正常</div>
+        <div class="status-desc">預測延遲機率低，不需要特別處理。</div>
+      </div>
+    </div>
+    <div class="status-right">
+      <div>
+        <div class="status-count">436</div>
+        <div style="font-size:11px; color:#065f46;">筆訂單</div>
+      </div>
+      <div class="status-meta">
+        <div class="status-meta-val">—</div>
+        <div class="status-meta-lbl">無需處理</div>
+      </div>
+      <button class="status-action-btn">無需動作</button>
+    </div>
+  </div>
+</div>
+
+<!-- 建議動作橫幅 -->
+<div class="action-banner">
+  <div class="action-banner-left">
+    <div class="action-banner-icon">💡</div>
+    <div>
+      <div class="action-banner-title">系統建議：現在升級這 23 筆訂單</div>
+      <div class="action-banner-desc">
+        只需花費約 <b style="color:white;">$1,840</b> 的升級費用，預計可避免 <b style="color:white;">$5,750</b> 的延遲罰金。<br>
+        平均每筆訂單投資 $80，預期回報 $250。
+      </div>
+    </div>
+  </div>
+  <button class="action-banner-btn" onclick="alert('前往最佳化調度（試做版）')">
+    立刻執行升級調度 →
+  </button>
+</div>
+
+<!-- KPI 三格 -->
+<div class="kpi-row">
+  <div class="kpi-card">
+    <div class="kpi-icon">📦</div>
+    <div class="kpi-label">今日訂單總數</div>
+    <div class="kpi-value">500</div>
+    <div class="kpi-explain">
+      系統已掃描所有待出貨訂單，<b>64 筆</b>有延遲風險，佔 <b>12.8%</b>。
+    </div>
+  </div>
+  <div class="kpi-card">
+    <div class="kpi-icon">⚠️</div>
+    <div class="kpi-label">高風險訂單</div>
+    <div class="kpi-value" style="color: #ef4444;">23</div>
+    <div class="kpi-explain">
+      這些訂單延遲機率超過 <b>50%</b>，建議優先升級為快遞出貨。
+    </div>
+  </div>
+  <div class="kpi-card">
+    <div class="kpi-icon">💸</div>
+    <div class="kpi-label">若不處理的損失</div>
+    <div class="kpi-value" style="color: #f59e0b;">$5,750</div>
+    <div class="kpi-explain">
+      以每筆延遲罰金 <b>$250</b> 計算。升級費用僅 <b>$1,840</b>，仍划算。
+    </div>
+  </div>
+</div>
+
+<!-- 提示橫幅 -->
+<div class="notice">
+  <div class="notice-icon">ℹ️</div>
+  <div class="notice-text">
+    <b>資料說明：</b>以上數字由 AI 模型預測，準確率約 80%。建議搭配實際業務判斷使用。
+    若想調整「多少機率才算高風險」，可在頁面上方調整門檻值。
+  </div>
+</div>
+
+</body>
+</html>

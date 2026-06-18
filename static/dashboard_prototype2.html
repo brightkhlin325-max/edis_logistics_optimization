@@ -1,0 +1,305 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Dashboard 試做版 2 — 懸浮卡片</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&family=Noto+Sans+TC:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --navy:    #437096;
+  --navy-dk: #2d5269;
+  --bg:      #eef0ed;
+  --card:    #ffffff;
+  --border:  #dde0de;
+  --text:    #2d3340;
+  --muted:   #8a939e;
+  --sidebar: #1e2d3d;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: 'DM Sans','Noto Sans TC',sans-serif; background: var(--bg); display: flex; min-height: 100vh; }
+
+/* ── Sidebar ── */
+.sidebar {
+  width: 200px; flex-shrink: 0;
+  background: var(--sidebar);
+  display: flex; flex-direction: column;
+  padding: 20px 0;
+}
+.sidebar-logo {
+  padding: 0 20px 20px;
+  font-size: 15px; font-weight: 700; color: white;
+  border-bottom: 1px solid rgba(255,255,255,0.08);
+  margin-bottom: 12px;
+}
+.sidebar-logo span { font-size: 11px; display: block; color: rgba(255,255,255,0.4); font-weight: 400; margin-top: 2px; }
+.nav-item {
+  padding: 10px 20px;
+  font-size: 13px; color: rgba(255,255,255,0.55);
+  cursor: pointer; border-radius: 0;
+  display: flex; align-items: center; gap: 10px;
+}
+.nav-item.active { background: rgba(67,112,150,0.35); color: white; font-weight: 600; }
+.nav-item:hover:not(.active) { background: rgba(255,255,255,0.05); color: rgba(255,255,255,0.8); }
+
+/* ── Main ── */
+.main { flex: 1; overflow-y: auto; padding: 32px 36px; position: relative; }
+.page-title { font-size: 20px; font-weight: 700; color: var(--text); margin-bottom: 4px; }
+.page-sub { font-size: 12.5px; color: var(--muted); margin-bottom: 28px; }
+
+/* ── 背景資料區（模擬原本 Dashboard 的感覺，刻意模糊） ── */
+.bg-content {
+  display: grid; grid-template-columns: repeat(3,1fr); gap: 14px; margin-bottom: 20px;
+  opacity: 0.25; filter: blur(1px); pointer-events: none; user-select: none;
+}
+.bg-card {
+  background: white; border-radius: 10px; padding: 18px;
+  border: 1px solid var(--border);
+}
+.bg-card-label { font-size: 11px; color: var(--muted); margin-bottom: 8px; }
+.bg-card-val { font-size: 24px; font-weight: 700; color: var(--text); }
+.bg-chart { background: white; border-radius: 10px; padding: 18px; border: 1px solid var(--border); height: 120px; margin-bottom: 20px; opacity: 0.25; filter: blur(1px); }
+
+/* ── 懸浮卡片容器 ── */
+.float-layer {
+  position: absolute;
+  top: 80px; left: 36px; right: 36px;
+  pointer-events: none;
+}
+
+/* ── 懸浮主卡 ── */
+.float-card {
+  pointer-events: all;
+  background: rgba(255,255,255,0.96);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(255,255,255,0.8);
+  border-radius: 20px;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.12), 0 2px 8px rgba(0,0,0,0.06);
+  padding: 24px 28px;
+  margin-bottom: 14px;
+}
+.float-card-header {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 20px;
+}
+.float-card-title {
+  display: flex; align-items: center; gap: 10px;
+}
+.float-card-icon {
+  width: 38px; height: 38px; border-radius: 10px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 18px;
+}
+.float-card-icon.urgent { background: #fef2f2; }
+.float-card-icon.info   { background: #eff6ff; }
+.float-card-title-text { font-size: 15px; font-weight: 700; color: var(--text); }
+.float-card-title-sub  { font-size: 11.5px; color: var(--muted); margin-top: 1px; }
+.float-card-dismiss {
+  font-size: 11px; color: var(--muted); cursor: pointer; padding: 4px 10px;
+  border-radius: 20px; border: 1px solid var(--border);
+  background: transparent;
+}
+.float-card-dismiss:hover { background: var(--bg); }
+
+/* ── 行動項目列表 ── */
+.action-list { display: flex; flex-direction: column; gap: 10px; }
+.action-item {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 14px 16px;
+  border-radius: 12px;
+  border: 1px solid transparent;
+  gap: 12px;
+  cursor: pointer;
+  transition: transform 0.1s, box-shadow 0.1s;
+}
+.action-item:hover { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(0,0,0,0.08); }
+.action-item.red    { background: #fff5f5; border-color: #fecaca; }
+.action-item.yellow { background: #fffbf0; border-color: #fde68a; }
+.action-item.green  { background: #f0fdf4; border-color: #bbf7d0; cursor: default; }
+.action-item.green:hover { transform: none; box-shadow: none; }
+
+.action-item-left { display: flex; align-items: center; gap: 12px; flex: 1; min-width: 0; }
+.action-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+.red    .action-dot { background: #ef4444; }
+.yellow .action-dot { background: #f59e0b; }
+.green  .action-dot { background: #10b981; }
+
+.action-text { flex: 1; min-width: 0; }
+.action-label { font-size: 13.5px; font-weight: 600; }
+.red    .action-label { color: #b91c1c; }
+.yellow .action-label { color: #92400e; }
+.green  .action-label { color: #065f46; }
+.action-desc { font-size: 11.5px; color: var(--muted); margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+.action-right { display: flex; align-items: center; gap: 14px; flex-shrink: 0; }
+.action-count { text-align: right; }
+.action-count-val { font-size: 20px; font-weight: 700; font-family: 'DM Mono',monospace; line-height: 1; }
+.red    .action-count-val { color: #ef4444; }
+.yellow .action-count-val { color: #f59e0b; }
+.green  .action-count-val { color: #10b981; }
+.action-count-unit { font-size: 10px; color: var(--muted); margin-top: 2px; }
+
+.action-btn {
+  padding: 7px 14px; border-radius: 8px; border: none;
+  font-size: 12px; font-weight: 600; cursor: pointer; white-space: nowrap;
+}
+.red    .action-btn { background: #ef4444; color: white; }
+.yellow .action-btn { background: #f59e0b; color: white; }
+.green  .action-btn { background: #e5e7eb; color: #9ca3af; cursor: default; }
+
+/* ── 建議小卡（底部） ── */
+.float-hint {
+  pointer-events: all;
+  background: linear-gradient(135deg, var(--navy-dk) 0%, var(--navy) 100%);
+  border-radius: 16px;
+  padding: 16px 20px;
+  display: flex; align-items: center; justify-content: space-between; gap: 14px;
+  box-shadow: 0 4px 20px rgba(67,112,150,0.3);
+}
+.float-hint-left { display: flex; align-items: center; gap: 12px; }
+.float-hint-emoji { font-size: 22px; }
+.float-hint-title { font-size: 13px; font-weight: 700; color: white; }
+.float-hint-desc  { font-size: 11.5px; color: rgba(255,255,255,0.75); margin-top: 2px; }
+.float-hint-btn {
+  background: rgba(255,255,255,0.2);
+  border: 1px solid rgba(255,255,255,0.3);
+  color: white; border-radius: 10px;
+  padding: 8px 16px; font-size: 12px; font-weight: 600;
+  cursor: pointer; white-space: nowrap;
+  backdrop-filter: blur(4px);
+}
+.float-hint-btn:hover { background: rgba(255,255,255,0.3); }
+
+/* ── 試做標籤 ── */
+.proto-tag {
+  display: inline-block;
+  background: #fef3c7; border: 1px solid #fcd34d;
+  color: #92400e; font-size: 10.5px; font-weight: 600;
+  padding: 2px 8px; border-radius: 20px; margin-left: 8px;
+  vertical-align: middle;
+}
+</style>
+</head>
+<body>
+
+<!-- Sidebar -->
+<div class="sidebar">
+  <div class="sidebar-logo">EDIS <span>物流延遲預測系統</span></div>
+  <div class="nav-item active">📊 今日總覽</div>
+  <div class="nav-item">⚠️ 風險訂單</div>
+  <div class="nav-item">⚡ 最佳化調度</div>
+  <div class="nav-item">✦ AI 助理</div>
+  <div class="nav-item">📈 模型效能</div>
+  <div class="nav-item">🗺️ 區域地圖</div>
+  <div class="nav-item">🔐 權限管理</div>
+</div>
+
+<!-- Main -->
+<div class="main">
+  <div class="page-title">今日總覽 <span class="proto-tag">試做版 2</span></div>
+  <div class="page-sub">2026 年 6 月 18 日 · 系統已掃描 500 筆訂單</div>
+
+  <!-- 背景（模擬舊 Dashboard 的資料區塊，刻意淡化） -->
+  <div class="bg-content">
+    <div class="bg-card"><div class="bg-card-label">待處理訂單總數</div><div class="bg-card-val">500</div></div>
+    <div class="bg-card"><div class="bg-card-label">預估延遲訂單數</div><div class="bg-card-val">64</div></div>
+    <div class="bg-card"><div class="bg-card-label">預期延遲罰金損失</div><div class="bg-card-val">$8,950</div></div>
+  </div>
+  <div class="bg-chart"></div>
+  <div class="bg-content" style="grid-template-columns:repeat(4,1fr);">
+    <div class="bg-card"><div class="bg-card-label">SLA Risk</div><div class="bg-card-val" style="font-size:16px">HIGH</div></div>
+    <div class="bg-card"><div class="bg-card-label">Penalty Exposure</div><div class="bg-card-val" style="font-size:16px">$5,750</div></div>
+    <div class="bg-card"><div class="bg-card-label">Budget Ask</div><div class="bg-card-val" style="font-size:16px">$1,840</div></div>
+    <div class="bg-card"><div class="bg-card-label">Primary Driver</div><div class="bg-card-val" style="font-size:16px">地區</div></div>
+  </div>
+
+  <!-- 懸浮卡片層 -->
+  <div class="float-layer">
+
+    <!-- 主卡：今天要做什麼 -->
+    <div class="float-card">
+      <div class="float-card-header">
+        <div class="float-card-title">
+          <div class="float-card-icon urgent">🎯</div>
+          <div>
+            <div class="float-card-title-text">今天要做什麼？</div>
+            <div class="float-card-title-sub">根據 AI 預測，整理出以下優先順序</div>
+          </div>
+        </div>
+        <button class="float-card-dismiss" onclick="this.closest('.float-card').style.display='none'">收起 ✕</button>
+      </div>
+
+      <div class="action-list">
+        <!-- 紅：立刻處理 -->
+        <div class="action-item red" onclick="alert('前往風險訂單列表')">
+          <div class="action-item-left">
+            <div class="action-dot"></div>
+            <div class="action-text">
+              <div class="action-label">🔴 立刻處理這批訂單</div>
+              <div class="action-desc">延遲風險高，不處理會產生罰金，建議升級出貨方式</div>
+            </div>
+          </div>
+          <div class="action-right">
+            <div class="action-count">
+              <div class="action-count-val">23</div>
+              <div class="action-count-unit">筆訂單</div>
+            </div>
+            <button class="action-btn">查看 →</button>
+          </div>
+        </div>
+
+        <!-- 黃：留意 -->
+        <div class="action-item yellow" onclick="alert('前往風險訂單列表（黃色篩選）')">
+          <div class="action-item-left">
+            <div class="action-dot"></div>
+            <div class="action-text">
+              <div class="action-label">🟡 這些訂單需要留意</div>
+              <div class="action-desc">有一定風險，先追蹤，若情況惡化再升級</div>
+            </div>
+          </div>
+          <div class="action-right">
+            <div class="action-count">
+              <div class="action-count-val">41</div>
+              <div class="action-count-unit">筆訂單</div>
+            </div>
+            <button class="action-btn">查看 →</button>
+          </div>
+        </div>
+
+        <!-- 綠：正常 -->
+        <div class="action-item green">
+          <div class="action-item-left">
+            <div class="action-dot"></div>
+            <div class="action-text">
+              <div class="action-label">🟢 其餘訂單目前正常</div>
+              <div class="action-desc">不需特別處理</div>
+            </div>
+          </div>
+          <div class="action-right">
+            <div class="action-count">
+              <div class="action-count-val">436</div>
+              <div class="action-count-unit">筆訂單</div>
+            </div>
+            <button class="action-btn">無需動作</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 建議動作小卡 -->
+    <div class="float-hint">
+      <div class="float-hint-left">
+        <div class="float-hint-emoji">💡</div>
+        <div>
+          <div class="float-hint-title">花 $1,840 升級，可避免 $5,750 罰金</div>
+          <div class="float-hint-desc">系統已找出最划算的升級方案，平均每筆花 $80、省 $250</div>
+        </div>
+      </div>
+      <button class="float-hint-btn" onclick="alert('前往最佳化調度')">立刻執行升級 →</button>
+    </div>
+
+  </div>
+</div>
+
+</body>
+</html>

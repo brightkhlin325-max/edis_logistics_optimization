@@ -823,6 +823,164 @@ body {
 .modal-confirm:hover { background:var(--navy-dk); }
 .modal-cancel { padding:10px 16px; background:var(--bg); color:var(--muted); border:1px solid var(--border); border-radius:7px; font-size:13px; cursor:pointer; }
 </style>
+
+<!-- ── 右側行動面板 CSS ── -->
+<style>
+#rp-panel {
+  position: fixed;
+  top: 0; right: 0; bottom: 0;
+  width: 360px;
+  background: var(--card);
+  border-left: 1px solid var(--border);
+  display: flex; flex-direction: column;
+  z-index: 50;
+  transition: width .28s cubic-bezier(.4,0,.2,1);
+  overflow: hidden;
+  font-family: 'DM Sans','Noto Sans TC',sans-serif;
+}
+#rp-panel.collapsed { width: 44px; }
+
+/* 主內容偏移，避免被右側面板蓋住 */
+.main { transition: padding-right .28s cubic-bezier(.4,0,.2,1); padding-right: 360px; }
+.main.rp-collapsed { padding-right: 44px; }
+
+/* 收折按鈕 */
+.rp-toggle {
+  position: absolute; top: 50%; left: 0;
+  transform: translateY(-50%);
+  width: 20px; height: 56px;
+  background: var(--border); border: none;
+  border-radius: 0 8px 8px 0;
+  cursor: pointer; color: var(--muted); font-size: 11px;
+  display: flex; align-items: center; justify-content: center;
+  transition: background .15s, color .15s; z-index: 10;
+}
+.rp-toggle:hover { background: var(--navy); color: white; }
+.rp-toggle-arrow { transition: transform .28s cubic-bezier(.4,0,.2,1); display: inline-block; }
+#rp-panel.collapsed .rp-toggle-arrow { transform: rotate(180deg); }
+
+/* 收合狀態標籤 */
+.rp-collapsed-label {
+  position: absolute; top: 0; left: 0; right: 0; bottom: 0;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px;
+  opacity: 0; transition: opacity .2s; pointer-events: none; cursor: pointer;
+}
+#rp-panel.collapsed .rp-collapsed-label { opacity: 1; pointer-events: all; }
+.rp-badge {
+  background: #ef4444; color: white;
+  font-size: 11px; font-weight: 700;
+  width: 22px; height: 22px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+}
+.rp-vtxt {
+  writing-mode: vertical-rl; font-size: 10px; font-weight: 600;
+  color: var(--muted); letter-spacing: 1px;
+}
+
+/* 展開內容 */
+.rp-content {
+  flex: 1; display: flex; flex-direction: column;
+  padding-left: 20px; overflow: hidden;
+  opacity: 1; transition: opacity .2s; min-width: 340px;
+}
+#rp-panel.collapsed .rp-content { opacity: 0; pointer-events: none; }
+
+/* 標題列 */
+.rp-header {
+  padding: 16px 16px 12px 0;
+  border-bottom: 1px solid var(--border); margin-bottom: 10px;
+}
+.rp-header-top { display: flex; align-items: center; justify-content: space-between; }
+.rp-title { font-size: 13px; font-weight: 700; color: var(--text); display: flex; align-items: center; gap: 6px; }
+.rp-header-right { display: flex; align-items: center; gap: 6px; }
+.rp-update { font-size: 10px; color: var(--muted); }
+.rp-refresh {
+  width: 22px; height: 22px; border-radius: 50%;
+  border: 1px solid var(--border); background: transparent;
+  cursor: pointer; display: flex; align-items: center; justify-content: center;
+  font-size: 11px; color: var(--muted);
+}
+.rp-refresh:hover { background: var(--bg); color: var(--navy); }
+.rp-refresh.spinning { animation: rp-spin .7s linear; }
+@keyframes rp-spin { to { transform: rotate(360deg); } }
+
+/* 行動列表 */
+.rp-list { display: flex; flex-direction: column; gap: 8px; padding-right: 16px; overflow-y: auto; flex: 1; padding-bottom: 4px; }
+
+.rp-item {
+  border-radius: 12px; cursor: pointer;
+  transition: box-shadow .15s, transform .12s;
+  border: 1px solid transparent; overflow: hidden; position: relative;
+}
+.rp-item:hover { transform: translateY(-1px); box-shadow: 0 4px 14px rgba(0,0,0,.08); }
+.rp-item.rp-red    { background: #fff5f5; border-color: #fecaca; }
+.rp-item.rp-yellow { background: #fffbf0; border-color: #fde68a; }
+.rp-item.rp-green  { background: #f0fdf4; border-color: #bbf7d0; cursor: default; }
+.rp-item.rp-green:hover { transform: none; box-shadow: none; }
+.rp-item::before {
+  content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 4px; border-radius: 12px 0 0 12px;
+}
+.rp-item.rp-red::before    { background: #ef4444; }
+.rp-item.rp-yellow::before { background: #f59e0b; }
+.rp-item.rp-green::before  { background: #10b981; }
+
+.rp-item-inner { padding: 11px 13px 11px 17px; }
+.rp-item-top { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 7px; }
+.rp-item-left { flex: 1; min-width: 0; }
+.rp-item-label { font-size: 13px; font-weight: 700; margin-bottom: 2px; }
+.rp-item.rp-red    .rp-item-label { color: #b91c1c; }
+.rp-item.rp-yellow .rp-item-label { color: #92400e; }
+.rp-item.rp-green  .rp-item-label { color: #065f46; }
+.rp-item-desc { font-size: 11px; color: var(--muted); }
+.rp-count-val  { font-size: 30px; font-weight: 700; font-family: 'DM Mono',monospace; line-height: 1; text-align: right; }
+.rp-item.rp-red    .rp-count-val { color: #ef4444; }
+.rp-item.rp-yellow .rp-count-val { color: #f59e0b; }
+.rp-item.rp-green  .rp-count-val { color: #10b981; }
+.rp-count-unit { font-size: 9px; color: var(--muted); text-align: right; }
+
+.rp-item-footer { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding-top: 7px; border-top: 1px solid rgba(0,0,0,.06); }
+.rp-item-tags { display: flex; align-items: center; gap: 5px; flex-wrap: wrap; }
+.rp-trend-tag {
+  display: inline-flex; align-items: center; gap: 3px;
+  font-size: 10px; font-weight: 600; padding: 2px 6px; border-radius: 20px;
+}
+.rp-trend-up   { background: #fef2f2; color: #ef4444; }
+.rp-trend-down { background: #f0fdf4; color: #10b981; }
+.rp-trend-same { background: #f3f4f6; color: var(--muted); }
+.rp-btn {
+  padding: 5px 12px; border-radius: 6px; border: none;
+  font-size: 11px; font-weight: 600; cursor: pointer; white-space: nowrap;
+}
+.rp-item.rp-red    .rp-btn { background: #ef4444; color: white; }
+.rp-item.rp-yellow .rp-btn { background: #f59e0b; color: white; }
+.rp-item.rp-green  .rp-btn { background: #e5e7eb; color: #9ca3af; cursor: default; }
+.rp-btn.rp-locked  { background: #e5e7eb !important; color: #9ca3af !important; cursor: not-allowed !important; }
+
+/* 建議橫幅 */
+.rp-hint {
+  margin: 10px 16px 16px 0; flex-shrink: 0;
+  background: linear-gradient(135deg, var(--navy-dk,#2d5269), var(--navy,#437096));
+  border-radius: 10px; padding: 12px 14px;
+}
+.rp-hint-title { font-size: 12px; font-weight: 700; color: white; margin-bottom: 4px; }
+.rp-hint-desc  { font-size: 10.5px; color: rgba(255,255,255,.75); margin-bottom: 10px; }
+.rp-hint-btn {
+  width: 100%; background: rgba(255,255,255,.18); border: 1px solid rgba(255,255,255,.3);
+  color: white; border-radius: 7px; padding: 7px;
+  font-size: 12px; font-weight: 600; cursor: pointer;
+}
+.rp-hint-btn:hover { background: rgba(255,255,255,.28); }
+.rp-hint-btn.rp-locked { opacity: .5; cursor: not-allowed; }
+
+/* skeleton */
+.rp-skeleton-list { display: flex; flex-direction: column; gap: 8px; padding-right: 16px; }
+.rp-skeleton-item {
+  height: 88px; border-radius: 12px;
+  background: linear-gradient(90deg,#f0f0f0 25%,#e8e8e8 50%,#f0f0f0 75%);
+  background-size: 200% 100%; animation: rp-shimmer 1.4s infinite;
+}
+@keyframes rp-shimmer { 0%{background-position:200% 0} 100%{background-position:-200% 0} }
+</style>
 </head>
 <body>
 
@@ -2634,6 +2792,8 @@ function renderExecutiveSummary(d) {
 
   document.getElementById('execActionText').textContent =
     `${d.recommended_action} ${d.data_quality_note || ''}`;
+
+  if (typeof rpRender === 'function') rpRender(d);
 }
 
 function renderBudgetScenarios(d) {
@@ -4030,6 +4190,210 @@ function _tourEnd() {
 window.addEventListener('load', function() {
   if (!localStorage.getItem('edis_tour')) setTimeout(startTour, 900);
 });
+</script>
+
+<!-- ── 右側行動面板 HTML ── -->
+<div id="rp-panel">
+  <button class="rp-toggle" onclick="toggleRightPanel()" title="收合行動面板">
+    <span class="rp-toggle-arrow">›</span>
+  </button>
+  <div class="rp-collapsed-label" onclick="toggleRightPanel()">
+    <div class="rp-badge" id="rp-badge">—</div>
+    <div class="rp-vtxt">今日待辦</div>
+  </div>
+  <div class="rp-content">
+    <div class="rp-header">
+      <div class="rp-header-top">
+        <div class="rp-title">🎯 今天要做什麼？</div>
+        <div class="rp-header-right">
+          <span class="rp-update" id="rp-update">載入中...</span>
+          <button class="rp-refresh" id="rp-refresh-btn" onclick="rpRefresh()" title="重新整理">↻</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="rp-skeleton" class="rp-skeleton-list" style="display:none">
+      <div class="rp-skeleton-item"></div>
+      <div class="rp-skeleton-item"></div>
+      <div class="rp-skeleton-item"></div>
+    </div>
+
+    <div id="rp-body">
+      <div class="rp-list" id="rp-list">
+        <div class="rp-item rp-red" id="rp-item-red" onclick="rpItemClick('red')">
+          <div class="rp-item-inner">
+            <div class="rp-item-top">
+              <div class="rp-item-left">
+                <div class="rp-item-label">🔴 立刻處理</div>
+                <div class="rp-item-desc">延遲風險高，需升級出貨方式</div>
+              </div>
+              <div>
+                <div class="rp-count-val" id="rp-red-count">—</div>
+                <div class="rp-count-unit">筆待處理</div>
+              </div>
+            </div>
+            <div class="rp-item-footer">
+              <div class="rp-item-tags">
+                <span class="rp-trend-tag" id="rp-red-trend">—</span>
+              </div>
+              <button class="rp-btn" id="rp-red-btn">查看 →</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="rp-item rp-yellow" id="rp-item-yellow" onclick="rpItemClick('yellow')">
+          <div class="rp-item-inner">
+            <div class="rp-item-top">
+              <div class="rp-item-left">
+                <div class="rp-item-label">🟡 需要留意</div>
+                <div class="rp-item-desc">有風險，建議持續追蹤</div>
+              </div>
+              <div>
+                <div class="rp-count-val" id="rp-yellow-count">—</div>
+                <div class="rp-count-unit">筆留意中</div>
+              </div>
+            </div>
+            <div class="rp-item-footer">
+              <div class="rp-item-tags">
+                <span class="rp-trend-tag" id="rp-yellow-trend">—</span>
+              </div>
+              <button class="rp-btn" id="rp-yellow-btn">查看 →</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="rp-item rp-green">
+          <div class="rp-item-inner">
+            <div class="rp-item-top">
+              <div class="rp-item-left">
+                <div class="rp-item-label">🟢 目前正常</div>
+                <div class="rp-item-desc">不需特別處理</div>
+              </div>
+              <div>
+                <div class="rp-count-val" id="rp-green-count">—</div>
+                <div class="rp-count-unit">筆正常</div>
+              </div>
+            </div>
+            <div class="rp-item-footer">
+              <div class="rp-item-tags">
+                <span class="rp-trend-tag rp-trend-same" id="rp-green-trend">— 與昨天相同</span>
+              </div>
+              <button class="rp-btn">無需動作</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="rp-hint">
+        <div class="rp-hint-title" id="rp-hint-title">💡 計算中...</div>
+        <div class="rp-hint-desc" id="rp-hint-desc">根據 AI 分析整理最划算的升級方案</div>
+        <button class="rp-hint-btn" id="rp-hint-btn" onclick="rpUpgrade()">立刻執行升級調度 →</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ── 右側面板：收折 ────────────────────────────────
+function toggleRightPanel() {
+  const panel = document.getElementById('rp-panel');
+  const main  = document.querySelector('.main');
+  const collapsed = panel.classList.toggle('collapsed');
+  if (main) main.classList.toggle('rp-collapsed', collapsed);
+  localStorage.setItem('rp_collapsed', collapsed ? '1' : '0');
+}
+(function initRpState() {
+  if (localStorage.getItem('rp_collapsed') === '1') {
+    document.getElementById('rp-panel').classList.add('collapsed');
+    const main = document.querySelector('.main');
+    if (main) main.classList.add('rp-collapsed');
+  }
+})();
+
+// ── 右側面板：按鈕動作 ───────────────────────────
+function rpItemClick(type) {
+  if (currentRole !== 'manager') {
+    showToast('此操作需要 Manager 權限。', 'error'); return;
+  }
+  showPage('risk-list');
+}
+function rpUpgrade() {
+  if (currentRole !== 'manager') {
+    showToast('升級調度需要 Manager 權限。', 'error'); return;
+  }
+  showPage('optimization');
+}
+
+// ── 右側面板：重新整理 ───────────────────────────
+function rpRefresh() {
+  const btn = document.getElementById('rp-refresh-btn');
+  btn.classList.add('spinning'); btn.disabled = true;
+  document.getElementById('rp-update').textContent = '更新中...';
+  document.getElementById('rp-skeleton').style.display = 'flex';
+  document.getElementById('rp-body').style.display = 'none';
+  refreshDashboard().finally(() => {
+    btn.classList.remove('spinning'); btn.disabled = false;
+    document.getElementById('rp-skeleton').style.display = 'none';
+    document.getElementById('rp-body').style.display = 'block';
+    rpSetUpdateTime();
+  });
+}
+function rpSetUpdateTime() {
+  const now = new Date();
+  document.getElementById('rp-update').textContent =
+    `更新於 ${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
+}
+
+// ── 右側面板：渲染（由 renderExecutiveSummary 呼叫）
+function rpRender(d) {
+  const redCount    = d.at_risk_orders     || 0;
+  const yellowCount = d.medium_risk_orders || 0;
+  const greenCount  = Math.max(0, (d.total_orders || 0) - redCount - yellowCount);
+
+  document.getElementById('rp-red-count').textContent    = redCount.toLocaleString();
+  document.getElementById('rp-yellow-count').textContent = yellowCount.toLocaleString();
+  document.getElementById('rp-green-count').textContent  = greenCount.toLocaleString();
+  document.getElementById('rp-badge').textContent        = redCount > 99 ? '99+' : redCount;
+
+  // 趨勢（localStorage 比對昨天）
+  const today = new Date().toDateString();
+  const stored = JSON.parse(localStorage.getItem('rp_yesterday') || '{}');
+  const rpTrendEl = (id, cur, prev) => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    if (!prev || prev === 0) { el.className = 'rp-trend-tag rp-trend-same'; el.textContent = '— 首次載入'; return; }
+    const diff = cur - prev;
+    if (diff > 0) { el.className = 'rp-trend-tag rp-trend-up';   el.textContent = `▲ 比上次多 ${diff} 筆`; }
+    else if (diff < 0) { el.className = 'rp-trend-tag rp-trend-down'; el.textContent = `▼ 比上次少 ${Math.abs(diff)} 筆`; }
+    else { el.className = 'rp-trend-tag rp-trend-same'; el.textContent = '— 與上次相同'; }
+  };
+  rpTrendEl('rp-red-trend',    redCount,    stored.red);
+  rpTrendEl('rp-yellow-trend', yellowCount, stored.yellow);
+
+  // 儲存本次數字作為下次比對基準
+  if (stored.date !== today) {
+    localStorage.setItem('rp_yesterday', JSON.stringify({ date: today, red: redCount, yellow: yellowCount }));
+  }
+
+  // 角色控制
+  const isManager = currentRole === 'manager';
+  ['rp-red-btn','rp-yellow-btn'].forEach(id => {
+    const b = document.getElementById(id);
+    if (b) b.classList.toggle('rp-locked', !isManager);
+  });
+  const hb = document.getElementById('rp-hint-btn');
+  if (hb) hb.classList.toggle('rp-locked', !isManager);
+
+  // 建議橫幅
+  const budget  = Math.round(d.recommended_budget || 0);
+  const savings = Math.round(Math.max(0, (d.expected_penalty_exposure || 0) - budget));
+  if (budget > 0 && savings > 0) {
+    document.getElementById('rp-hint-title').textContent = `💡 花 $${budget.toLocaleString()} 可省 $${savings.toLocaleString()}`;
+    document.getElementById('rp-hint-desc').textContent  = `系統已找出最佳升級方案，${d.positive_roi_orders || 0} 筆訂單 ROI 為正`;
+  }
+
+  rpSetUpdateTime();
+}
 </script>
 </body>
 </html>

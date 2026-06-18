@@ -1581,6 +1581,7 @@ def get_executive_summary(
         return {
             "total_orders": total_orders,
             "at_risk_orders": at_risk_orders,
+            "medium_risk_orders": 0,
             "at_risk_rate": 0.5,
             "service_level_target": 0.9,
             "estimated_service_level": 0.5,
@@ -1605,9 +1606,12 @@ def get_executive_summary(
     if "upgrade_cost" not in working.columns:
         working["upgrade_cost"] = upgrade_cost
 
+    MEDIUM_RISK_LOWER = 0.3
     total_orders = int(len(working))
     at_risk = working[working["p_late"] >= threshold].copy()
     at_risk_orders = int(len(at_risk))
+    medium_risk = working[(working["p_late"] >= MEDIUM_RISK_LOWER) & (working["p_late"] < threshold)]
+    medium_risk_orders = int(len(medium_risk))
     at_risk_rate = (at_risk_orders / total_orders) if total_orders else 0.0
     estimated_service_level = 1.0 - at_risk_rate
     exposure = float(at_risk["expected_penalty"].sum()) if not at_risk.empty else 0.0
@@ -1643,6 +1647,7 @@ def get_executive_summary(
     return {
         "total_orders": total_orders,
         "at_risk_orders": at_risk_orders,
+        "medium_risk_orders": medium_risk_orders,
         "at_risk_rate": round(at_risk_rate, 4),
         "service_level_target": 0.9,
         "estimated_service_level": round(estimated_service_level, 4),
