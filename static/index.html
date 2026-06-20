@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>EDIS Dashboard</title>
+<title>EDIS 儀表板</title>
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&family=DM+Mono:wght@400;500&family=Noto+Sans+TC:wght@300;400;500;600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
@@ -461,7 +461,7 @@ body {
 .kpi-card {
   background: var(--card);
   border: 1px solid var(--border);
-  border-radius: 12px;
+  border-radius: 8px;
   padding: 22px 26px;
   display: flex;
   align-items: center;
@@ -476,11 +476,11 @@ body {
 }
 
 .kpi-card.kpi-total {
-  background: linear-gradient(135deg, #ffffff 0%, #f1f5f9 100%);
+  background: linear-gradient(135deg, #ffffff 0%, #eef5fa 100%);
   border-left: 5px solid var(--steel);
 }
 .kpi-card.kpi-late {
-  background: linear-gradient(135deg, #ffffff 0%, #fffbeb 100%);
+  background: linear-gradient(135deg, #ffffff 0%, #fff7ed 100%);
   border-left: 5px solid #d97706;
 }
 .kpi-card.kpi-penalty {
@@ -701,6 +701,119 @@ body {
   color: var(--muted);
 }
 
+.policy-sync-box {
+  padding: 12px 14px;
+  background: linear-gradient(135deg, #f8fbfd 0%, #eef5fa 100%);
+  border: 1px solid var(--border);
+  border-left: 4px solid var(--navy);
+  border-radius: 8px;
+  font-size: 12px;
+  line-height: 1.55;
+  color: var(--muted);
+}
+
+.policy-sync-box strong {
+  color: var(--text);
+  font-weight: 700;
+}
+
+.workflow-strip {
+  display: none;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  margin: 0 0 20px;
+}
+
+.workflow-step {
+  display: grid;
+  grid-template-columns: 34px 1fr;
+  gap: 12px;
+  align-items: start;
+  padding: 14px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: 0 6px 18px rgba(45,51,64,0.05);
+}
+
+.workflow-step.active {
+  border-color: rgba(67,112,150,0.35);
+  background: linear-gradient(135deg, #ffffff 0%, #f1f7fb 100%);
+}
+
+.workflow-num {
+  width: 34px;
+  height: 34px;
+  border-radius: 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--navy);
+  color: white;
+  font-family: 'DM Mono', monospace;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.workflow-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text);
+  margin-bottom: 3px;
+}
+
+.workflow-copy {
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--muted);
+}
+
+.decision-panel {
+  border-color: rgba(67,112,150,0.28);
+  box-shadow: 0 12px 30px rgba(67,112,150,0.12);
+}
+
+.decision-panel .panel-head {
+  background: linear-gradient(135deg, #f8fbfd 0%, #eef5fa 100%);
+}
+
+.decision-panel .run-btn {
+  padding: 12px;
+  box-shadow: 0 8px 18px rgba(67,112,150,0.22);
+}
+
+.solver-summary {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.solver-chip {
+  padding: 8px 10px;
+  background: white;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+}
+
+.solver-chip span {
+  display: block;
+  font-family: 'DM Mono', monospace;
+  font-size: 10px;
+  color: var(--muted);
+  margin-bottom: 3px;
+  text-transform: uppercase;
+}
+
+.solver-chip strong {
+  display: block;
+  font-size: 14px;
+  color: var(--navy);
+}
+
+@media (max-width: 900px) {
+  .workflow-strip { grid-template-columns: 1fr; }
+}
+
 /* Opt results */
 .opt-divider { height: 1px; background: var(--border); }
 
@@ -822,9 +935,488 @@ body {
 .modal-confirm { flex:1; padding:10px; background:var(--navy); color:white; border:none; border-radius:7px; font-size:13px; font-weight:600; cursor:pointer; }
 .modal-confirm:hover { background:var(--navy-dk); }
 .modal-cancel { padding:10px 16px; background:var(--bg); color:var(--muted); border:1px solid var(--border); border-radius:7px; font-size:13px; cursor:pointer; }
+
+/* EDIS command-center concept theme */
+:root {
+  --white: #e8f6fb;
+  --steel: #53d7f6;
+  --mauve: #6b7c8d;
+  --warm: #ff9f2f;
+  --navy: #19d3ff;
+  --navy-dk: #0aa9d1;
+  --navy-lt: #67e6ff;
+  --bg: #030b12;
+  --surface: #07131d;
+  --card: rgba(9, 23, 34, 0.92);
+  --border: rgba(83, 215, 246, 0.18);
+  --text: #eaf7fb;
+  --muted: #8ea2b4;
+}
+
+body {
+  background:
+    radial-gradient(circle at 72% 5%, rgba(25, 211, 255, 0.12), transparent 34%),
+    linear-gradient(180deg, #06111a 0%, #02070b 100%);
+}
+
+.sidebar {
+  background: linear-gradient(180deg, #071623 0%, #04101a 100%);
+  border-right: 1px solid rgba(83,215,246,0.14);
+  box-shadow: 12px 0 30px rgba(0,0,0,0.24);
+}
+
+.brand-mark {
+  width: auto;
+  height: auto;
+  background: transparent;
+  color: var(--steel);
+  font-size: 0;
+  margin: 0;
+}
+
+.brand-mark::after {
+  content: "EDIS";
+  font-family: 'DM Sans', sans-serif;
+  font-size: 34px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  text-shadow: 0 0 22px rgba(83,215,246,0.42);
+}
+
+.brand-name { display: none; }
+.brand-sub { color: #6f8496; margin-top: 6px; }
+.nav-item { color: #a7b7c5; padding: 14px 24px; font-size: 14px; }
+.nav-item.active {
+  background: linear-gradient(90deg, rgba(25,211,255,0.22), rgba(25,211,255,0.04));
+  border-left-color: var(--steel);
+  color: #ffffff;
+}
+
+.topbar {
+  background: rgba(3, 11, 18, 0.86);
+  border-bottom: 1px solid rgba(83,215,246,0.13);
+  backdrop-filter: blur(14px);
+}
+
+.topbar-title { color: #ffffff; font-size: 17px; }
+.content { padding: 26px 34px 24px; }
+.page-title { color: #ffffff; font-size: 20px; }
+.page-sub { color: #91a6b7; }
+
+.concept-top-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 380px;
+  gap: 18px;
+  margin-bottom: 16px;
+}
+
+.concept-top-grid .kpi-row {
+  margin: 0;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.kpi-card,
+.panel,
+.exec-card,
+.workflow-step,
+.stat-box {
+  background: linear-gradient(180deg, rgba(12,30,44,0.94) 0%, rgba(5,17,27,0.96) 100%);
+  border: 1px solid rgba(83,215,246,0.18);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.04), 0 16px 36px rgba(0,0,0,0.24);
+}
+
+.kpi-card {
+  min-height: 210px;
+  align-items: flex-start;
+  flex-direction: column;
+  gap: 18px;
+  position: relative;
+  overflow: hidden;
+}
+
+.kpi-card::after {
+  content: "";
+  position: absolute;
+  left: 22px;
+  right: 22px;
+  bottom: 26px;
+  height: 58px;
+  opacity: 0.78;
+  background:
+    linear-gradient(135deg, transparent 0 12%, currentColor 12% 14%, transparent 14% 27%, currentColor 27% 29%, transparent 29% 45%, currentColor 45% 47%, transparent 47% 62%, currentColor 62% 64%, transparent 64% 80%, currentColor 80% 82%, transparent 82%),
+    linear-gradient(180deg, currentColor, transparent);
+  clip-path: polygon(0 68%, 8% 58%, 16% 63%, 24% 42%, 32% 50%, 42% 72%, 52% 48%, 62% 56%, 72% 22%, 82% 34%, 92% 28%, 100% 12%, 100% 100%, 0 100%);
+}
+
+.kpi-card.kpi-total { color: #53d7f6; border-left: 0; }
+.kpi-card.kpi-late { color: #ff5f47; border-left: 0; }
+.kpi-card.kpi-penalty { color: #ff9f2f; border-left: 0; }
+body[data-theme="dark"] .kpi-card.kpi-total,
+body[data-theme="dark"] .kpi-card.kpi-late,
+body[data-theme="dark"] .kpi-card.kpi-penalty {
+  background: linear-gradient(180deg, rgba(12,30,44,0.94) 0%, rgba(5,17,27,0.96) 100%);
+}
+.kpi-icon-wrap { display: none; }
+.kpi-label { color: #d8e9f0; font-size: 14px; font-weight: 700; }
+.kpi-value { font-size: 48px; color: currentColor !important; letter-spacing: -1px; }
+.kpi-change { color: #b4c6d3; font-size: 14px; position: relative; z-index: 1; }
+
+#actionableInsightsBanner {
+  display: flex !important;
+  height: 100%;
+  margin: 0 !important;
+  padding: 18px 18px !important;
+  align-items: stretch !important;
+  flex-direction: column;
+  justify-content: space-between !important;
+  background: linear-gradient(180deg, rgba(12,30,44,0.94), rgba(5,17,27,0.98)) !important;
+  color: var(--text) !important;
+  border: 1px solid rgba(83,215,246,0.22) !important;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.04), 0 16px 36px rgba(0,0,0,0.24) !important;
+}
+
+#actionableInsightsBanner > div:first-child {
+  align-items: flex-start !important;
+}
+
+#actionableInsightsBanner span:first-child { display: none; }
+#actionableInsightsBanner .run-btn {
+  width: 100% !important;
+  margin-top: 18px;
+  background: transparent !important;
+  color: var(--steel) !important;
+  border: 1px solid rgba(83,215,246,0.72) !important;
+  box-shadow: none !important;
+  padding: 12px 16px !important;
+}
+
+.exec-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.exec-value { color: var(--steel); }
+.exec-action { background: rgba(25,211,255,0.06); border-color: rgba(83,215,246,0.24); }
+.exec-action { display: none !important; }
+
+.scenario-card-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 14px;
+  padding: 16px 18px 8px;
+}
+
+.scenario-card {
+  position: relative;
+  min-height: 132px;
+  padding: 16px;
+  border: 1px solid rgba(83,215,246,0.22);
+  border-radius: 8px;
+  background: rgba(2,10,16,0.72);
+}
+
+.scenario-card.recommended {
+  border-color: var(--steel);
+  box-shadow: 0 0 0 1px rgba(83,215,246,0.22), 0 14px 28px rgba(25,211,255,0.12);
+}
+
+.scenario-card.recommended::after {
+  content: "✓";
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: var(--steel);
+  color: #021016;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 900;
+}
+
+.scenario-budget {
+  color: var(--steel);
+  font-size: 20px;
+  font-weight: 800;
+  margin-bottom: 8px;
+}
+
+.scenario-line {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.7;
+}
+
+.scenario-line strong {
+  color: var(--text);
+  font-weight: 700;
+}
+
+.scenario-line .benefit {
+  color: #24c678;
+}
+
+body[data-theme="light"] .scenario-card {
+  background: #ffffff;
+  border-color: #d7e5ec;
+}
+
+@media (max-width: 1200px) {
+  .scenario-card-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+@media (max-width: 700px) {
+  .scenario-card-grid { grid-template-columns: 1fr; }
+}
+.risk-table th {
+  background: rgba(255,255,255,0.03);
+  color: #98adbd;
+  border-bottom-color: rgba(83,215,246,0.16);
+}
+.risk-table td {
+  color: #dbe8ee;
+  border-bottom-color: rgba(83,215,246,0.09);
+}
+.risk-table tr:hover td { background: rgba(83,215,246,0.05); }
+.budget-input,
+.modal-input {
+  background: rgba(1,8,13,0.82);
+  border-color: rgba(83,215,246,0.24);
+  color: #ffffff;
+}
+.policy-sync-box {
+  background: rgba(25,211,255,0.06);
+  border-color: rgba(83,215,246,0.25);
+  border-left-color: var(--steel);
+}
+.solver-chip {
+  background: rgba(2,10,16,0.76);
+  border-color: rgba(83,215,246,0.18);
+}
+.run-btn {
+  background: var(--steel);
+  color: #021016;
+}
+.run-btn:hover { background: var(--navy-lt); }
+
+body[data-theme="light"] {
+  --white: #ffffff;
+  --steel: #0e8fb2;
+  --mauve: #6b7280;
+  --warm: #d97706;
+  --navy: #0e8fb2;
+  --navy-dk: #086f8c;
+  --navy-lt: #23b7dc;
+  --bg: #edf4f7;
+  --surface: #ffffff;
+  --card: #ffffff;
+  --border: #d7e5ec;
+  --text: #14212b;
+  --muted: #647484;
+  background: linear-gradient(180deg, #f7fbfd 0%, #e7f1f5 100%);
+}
+
+body[data-theme="light"] .sidebar {
+  background: #ffffff;
+  border-right-color: #d7e5ec;
+  box-shadow: 10px 0 28px rgba(20,33,43,0.06);
+}
+
+body[data-theme="light"] .brand-mark::after {
+  color: #0e8fb2;
+  text-shadow: none;
+}
+
+body[data-theme="light"] .nav-item { color: #586879; }
+body[data-theme="light"] .nav-item.active {
+  color: #0b5065;
+  background: linear-gradient(90deg, rgba(14,143,178,0.14), rgba(14,143,178,0.03));
+}
+
+body[data-theme="light"] .topbar {
+  background: rgba(255,255,255,0.9);
+  border-bottom-color: #d7e5ec;
+}
+
+body[data-theme="light"] .topbar-title,
+body[data-theme="light"] .page-title { color: #14212b; }
+
+body[data-theme="light"] .kpi-label,
+body[data-theme="light"] .kpi-card.kpi-penalty .kpi-label,
+body[data-theme="light"] .stat-label,
+body[data-theme="light"] .exec-label,
+body[data-theme="light"] .panel-title {
+  color: #355064;
+  font-weight: 800;
+}
+
+body[data-theme="light"] .kpi-change,
+body[data-theme="light"] .kpi-card.kpi-penalty .kpi-change,
+body[data-theme="light"] .exec-note,
+body[data-theme="light"] .panel-subtitle,
+body[data-theme="light"] .page-sub {
+  color: #526b7d;
+}
+
+body[data-theme="light"] .kpi-card.kpi-total,
+body[data-theme="light"] .kpi-card.kpi-late,
+body[data-theme="light"] .kpi-card.kpi-penalty {
+  background: #ffffff;
+  border-left: 0;
+}
+
+body[data-theme="light"] .kpi-card .kpi-value {
+  text-shadow: none;
+}
+
+body[data-theme="light"] .kpi-value.steel,
+body[data-theme="light"] #kpiTotalOrders {
+  color: #12a9ca !important;
+}
+
+body[data-theme="light"] .kpi-value.warm,
+body[data-theme="light"] #kpiPredictedLateOrders {
+  color: #ef553f !important;
+}
+
+body[data-theme="light"] #kpiExpectedPenaltyLoss {
+  color: #f08a18 !important;
+  text-shadow: none !important;
+}
+
+body[data-theme="light"] .kpi-card,
+body[data-theme="light"] .panel,
+body[data-theme="light"] .exec-card,
+body[data-theme="light"] .stat-box,
+body[data-theme="light"] .workflow-step {
+  background: #ffffff;
+  border-color: #d7e5ec;
+  box-shadow: 0 12px 28px rgba(20,33,43,0.08);
+}
+
+body[data-theme="light"] .kpi-card::after {
+  opacity: 0.48;
+}
+
+body[data-theme="light"] #actionableInsightsBanner {
+  background: #ffffff !important;
+  color: #14212b !important;
+  border-color: #d7e5ec !important;
+}
+
+body[data-theme="light"] .risk-table th { background: #f5f9fb; color: #647484; }
+body[data-theme="light"] .risk-table td { color: #14212b; border-bottom-color: #e8eef2; }
+body[data-theme="light"] .budget-input,
+body[data-theme="light"] .modal-input {
+  background: #f7fbfd;
+  border-color: #d7e5ec;
+  color: #14212b;
+}
+
+.theme-switch {
+  display: flex;
+  gap: 4px;
+  padding: 3px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: rgba(255,255,255,0.04);
+}
+
+.theme-btn {
+  border: 0;
+  border-radius: 999px;
+  padding: 5px 10px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.theme-btn.active {
+  background: var(--navy);
+  color: #021016;
+}
+
+.manager-analysis-card {
+  padding: 16px;
+  background: rgba(2,10,16,0.78) !important;
+  border: 1px solid rgba(83,215,246,0.25) !important;
+  border-radius: 8px !important;
+  color: var(--text) !important;
+}
+
+.manager-analysis-title {
+  font-size: 12px;
+  color: var(--steel) !important;
+  font-weight: 800;
+  margin-bottom: 8px;
+  letter-spacing: 0.4px;
+}
+
+.manager-analysis-text {
+  font-size: 14px !important;
+  line-height: 1.7 !important;
+  color: var(--text) !important;
+  font-weight: 600;
+}
+
+.manager-factor-card {
+  padding: 10px 12px;
+  border: 1px solid rgba(83,215,246,0.22);
+  border-radius: 8px;
+  background: rgba(255,255,255,0.04);
+}
+
+.manager-factor-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  align-items: center;
+}
+
+.manager-factor-label {
+  font-size: 12px;
+  font-weight: 800;
+  color: var(--text);
+}
+
+.manager-factor-impact {
+  font-size: 11px;
+  color: var(--steel);
+  font-family: 'DM Mono', monospace;
+}
+
+.manager-factor-evidence {
+  font-size: 12px;
+  color: var(--muted);
+  line-height: 1.55;
+  margin-top: 5px;
+}
+
+body[data-theme="light"] .manager-analysis-card {
+  background: #ffffff !important;
+  border-color: #cfe8f1 !important;
+  color: #14212b !important;
+  box-shadow: 0 10px 24px rgba(20,33,43,0.08);
+}
+
+body[data-theme="light"] .manager-factor-card {
+  background: #f7fbfd;
+  border-color: #cfe8f1;
+}
+
+body[data-role="viewer"] .manager-only-nav {
+  display: none !important;
+}
+
+@media (max-width: 1200px) {
+  .concept-top-grid { grid-template-columns: 1fr; }
+}
 </style>
 </head>
-<body>
+<body data-theme="dark" data-role="viewer">
 
 <!-- ── Sidebar ── -->
 <aside class="sidebar">
@@ -837,7 +1429,7 @@ body {
   <nav class="sidebar-nav">
     <div class="nav-section">主選單</div>
     <a class="nav-item active" id="nav-dashboard" onclick="showPage('dashboard')">
-      <i class="nav-icon">▪</i> Dashboard
+      <i class="nav-icon">▪</i> 儀表板
     </a>
     <a class="nav-item" id="nav-risk-list" onclick="showPage('risk-list')">
       <i class="nav-icon">◈</i> 風險訂單列表
@@ -848,19 +1440,22 @@ body {
     <a class="nav-item" id="nav-ai-assistant" onclick="showPage('ai-assistant')">
       <i class="nav-icon">✦</i> AI 助理
     </a>
-    <div class="nav-section">分析</div>
-    <a class="nav-item" id="nav-model-perf" onclick="showPage('model-perf')">
+    <div class="nav-section manager-only-nav">分析</div>
+    <a class="nav-item manager-only-nav" id="nav-model-perf" onclick="showPage('model-perf')">
       <i class="nav-icon">◇</i> 模型效能
     </a>
-    <a class="nav-item" id="nav-region-map" onclick="showPage('region-map')">
+    <a class="nav-item manager-only-nav" id="nav-region-map" onclick="showPage('region-map')">
       <i class="nav-icon">◆</i> 區域風險地圖
     </a>
-    <div class="nav-section">系統</div>
-    <a class="nav-item" id="nav-rbac" onclick="showPage('rbac')">
+    <div class="nav-section manager-only-nav">系統</div>
+    <a class="nav-item manager-only-nav" id="nav-rbac" onclick="showPage('rbac')">
       <i class="nav-icon">○</i> RBAC 權限
     </a>
-    <a class="nav-item" id="nav-llm-settings" onclick="showPage('llm-settings')">
-      <i class="nav-icon">⚙</i> LLM 設定
+    <a class="nav-item manager-only-nav" id="nav-settings" onclick="showPage('settings')">
+      <i class="nav-icon">⚙</i> 系統設定
+    </a>
+    <a class="nav-item manager-only-nav" id="nav-llm-settings" onclick="showPage('llm-settings')">
+      <i class="nav-icon">🤖</i> LLM 設定
     </a>
   </nav>
 
@@ -876,19 +1471,24 @@ body {
   <!-- Topbar -->
   <div class="topbar">
     <div>
-      <div class="topbar-title">Dashboard</div>
+      <div class="topbar-title">儀表板</div>
     </div>
     <div class="topbar-right">
       <div class="status-pill">
         <span class="dot dot-green"></span>
-        <span id="statusText">Mock Data</span>
+        <span id="statusText">示範資料</span>
       </div>
 
-      <span class="role-badge badge-viewer" id="roleBadge">● Viewer</span>
+      <span class="role-badge badge-viewer" id="roleBadge">● 檢視者</span>
+
+      <div class="theme-switch" aria-label="Theme switch">
+        <button class="theme-btn" id="themeLightBtn" onclick="setTheme('light')">日間</button>
+        <button class="theme-btn active" id="themeDarkBtn" onclick="setTheme('dark')">夜間</button>
+      </div>
 
       <div class="role-switch">
-        <button class="role-btn active" onclick="setRole('viewer')">Viewer</button>
-        <button class="role-btn" onclick="setRole('manager')">Manager</button>
+        <button class="role-btn active" onclick="setRole('viewer')">檢視者</button>
+        <button class="role-btn" onclick="setRole('manager')">管理者</button>
       </div>
     </div>
   </div>
@@ -977,8 +1577,9 @@ body {
         </div>
       </div>
 
+      <div class="concept-top-grid fade-in">
       <!-- KPI -->
-      <div class="kpi-row fade-in">
+      <div class="kpi-row">
         <div class="kpi-card kpi-total">
           <div class="kpi-icon-wrap icon-steel">📦</div>
           <div class="kpi-info">
@@ -1006,37 +1607,38 @@ body {
       </div>
 
       <!-- Actionable Insights Banner -->
-      <div id="actionableInsightsBanner" class="panel fade-in" style="margin-bottom: 24px; padding: 16px 20px; background: linear-gradient(90deg, #1e3a8a 0%, #3b82f6 100%); color: white; border-radius: 10px; display: none; align-items: center; justify-content: space-between; box-shadow: 0 4px 14px rgba(59, 130, 246, 0.25);">
+      <div id="actionableInsightsBanner" class="panel" style="margin-bottom: 24px; padding: 16px 20px; background: linear-gradient(90deg, #1e3a8a 0%, #3b82f6 100%); color: white; border-radius: 10px; display: none; align-items: center; justify-content: space-between; box-shadow: 0 4px 14px rgba(59, 130, 246, 0.25);">
         <div style="display:flex; align-items:center; gap:12px;">
           <span style="font-size:22px;">💡</span>
           <div>
-            <div style="font-size:13.5px; font-weight:700; color:white;">高階經理人決策建議 (Actionable Insight)</div>
+            <div style="font-size:16px; font-weight:700; color:var(--text); display:flex; justify-content:space-between; gap:16px;">AI 決策摘要 <span style="color:var(--steel);font-size:13px;">EDIS AI</span></div>
             <div id="actionableInsightsText" style="font-size:12px; opacity:0.9; margin-top:2px;">載入中...</div>
           </div>
         </div>
-        <button class="run-btn" onclick="document.getElementById('nav-optimization').click()" style="background:white; color:#1e3a8a; font-weight:700; border:none; padding:8px 16px; font-size:12px; border-radius:6px; box-shadow:0 2px 6px rgba(0,0,0,0.1); cursor:pointer; width:auto; flex-shrink:0;">
+        <button class="run-btn" onclick="goToOptimizationWithCurrentPolicy()" style="background:white; color:#1e3a8a; font-weight:700; border:none; padding:8px 16px; font-size:12px; border-radius:6px; box-shadow:0 2px 6px rgba(0,0,0,0.1); cursor:pointer; width:auto; flex-shrink:0;">
           前往最佳化調度
         </button>
+      </div>
       </div>
 
       <div class="exec-grid fade-in">
         <div class="exec-card">
-          <div class="exec-label">SLA Risk</div>
+          <div class="exec-label">服務水準風險</div>
           <div class="exec-value" id="execSlaRisk">—</div>
           <div class="exec-note" id="execSlaRiskNote">載入中...</div>
         </div>
         <div class="exec-card">
-          <div class="exec-label">Penalty Exposure</div>
+          <div class="exec-label">罰金曝險</div>
           <div class="exec-value" id="execExposure">—</div>
           <div class="exec-note" id="execExposureNote">高風險訂單預估罰金</div>
         </div>
         <div class="exec-card">
-          <div class="exec-label">Budget Ask</div>
+          <div class="exec-label">建議預算</div>
           <div class="exec-value" id="execBudget">—</div>
           <div class="exec-note" id="execBudgetNote">ROI 為正訂單的建議升級預算</div>
         </div>
         <div class="exec-card">
-          <div class="exec-label">Primary Driver</div>
+          <div class="exec-label">主要風險來源</div>
           <div class="exec-value" id="execDriver">—</div>
           <div class="exec-note" id="execDriverNote">主要風險來源</div>
         </div>
@@ -1055,22 +1657,8 @@ body {
           </div>
           <span class="tag tag-count" id="scenarioCount">0 個情境</span>
         </div>
-        <div class="table-scroll">
-          <table class="risk-table">
-            <thead>
-              <tr>
-                <th>預算</th>
-                <th>升級訂單</th>
-                <th>實際花費</th>
-                <th>避免罰金</th>
-                <th>預估淨效益</th>
-                <th>使用率</th>
-              </tr>
-            </thead>
-            <tbody id="scenarioTableBody">
-              <tr><td colspan="6" style="text-align:center;padding:24px;color:var(--muted);font-size:13px">載入中...</td></tr>
-            </tbody>
-          </table>
+        <div class="scenario-card-grid" id="scenarioCardGrid">
+          <div style="grid-column:1/-1;text-align:center;padding:24px;color:var(--muted);font-size:13px">載入中...</div>
         </div>
         <div class="scenario-note" id="scenarioRecommendation">等待情境分析。</div>
       </div>
@@ -1108,24 +1696,28 @@ body {
         </div>
 
         <!-- Optimize panel -->
-        <div class="panel" style="height:fit-content;">
+        <div class="panel decision-panel" style="height:fit-content;">
           <div class="panel-head">
             <div>
               <div class="panel-title">經理調度模擬區</div>
               <div class="panel-subtitle">在預算限制下進行物流升級與決策模擬</div>
             </div>
-            <span class="role-badge badge-viewer" id="optRoleBadge">Viewer</span>
+            <span class="role-badge badge-viewer" id="optRoleBadge">檢視者</span>
           </div>
           <div class="opt-body">
             <div>
-              <label class="field-label">物流預算上限 Budget (USD)</label>
+              <label class="field-label">物流預算上限（美元）</label>
               <input type="number" class="budget-input" id="budgetInput" placeholder="5000" value="5000" min="0">
+            </div>
+            <div class="policy-sync-box" id="dashboardPolicySync">
+              <strong>目前調度規則</strong><br>
+              風險門檻 <span id="dashboardOptThreshold">0.50</span> 會直接帶入最佳化計算，不再和儀表板顯示值分開。
             </div>
             <button class="run-btn hidden" id="runBtn" onclick="runOptimize()">
               執行最佳化調度
             </button>
             <div class="locked-box" id="lockedBox">
-              🔒 需要 Manager 權限才能執行最佳化
+              🔒 需要管理者權限才能執行最佳化
             </div>
             <!-- Results -->
             <div id="optResult" class="hidden" style="display:flex;flex-direction:column;gap:14px">
@@ -1151,9 +1743,9 @@ body {
                   </div>
                 </div>
               </div>
-              <div id="managerAnalysisBox" style="padding:14px 16px; background:#f6f9fb; border:1px solid var(--border); border-radius:6px; display:none;">
-                <div style="font-size:11px;color:var(--muted);font-weight:600;margin-bottom:6px;text-transform:uppercase;letter-spacing:0.5px;font-family:'DM Mono',monospace">主管分析摘要</div>
-                <div id="managerAnalysisText" style="font-size:13px;line-height:1.65;color:var(--text);"></div>
+              <div id="managerAnalysisBox" class="manager-analysis-card" style="display:none;">
+                <div class="manager-analysis-title">主管分析摘要</div>
+                <div id="managerAnalysisText" class="manager-analysis-text"></div>
                 <div id="managerAnalysisFactors" style="margin-top:10px;display:flex;flex-direction:column;gap:6px;"></div>
               </div>
               <div>
@@ -1189,7 +1781,7 @@ body {
                 <input type="file" id="aiPredictCsvInput" accept=".csv" style="display:none;" onchange="uploadPredictionCSV(this)">
                 <button class="ai-icon-btn" id="aiUploadPredictBtn" type="button" onclick="document.getElementById('aiPredictCsvInput').click()" title="上傳待預測 CSV">+</button>
                 <span class="ai-file-chip" id="aiLlmMode">AI ready</span>
-                <span id="aiLockedBox" class="ai-file-chip" style="display:none;">需要 Manager 權限</span>
+                <span id="aiLockedBox" class="ai-file-chip" style="display:none;">需要管理者權限</span>
                 <button class="ai-file-chip" id="aiResetPredictBtn" onclick="resetCSV()" style="display:none;border:0;background:transparent;cursor:pointer;color:#e07b54;">還原預設驗證集</button>
               </div>
               <button class="ai-send-btn" id="aiGenerateBriefBtn" type="button" onclick="generateAIBrief()" title="送出問題">↑</button>
@@ -1360,7 +1952,7 @@ body {
               </button>
             </div>
             <div id="diagViewerNote" style="display:none;text-align:center;font-size:12px;color:var(--muted);padding:8px;background:var(--bg);border-radius:6px;">
-              🔒 需要 Manager 權限才能執行標記或重訓操作
+              🔒 需要管理者權限才能執行標記或重訓操作
             </div>
           </div>
 
@@ -1410,31 +2002,40 @@ body {
       <!-- ② 訂單升級調度（原有功能，標題調整） -->
       <div class="grid-2 fade-in">
         <!-- Input controls -->
-        <div class="panel" style="height: fit-content;">
+        <div class="panel decision-panel" style="height: fit-content;">
           <div class="panel-head">
             <div class="panel-title">調度參數量化調整</div>
           </div>
           <div class="opt-body">
             <div>
-              <label class="field-label">物流預算上限 Budget (USD)</label>
+              <label class="field-label">物流預算上限（美元）</label>
               <input type="number" class="budget-input" id="optPageBudgetInput" placeholder="5000" value="5000" min="0">
             </div>
             <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
               <div>
-                <label class="field-label">單筆升級成本 Upgrade Cost ($)</label>
+                <label class="field-label">單筆升級成本（美元）</label>
                 <input type="number" class="budget-input" id="optPageUpgradeCost" placeholder="80" value="80" min="0">
               </div>
               <div>
-                <label class="field-label">單筆延遲罰金 Delay Penalty ($)</label>
+                <label class="field-label">單筆延遲罰金（美元）</label>
                 <input type="number" class="budget-input" id="optPageDelayPenalty" placeholder="250" value="250" min="0">
               </div>
             </div>
             
+            <div class="policy-sync-box" id="optPagePolicySync">
+              <strong>最佳化引擎本次會使用的參數</strong>
+              <div class="solver-summary" style="margin-top:10px;">
+                <div class="solver-chip"><span>預算</span><strong>$<span id="optPolicyBudget">5,000</span></strong></div>
+                <div class="solver-chip"><span>升級成本</span><strong>$<span id="optPolicyUpgrade">80</span></strong></div>
+                <div class="solver-chip"><span>延遲罰金</span><strong>$<span id="optPolicyPenalty">250</span></strong></div>
+                <div class="solver-chip"><span>風險門檻</span><strong><span id="optPolicyThreshold">0.50</span></strong></div>
+              </div>
+            </div>
             <button class="run-btn hidden" id="optPageRunBtn" onclick="runPageOptimize()">
               開始計算最佳化調度方案
             </button>
             <div class="locked-box" id="optPageLockedBox">
-              🔒 需要 Manager 權限才能執行最佳化調度
+              🔒 需要管理者權限才能執行最佳化調度
             </div>
           </div>
         </div>
@@ -1443,7 +2044,7 @@ body {
         <div class="panel">
           <div class="panel-head">
             <div class="panel-title">調度預估成效分析</div>
-            <span class="role-badge badge-viewer" id="optPageRoleBadge">Viewer</span>
+            <span class="role-badge badge-viewer" id="optPageRoleBadge">檢視者</span>
           </div>
           <div class="opt-body">
             <div id="optPageResultPlaceholder" style="text-align:center; padding:64px 20px; color:var(--muted); font-size:13px;">
@@ -1473,9 +2074,9 @@ body {
                 </div>
               </div>
               
-              <div id="optPageManagerAnalysisBox" style="padding:14px 16px; background:#f6f9fb; border:1px solid var(--border); border-radius:6px; display:none;">
-                <div style="font-size:11px;color:var(--muted);font-weight:600;margin-bottom:6px;text-transform:uppercase;letter-spacing:0.5px;font-family:'DM Mono',monospace">主管分析摘要</div>
-                <div id="optPageManagerAnalysisText" style="font-size:13px;line-height:1.65;color:var(--text);"></div>
+              <div id="optPageManagerAnalysisBox" class="manager-analysis-card" style="display:none;">
+                <div class="manager-analysis-title">主管分析摘要</div>
+                <div id="optPageManagerAnalysisText" class="manager-analysis-text"></div>
                 <div id="optPageManagerAnalysisFactors" style="margin-top:10px;display:flex;flex-direction:column;gap:6px;"></div>
               </div>
 
@@ -1703,8 +2304,8 @@ body {
               <th>API 端點 (Endpoint)</th>
               <th>請求類型</th>
               <th>功能說明</th>
-              <th>Viewer 權限</th>
-              <th>Logistics_Manager 權限</th>
+              <th>檢視者權限</th>
+              <th>物流管理者權限</th>
             </tr>
           </thead>
           <tbody>
@@ -1741,11 +2342,94 @@ body {
       </div>
     </div>
 
-    <!-- G. LLM SETTINGS PANEL -->
+    <!-- G. SYSTEM SETTINGS PANEL -->
+    <div class="page-section hidden" id="page-settings">
+      <div class="page-header fade-in">
+        <div class="page-title">系統設定</div>
+        <div class="page-sub">延遲判定門檻與模式建議設定</div>
+      </div>
+
+      <div class="panel fade-in" style="margin-bottom: 24px; padding: 18px 20px; background: var(--card); border: 1px solid var(--border); border-radius: 12px;">
+        <div class="panel-title" style="margin-bottom:12px;">延遲判定門檻值 (Threshold)</div>
+        <div style="display: flex; flex-wrap: wrap; gap: 24px; align-items: center; justify-content: space-between;">
+          <div style="flex: 1; min-width: 300px; display: flex; flex-direction: column; gap: 8px;">
+            <div style="display: flex; align-items: center; gap: 16px; width: 100%;">
+              <div style="flex-shrink: 0; min-width: 130px;">
+                <label class="field-label" style="font-weight:600; font-size:11px; margin-bottom:2px; display: flex; align-items: center; gap: 4px;">
+                  目前門檻值
+                  <span style="cursor: pointer; color: var(--navy); font-weight: bold; background: rgba(67,112,150,0.1); width: 14px; height: 14px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-size: 10px;" title="機器學習模型預測延遲機率大於此門檻時，即判定為延遲並啟動後續調度考量。">?</span>
+                </label>
+                <span style="font-size: 15px; font-weight: 700; color: var(--navy); font-family:'DM Mono',monospace;" id="thresholdValDisplay">0.50</span>
+              </div>
+              <input type="range" id="thresholdSlider" min="0.10" max="0.90" step="0.05" value="0.50" oninput="updateThreshold(this.value)" style="flex: 1; height: 6px; background: var(--border); border-radius: 3px; outline: none; cursor: pointer;">
+            </div>
+            <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap; font-size: 11px;">
+              <span style="color: var(--muted); font-weight: 500;">快速套用：</span>
+              <button id="badgeF1Btn" onclick="applyThresholdRecommendation('f1')" style="background: rgba(16, 185, 129, 0.1); color: #059669; border: 1px solid rgba(16, 185, 129, 0.2); border-radius: 4px; padding: 2px 6px; cursor: pointer; font-size: 10px; font-weight: 600;">
+                ⚖ 平衡模式 (F1): <span id="badgeF1Val">0.45</span>
+              </button>
+              <button id="badgeCostBtn" onclick="applyThresholdRecommendation('cost')" style="background: rgba(245, 158, 11, 0.1); color: #d97706; border: 1px solid rgba(245, 158, 11, 0.2); border-radius: 4px; padding: 2px 6px; cursor: pointer; font-size: 10px; font-weight: 600;">
+                💰 成本最低模式: <span id="badgeCostVal">0.35</span>
+              </button>
+              <span id="sopStatusLockWrap" style="margin-left: auto; display: flex; align-items: center; gap: 4px;">
+                <!-- SOP lock widgets dynamically populated -->
+              </span>
+            </div>
+          </div>
+          <div style="display: flex; gap: 12px; align-items: center; flex-wrap: wrap;">
+            <input type="file" id="csvFileInput" accept=".csv" style="display:none;" onchange="uploadTrainingCSV(this)">
+            <a href="/static/template.csv" download="template.csv" class="run-btn" id="downloadTemplateBtn" style="width:auto; padding: 8px 16px; background: var(--steel); border-radius: 6px; font-size:12px; display:flex; align-items:center; gap:6px; text-decoration:none; color:white;">
+              📥 下載回填範本 CSV
+            </a>
+            <button class="run-btn" id="uploadCsvBtn" onclick="document.getElementById('csvFileInput').click()" style="width:auto; padding: 8px 16px; background: var(--navy); border-radius: 6px; font-size:12px; display:flex; align-items:center; gap:6px;">
+              📤 回填已知結果 CSV
+            </button>
+            <button class="run-btn hidden" id="resetCsvBtn" onclick="resetCSV()" style="width:auto; padding: 8px 16px; background: #e07b54; border-radius: 6px; font-size:12px; display:none;">
+              🔄 還原驗證集
+            </button>
+            <span id="lockedUploadBox" class="locked-box" style="font-size:11px; padding:6px 12px; border-radius:6px; margin:0;">
+              🔒 需管理者權限以回填訓練資料
+            </span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Threshold tuning recommendation -->
+      <div class="panel fade-in" id="thresholdTuningPanel" style="margin-bottom:24px; padding:16px 20px; display:none;">
+        <div style="display:flex; justify-content:space-between; gap:16px; align-items:flex-start; flex-wrap:wrap; margin-bottom:14px;">
+          <div>
+            <div class="panel-title">門檻模式建議</div>
+            <div class="panel-subtitle">依目前訂單資料即時計算預警命中、延遲抓取與預估成本；F1 代表兼顧命中率與抓到率的綜合分數</div>
+          </div>
+          <div id="thresholdTuningNote" style="font-size:12px; color:var(--muted);"></div>
+        </div>
+        <div style="display:grid; grid-template-columns:repeat(3, minmax(0, 1fr)); gap:12px;" id="thresholdTuningCards">
+          <div class="stat-box">
+            <div class="stat-label">目前門檻</div>
+            <div class="stat-value" id="tuneCurrentThreshold">--</div>
+            <div class="exec-note" id="tuneCurrentMetrics">載入中...</div>
+          </div>
+          <div class="stat-box">
+            <div class="stat-label" title="F1 是兼顧命中率與抓到率的綜合分數，用來挑選不過度漏判、也不過度誤報的門檻。">平衡模式 (F1)</div>
+            <div class="stat-value green" id="tuneBestF1Threshold">--</div>
+            <div class="exec-note" id="tuneBestF1Metrics">載入中...</div>
+            <button class="run-btn" onclick="applyThresholdRecommendation('f1')" style="margin-top:10px; padding:7px 10px; font-size:12px;">套用平衡模式 (F1)</button>
+          </div>
+          <div class="stat-box">
+            <div class="stat-label" title="依升級成本與漏判延遲成本估算總損失最低的門檻。">成本最低模式</div>
+            <div class="stat-value warm" id="tuneBestCostThreshold">--</div>
+            <div class="exec-note" id="tuneBestCostMetrics">載入中...</div>
+            <button class="run-btn" onclick="applyThresholdRecommendation('cost')" style="margin-top:10px; padding:7px 10px; font-size:12px; background:var(--warm);">套用成本最低模式</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- H. LLM SETTINGS PANEL -->
     <div class="page-section hidden" id="page-llm-settings">
       <div class="page-header fade-in">
         <div class="page-title">LLM 設定</div>
-        <div class="page-sub">Manager 可設定 AI 助理使用的 Provider、模型與 API Key</div>
+        <div class="page-sub">管理者可設定 AI 助理使用的服務供應商、模型與 API Key</div>
       </div>
 
       <div class="panel fade-in" style="max-width:760px;">
@@ -1754,16 +2438,16 @@ body {
             <div class="panel-title">AI 助理連線設定</div>
             <div class="panel-subtitle">設定會加密儲存在本機專案資料夾，重啟服務後仍會套用。</div>
           </div>
-          <span class="role-badge badge-viewer" id="llmSettingsRoleBadge">Viewer</span>
+          <span class="role-badge badge-viewer" id="llmSettingsRoleBadge">檢視者</span>
         </div>
 
         <div id="llmSettingsLocked" class="locked-box" style="margin-bottom:16px;">
-          🔒 需要 Manager 權限才能查看與修改 LLM 設定
+          🔒 需要管理者權限才能查看與修改 LLM 設定
         </div>
 
         <div id="llmSettingsForm" style="display:none;grid-template-columns:1fr 1fr;gap:16px;">
           <div>
-            <label class="field-label">Provider</label>
+            <label class="field-label">服務供應商</label>
             <select id="llmProviderInput" class="budget-input" style="width:100%;" onchange="handleLLMProviderChange()">
               <option value="local">local</option>
               <option value="openai">openai</option>
@@ -1862,6 +2546,7 @@ function showPage(pageId) {
     populateRegionDropdown();
     applyFilters();
   } else if (pageId === 'optimization') {
+    syncOptimizationControls();
     loadMonthlyChart();
   } else if (pageId === 'model-perf') {
     loadModelPerformance();
@@ -1922,7 +2607,7 @@ function displayOrderId(orderId) {
   return raw ? `ORD-${raw.slice(0, 8)}` : 'ORD-UNKNOWN';
 }
 
-async function fetchOptimize(budget, upgradeCost, delayPenalty) {
+async function fetchOptimize(budget, upgradeCost, delayPenalty, riskThreshold = threshold) {
   const response = await fetch(`${API_BASE}/api/optimize`, {
     method: 'POST',
     headers: {
@@ -1933,6 +2618,7 @@ async function fetchOptimize(budget, upgradeCost, delayPenalty) {
       budget,
       upgrade_cost: upgradeCost,
       delay_penalty: delayPenalty,
+      risk_threshold: riskThreshold,
       max_candidates: 500
     })
   });
@@ -1967,7 +2653,39 @@ async function populateRegionDropdown() {
 function updateThreshold(val) {
   threshold = parseFloat(val);
   document.getElementById('thresholdValDisplay').textContent = threshold.toFixed(2);
+  syncOptimizationControls();
   refreshDashboard();
+}
+
+function syncOptimizationControls() {
+  const dashboardThreshold = document.getElementById('dashboardOptThreshold');
+  if (dashboardThreshold) dashboardThreshold.textContent = threshold.toFixed(2);
+
+  const budgetInput = document.getElementById('optPageBudgetInput');
+  const upgradeInput = document.getElementById('optPageUpgradeCost');
+  const penaltyInput = document.getElementById('optPageDelayPenalty');
+  const budget = parseFloat(budgetInput?.value) || 5000;
+  const upgrade = parseFloat(upgradeInput?.value) || 80;
+  const penalty = parseFloat(penaltyInput?.value) || 250;
+
+  const setText = (id, value) => {
+    const el = document.getElementById(id);
+    if (el) el.textContent = value;
+  };
+  setText('optPolicyBudget', budget.toLocaleString());
+  setText('optPolicyUpgrade', upgrade.toLocaleString());
+  setText('optPolicyPenalty', penalty.toLocaleString());
+  setText('optPolicyThreshold', threshold.toFixed(2));
+}
+
+function goToOptimizationWithCurrentPolicy() {
+  const dashboardBudget = parseFloat(document.getElementById('budgetInput')?.value);
+  const pageBudgetInput = document.getElementById('optPageBudgetInput');
+  if (pageBudgetInput && Number.isFinite(dashboardBudget)) {
+    pageBudgetInput.value = dashboardBudget;
+  }
+  syncOptimizationControls();
+  showPage('optimization');
 }
 
 // ══ CSV Import & Reset Handlers ══
@@ -2471,6 +3189,19 @@ function formatTuneMetrics(row) {
 let isSandboxMode = false;
 let sopDefaultThreshold = 0.50;
 
+function renderProgressStatus(progress, message, spinning = true) {
+  const pct = Math.max(0, Math.min(100, Number(progress) || 0));
+  return `
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:8px;">
+      <span>${spinning ? '<span class="spinner"></span>' : ''}${message || ''}</span>
+      <strong style="font-family:'DM Mono',monospace;color:var(--navy);">${pct}%</strong>
+    </div>
+    <div class="usage-bar" style="height:8px;background:#e5e7eb;">
+      <div class="usage-fill" style="width:${pct}%;height:100%;background:var(--navy);"></div>
+    </div>
+  `;
+}
+
 function updateSopUI() {
   const slider = document.getElementById('thresholdSlider');
   const lockWrap = document.getElementById('sopStatusLockWrap');
@@ -2635,22 +3366,28 @@ function renderBudgetScenarios(d) {
   document.getElementById('scenarioRecommendation').textContent =
     d.recommendation || '目前沒有可用的預算情境建議。';
 
-  const tbody = document.getElementById('scenarioTableBody');
+  const grid = document.getElementById('scenarioCardGrid');
   if (!scenarios.length) {
-    tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;padding:24px;color:var(--muted);font-size:13px">尚無情境資料</td></tr>`;
+    grid.innerHTML = `<div style="grid-column:1/-1;text-align:center;padding:24px;color:var(--muted);font-size:13px">尚無情境資料</div>`;
     return;
   }
 
-  tbody.innerHTML = scenarios.map(s => `
-    <tr>
-      <td><span class="order-id">$${Math.round(s.budget).toLocaleString()}</span></td>
-      <td>${Number(s.selected_count || 0).toLocaleString()} 筆</td>
-      <td>$${Math.round(s.total_cost || 0).toLocaleString()}</td>
-      <td>$${Math.round(s.expected_total_penalty_avoided || 0).toLocaleString()}</td>
-      <td style="font-weight:700;color:${(s.expected_total_saving || 0) >= 0 ? '#15803d' : '#b91c1c'}">$${Math.round(s.expected_total_saving || 0).toLocaleString()}</td>
-      <td>${Number(s.budget_usage_pct || 0).toFixed(0)}%</td>
-    </tr>
-  `).join('');
+  const visibleScenarios = scenarios.slice(0, 4);
+  const bestSaving = Math.max(...visibleScenarios.map(s => Number(s.expected_total_saving || 0)));
+
+  grid.innerHTML = visibleScenarios.map(s => {
+    const saving = Number(s.expected_total_saving || 0);
+    const selected = Number(s.selected_count || 0);
+    const isRecommended = saving === bestSaving;
+    return `
+    <div class="scenario-card${isRecommended ? ' recommended' : ''}">
+      <div class="scenario-budget">$${Math.round(s.budget || 0).toLocaleString()}</div>
+      <div class="scenario-line"><span>升級訂單</span><strong>${selected.toLocaleString()} 筆</strong></div>
+      <div class="scenario-line"><span>避免罰金</span><strong>$${Math.round(s.expected_total_penalty_avoided || 0).toLocaleString()}</strong></div>
+      <div class="scenario-line"><span>淨效益</span><strong class="benefit">$${Math.round(saving).toLocaleString()}</strong></div>
+      <div class="scenario-line"><span>預算使用率</span><strong>${Number(s.budget_usage_pct || 0).toFixed(0)}%</strong></div>
+    </div>`;
+  }).join('');
 }
 
 function fillClass(p) {
@@ -2829,14 +3566,34 @@ function renderManagerFactors(containerId, explanations) {
   }
 
   container.innerHTML = factors.map(f => `
-    <div style="padding:9px 10px;border:1px solid var(--border);border-radius:6px;background:white;">
-      <div style="display:flex;justify-content:space-between;gap:10px;align-items:center;">
-        <span style="font-size:12px;font-weight:700;color:var(--text);">${f.label || f.feature}</span>
-        <span style="font-size:11px;color:var(--muted);font-family:'DM Mono',monospace">${f.impact || 'context'}</span>
+    <div class="manager-factor-card">
+      <div class="manager-factor-head">
+        <span class="manager-factor-label">${f.label || f.feature}</span>
+        <span class="manager-factor-impact">${f.impact || 'context'}</span>
       </div>
-      <div style="font-size:12px;color:var(--muted);line-height:1.5;margin-top:4px;">${f.evidence || '模型指出此因子會影響延遲風險。'}</div>
+      <div class="manager-factor-evidence">${f.evidence || '模型指出此因子會影響延遲風險。'}</div>
     </div>
   `).join('');
+}
+
+function setTheme(theme) {
+  const nextTheme = theme === 'light' ? 'light' : 'dark';
+  document.body.dataset.theme = nextTheme;
+  localStorage.setItem('edis_theme', nextTheme);
+  document.getElementById('themeLightBtn')?.classList.toggle('active', nextTheme === 'light');
+  document.getElementById('themeDarkBtn')?.classList.toggle('active', nextTheme === 'dark');
+}
+
+function initTheme() {
+  setTheme(localStorage.getItem('edis_theme') || 'dark');
+}
+
+function applyRoleNavigation() {
+  document.body.dataset.role = currentRole;
+  const hiddenForViewer = document.querySelector('.sidebar-nav .nav-item.active.manager-only-nav');
+  if (currentRole === 'viewer' && hiddenForViewer) {
+    showPage('dashboard');
+  }
 }
 
 // ══ Role Switcher ══
@@ -2851,6 +3608,7 @@ async function setRole(role) {
   }
   window._managerAuthenticated = false;
   currentRole = role;
+  applyRoleNavigation();
   if (role === 'viewer') {
     sessionStorage.removeItem('edis_token');
     sessionStorage.removeItem('edis_session_id');
@@ -2863,11 +3621,11 @@ async function setRole(role) {
   
   // Header badges
   document.getElementById('roleBadge').className = isM ? 'role-badge badge-manager' : 'role-badge badge-viewer';
-  document.getElementById('roleBadge').textContent = isM ? '● Manager' : '● Viewer';
+  document.getElementById('roleBadge').textContent = isM ? '● 管理者' : '● 檢視者';
   document.getElementById('optRoleBadge').className = isM ? 'role-badge badge-manager' : 'role-badge badge-viewer';
-  document.getElementById('optRoleBadge').textContent = isM ? 'Manager' : 'Viewer';
+  document.getElementById('optRoleBadge').textContent = isM ? '管理者' : '檢視者';
   document.getElementById('optPageRoleBadge').className = isM ? 'role-badge badge-manager' : 'role-badge badge-viewer';
-  document.getElementById('optPageRoleBadge').textContent = isM ? 'Manager' : 'Viewer';
+  document.getElementById('optPageRoleBadge').textContent = isM ? '管理者' : '檢視者';
 
   // Lock/Unlock Uploading for Manager
   document.getElementById('uploadCsvBtn').style.display = isM ? 'inline-flex' : 'none';
@@ -2881,7 +3639,7 @@ async function setRole(role) {
   if (aiLockedBox) aiLockedBox.style.display = isM ? 'none' : 'inline-flex';
   if (aiRoleBadge) {
     aiRoleBadge.className = isM ? 'role-badge badge-manager' : 'role-badge badge-viewer';
-    aiRoleBadge.textContent = isM ? 'Manager' : 'Viewer';
+    aiRoleBadge.textContent = isM ? '管理者' : '檢視者';
   }
   updateLLMSettingsAccess();
   if (isM && !document.getElementById('page-llm-settings').classList.contains('hidden')) {
@@ -2931,7 +3689,7 @@ async function runOptimize() {
   btn.innerHTML = '<span class="spinner"></span>計算中...';
   btn.disabled = true;
   try {
-    const data = await fetchOptimize(budget, 80, 250);
+    const data = await fetchOptimize(budget, 80, 250, threshold);
     renderOptResult(data);
   } catch(e) { alert(e.message); }
   finally {
@@ -2954,7 +3712,7 @@ async function runPageOptimize() {
   btn.disabled = true;
   
   try {
-    const data = await fetchOptimize(budget, upgradeCost, delayPenalty);
+    const data = await fetchOptimize(budget, upgradeCost, delayPenalty, threshold);
     
     placeholder.classList.add('hidden');
     resultPanel.classList.remove('hidden');
@@ -3530,7 +4288,7 @@ async function startRetrain() {
   const btn    = document.getElementById('diagStartRetrainBtn');
   const status = document.getElementById('diagRetrainStatus');
   if (btn)    { btn.style.display    = 'none'; }
-  if (status) { status.style.display = 'block'; status.innerHTML = '<span class="spinner"></span> 正在啟動重訓任務...'; }
+  if (status) { status.style.display = 'block'; status.innerHTML = renderProgressStatus(5, '正在啟動重訓任務...'); }
 
   try {
     const res = await fetch(`${API_BASE}/api/retrain`, {
@@ -3562,7 +4320,7 @@ function pollRetrainTask(taskId) {
       const data = await res.json();
       
       if (status) {
-        status.innerHTML = `<span class="spinner"></span> <strong>[${data.progress}%]</strong> ${data.log}`;
+        status.innerHTML = renderProgressStatus(data.progress, data.log, data.status === 'running');
       }
       
       if (data.status === 'success') {
@@ -3810,6 +4568,20 @@ document.addEventListener('keydown', function(e) {
     e.preventDefault();
     generateAIBrief();
   }
+});
+document.addEventListener('input', function(e) {
+  if (['budgetInput', 'optPageBudgetInput', 'optPageUpgradeCost', 'optPageDelayPenalty'].includes(e.target.id)) {
+    if (e.target.id === 'budgetInput') {
+      const pageBudgetInput = document.getElementById('optPageBudgetInput');
+      if (pageBudgetInput) pageBudgetInput.value = e.target.value;
+    }
+    syncOptimizationControls();
+  }
+});
+window.addEventListener('load', function() {
+  initTheme();
+  applyRoleNavigation();
+  syncOptimizationControls();
 });
 </script>
 
