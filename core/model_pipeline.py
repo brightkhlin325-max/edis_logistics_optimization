@@ -152,7 +152,7 @@ class ModelPipeline:
             json.dump(self.eval_metrics, f, ensure_ascii=False, indent=2)
         print(f"\n  評估指標已儲存：{metrics_path}")
 
-        print("\n✓ ModelPipeline 完成")
+        print("\n[SUCCESS] ModelPipeline 完成")
         print("=" * 60)
         return self.eval_metrics
 

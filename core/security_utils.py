@@ -173,4 +173,4 @@ if __name__ == "__main__":
     print("\n去識別化後：")
     print(safe.to_string())
 
-    print("\n✓ 測試完成。敏感欄位已移除，Order Id 已雜湊。")
+    print("\n[SUCCESS] 測試完成。敏感欄位已移除，Order Id 已雜湊。")

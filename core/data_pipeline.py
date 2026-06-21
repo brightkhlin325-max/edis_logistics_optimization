@@ -177,7 +177,7 @@ class DataPipeline:
             max_test_rows=self.max_test_rows,
         )
 
-        print(f"\n✓ 管線完成。訓練集：{len(X_train)} 筆，驗證集：{len(X_val)} 筆，測試集：{len(X_test)} 筆")
+        print(f"\n[SUCCESS] 管線完成。訓練集：{len(X_train)} 筆，驗證集：{len(X_val)} 筆，測試集：{len(X_test)} 筆")
         print(f"  輸出目錄：{os.path.abspath(output_dir)}")
         print("=" * 60)
 

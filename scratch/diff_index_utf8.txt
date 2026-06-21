@@ -1,0 +1,1961 @@
+﻿diff --git a/static/index.html b/static/index.html
+index 95e8a10..1ce8748 100644
+--- a/static/index.html
++++ b/static/index.html
+@@ -516,15 +516,17 @@ body {
+ .kpi-info { flex: 1; }
+ 
+ .kpi-label {
+-  font-size: 11px;
++  font-size: 12px;
+   color: var(--muted);
+-  font-weight: 400;
+-  margin-bottom: 4px;
++  font-weight: 600;
++  margin-bottom: 6px;
++  text-transform: uppercase;
++  letter-spacing: 0.5px;
+ }
+ 
+ .kpi-value {
+-  font-size: 28px;
+-  font-weight: 600;
++  font-size: 32px;
++  font-weight: 700;
+   color: var(--text);
+   line-height: 1;
+ }
+@@ -822,51 +824,247 @@ body {
+ .modal-confirm { flex:1; padding:10px; background:var(--navy); color:white; border:none; border-radius:7px; font-size:13px; font-weight:600; cursor:pointer; }
+ .modal-confirm:hover { background:var(--navy-dk); }
+ .modal-cancel { padding:10px 16px; background:var(--bg); color:var(--muted); border:1px solid var(--border); border-radius:7px; font-size:13px; cursor:pointer; }
++
++/* ── Side Drawer for Budget Configuration ── */
++.drawer-overlay {
++  display: none;
++  position: fixed;
++  inset: 0;
++  background: rgba(0,0,0,0.4);
++  z-index: 990;
++  justify-content: flex-end;
++}
++.drawer-overlay.show {
++  display: flex;
++}
++.drawer-content {
++  width: 420px;
++  background: var(--card);
++  border-left: 1px solid var(--border);
++  height: 100%;
++  padding: 32px 24px;
++  box-shadow: -8px 0 32px rgba(67,112,150,0.15);
++  display: flex;
++  flex-direction: column;
++  gap: 20px;
++  overflow-y: auto;
++  transform: translateX(100%);
++  transition: transform 0.3s ease;
++}
++.drawer-overlay.show .drawer-content {
++  transform: translateX(0);
++}
++
++/* ── Floating AI Chat Widget ── */
++.floating-chat-trigger {
++  position: fixed;
++  bottom: 24px;
++  right: 24px;
++  width: 56px;
++  height: 56px;
++  border-radius: 50%;
++  background: var(--navy);
++  color: white;
++  border: none;
++  font-size: 24px;
++  cursor: pointer;
++  box-shadow: 0 4px 16px rgba(67,112,150,0.3);
++  z-index: 980;
++  display: flex;
++  align-items: center;
++  justify-content: center;
++  transition: all 0.2s ease;
++}
++.floating-chat-trigger:hover {
++  transform: scale(1.05);
++  background: var(--navy-dk);
++}
++.floating-chat-container {
++  display: none;
++  position: fixed;
++  bottom: 90px;
++  right: 24px;
++  width: 380px;
++  height: 520px;
++  background: var(--card);
++  border: 1px solid var(--border);
++  border-radius: 12px;
++  box-shadow: 0 8px 32px rgba(67,112,150,0.2);
++  z-index: 980;
++  flex-direction: column;
++  overflow: hidden;
++}
++.floating-chat-container.show {
++  display: flex;
++}
++.floating-chat-header {
++  background: var(--navy);
++  color: white;
++  padding: 14px 18px;
++  font-weight: 600;
++  display: flex;
++  align-items: center;
++  justify-content: space-between;
++  font-size: 14px;
++}
++.floating-chat-body {
++  flex: 1;
++  display: flex;
++  flex-direction: column;
++  overflow: hidden;
++  padding: 12px;
++  background: var(--bg);
++}
++
++/* ── Redesigned Dashboard Styles ── */
++.kpi-ai-row {
++  display: grid;
++  grid-template-columns: 1.15fr 0.85fr;
++  gap: 20px;
++  margin-bottom: 24px;
++}
++.kpi-column {
++  display: flex;
++  flex-direction: column;
++  gap: 16px;
++}
++.budget-scenarios-row {
++  display: grid;
++  grid-template-columns: repeat(4, minmax(0, 1fr)) 1.1fr;
++  gap: 16px;
++  margin-bottom: 24px;
++}
++.budget-card {
++  background: var(--card);
++  border: 1.5px solid var(--border);
++  border-radius: 12px;
++  padding: 16px;
++  cursor: pointer;
++  transition: all 0.2s ease;
++  position: relative;
++  display: flex;
++  flex-direction: column;
++  justify-content: space-between;
++  min-height: 120px;
++}
++.budget-card:hover {
++  border-color: var(--steel);
++  box-shadow: 0 4px 12px rgba(67,112,150,0.08);
++  transform: translateY(-1px);
++}
++.budget-card.active {
++  border-color: var(--navy);
++  background: rgba(67, 112, 150, 0.03);
++  box-shadow: 0 4px 14px rgba(67,112,150,0.12);
++}
++.budget-card-check {
++  display: none;
++  position: absolute;
++  top: 12px;
++  right: 12px;
++  width: 18px;
++  height: 18px;
++  border-radius: 50%;
++  background: var(--navy);
++  color: white;
++  align-items: center;
++  justify-content: center;
++  font-size: 10px;
++}
++.budget-card.active .budget-card-check {
++  display: flex;
++}
++.custom-budget-card {
++  background: var(--card);
++  border: 1.5px solid var(--border);
++  border-radius: 12px;
++  padding: 16px;
++  display: flex;
++  flex-direction: column;
++  justify-content: space-between;
++  min-height: 120px;
++}
++.sidebar-profile {
++  position: absolute;
++  bottom: 20px;
++  left: 15px;
++  right: 15px;
++  padding-top: 15px;
++  border-top: 1px solid rgba(255,255,255,0.15);
++  cursor: pointer;
++}
++.sidebar-profile:hover {
++  opacity: 0.9;
++}
++.profile-dropdown-overlay {
++  display: none;
++  position: absolute;
++  bottom: 50px;
++  left: 0;
++  width: 190px;
++  background: var(--card);
++  border: 1px solid var(--border);
++  border-radius: 8px;
++  box-shadow: 0 -4px 16px rgba(0,0,0,0.15);
++  z-index: 1000;
++  padding: 6px 0;
++}
++.profile-dropdown-overlay.show {
++  display: block;
++}
++.profile-dropdown-overlay a {
++  display: block;
++  padding: 8px 12px;
++  font-size: 12px;
++  color: var(--text);
++  text-decoration: none;
++  transition: background 0.15s;
++}
++.profile-dropdown-overlay a:hover {
++  background: var(--bg);
++}
+ </style>
+ </head>
+ <body>
+ 
+ <!-- ── Sidebar ── -->
+ <aside class="sidebar">
+-  <div class="sidebar-brand">
+-    <div class="brand-mark">ED</div>
+-    <div class="brand-name">EDIS</div>
+-    <div class="brand-sub">物流延遲預測<br>最佳化調度系統</div>
++  <div class="sidebar-brand" style="padding: 24px 20px 10px; border: none;">
++    <div class="brand-name" style="font-size: 26px; font-weight: 800; letter-spacing: 1.5px; color: white;">EDIS</div>
+   </div>
+ 
+-  <nav class="sidebar-nav">
+-    <div class="nav-section">主選單</div>
++  <nav class="sidebar-nav" style="padding-top: 10px;">
+     <a class="nav-item active" id="nav-dashboard" onclick="showPage('dashboard')">
+-      <i class="nav-icon">▪</i> Dashboard
+-    </a>
+-    <a class="nav-item" id="nav-risk-list" onclick="showPage('risk-list')">
+-      <i class="nav-icon">◈</i> 風險訂單列表
++      <i class="nav-icon">🕒</i> 營運概覽
+     </a>
+     <a class="nav-item" id="nav-optimization" onclick="showPage('optimization')">
+-      <i class="nav-icon">◉</i> 最佳化調度
++      <i class="nav-icon">🚚</i> 智慧調度
+     </a>
+     <a class="nav-item" id="nav-ai-assistant" onclick="showPage('ai-assistant')">
+-      <i class="nav-icon">✦</i> AI 助理
+-    </a>
+-    <div class="nav-section">分析</div>
+-    <a class="nav-item" id="nav-model-perf" onclick="showPage('model-perf')">
+-      <i class="nav-icon">◇</i> 模型效能
+-    </a>
+-    <a class="nav-item" id="nav-region-map" onclick="showPage('region-map')">
+-      <i class="nav-icon">◆</i> 區域風險地圖
+-    </a>
+-    <div class="nav-section">系統</div>
+-    <a class="nav-item" id="nav-rbac" onclick="showPage('rbac')">
+-      <i class="nav-icon">○</i> RBAC 權限
+-    </a>
+-    <a class="nav-item" id="nav-llm-settings" onclick="showPage('llm-settings')">
+-      <i class="nav-icon">⚙</i> LLM 設定
++      <i class="nav-icon">💬</i> AI 助理
+     </a>
+   </nav>
+ 
+-  <div class="sidebar-footer">
+-    DataCo EDIS v1.0<br>
+-    2026 · 五人組專案
++  <!-- User profile widget bottom-left -->
++  <div class="sidebar-profile" onclick="toggleProfileDropdown(event)">
++    <div style="display: flex; align-items: center; justify-content: space-between; position: relative;">
++      <div style="display: flex; align-items: center; gap: 10px;">
++        <div id="profileAvatar" style="width: 32px; height: 32px; border-radius: 50%; background: rgba(255,255,255,0.2); color: white; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 14px; border: 1.5px solid white;">M</div>
++        <div>
++          <div id="profileName" style="font-size: 13px; font-weight: 600; color: white;">物流經理</div>
++          <div id="profileDept" style="font-size: 11px; color: rgba(255,255,255,0.6);">物流團隊</div>
++        </div>
++      </div>
++      <div style="color: rgba(255,255,255,0.6); font-size: 8px;">▼</div>
++      
++      <!-- Profile Dropdown overlay -->
++      <div id="profileDropdown" class="profile-dropdown-overlay">
++        <div style="padding: 6px 12px; font-size: 10px; color: var(--muted); text-transform: uppercase; font-weight: 600; border-bottom: 1px solid var(--border); margin-bottom: 4px;">系統設定</div>
++        <a id="menuModelPerf" onclick="showPage('model-perf'); event.stopPropagation();">📈 模型效能與重訓</a>
++        <a id="menuRBAC" onclick="showPage('rbac'); event.stopPropagation();">🔒 RBAC 權限管理</a>
++        <a id="menuLLMSettings" onclick="showPage('llm-settings'); event.stopPropagation();">🔧 LLM 參數設定</a>
++      </div>
++    </div>
+   </div>
+ </aside>
+ 
+@@ -876,19 +1074,21 @@ body {
+   <!-- Topbar -->
+   <div class="topbar">
+     <div>
+-      <div class="topbar-title">Dashboard</div>
++      <div class="topbar-title" id="mainTopbarTitle" style="font-size: 17px; font-weight: 700; color: var(--text);">營運概覽</div>
++      <div style="font-size: 11px; color: var(--muted); margin-top: 2px;" id="topbarSubtitle">數據更新時間：2026-06-20 14:30</div>
+     </div>
+     <div class="topbar-right">
+-      <div class="status-pill">
+-        <span class="dot dot-green"></span>
+-        <span id="statusText">Mock Data</span>
++      <div class="status-pill" style="display: flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 600; color: #16a34a; background: rgba(22, 163, 74, 0.1); padding: 4px 10px; border-radius: 12px;">
++        <span style="width: 6px; height: 6px; border-radius: 50%; background: #16a34a; display: inline-block;"></span>
++        <span id="statusText">系統狀態：所有系統運作正常</span>
+       </div>
+ 
+-      <span class="role-badge badge-viewer" id="roleBadge">● Viewer</span>
+-
+-      <div class="role-switch">
+-        <button class="role-btn active" onclick="setRole('viewer')">Viewer</button>
+-        <button class="role-btn" onclick="setRole('manager')">Manager</button>
++      <div style="position: relative;">
++        <select id="topbarRoleSelect" onchange="setRole(this.value)" style="background: var(--card); border: 1.5px solid var(--border); border-radius: 8px; color: var(--text); padding: 6px 30px 6px 12px; font-size: 12px; font-weight: 600; outline: none; cursor: pointer; -webkit-appearance: none; appearance: none; min-width: 100px;">
++          <option value="viewer">決策檢視者 (Viewer)</option>
++          <option value="manager" selected>物流經理 (Manager)</option>
++        </select>
++        <span style="position: absolute; right: 10px; top: 50%; transform: translateY(-50%); font-size: 8px; pointer-events: none; color: var(--muted);">▼</span>
+       </div>
+     </div>
+   </div>
+@@ -898,13 +1098,234 @@ body {
+ 
+     <!-- A. DASHBOARD PANEL -->
+     <div class="page-section" id="page-dashboard">
++      <!-- First Row: KPIs & AI Summary -->
++      <div class="kpi-ai-row fade-in">
++        <!-- Left: 3 KPI Cards -->
++        <div class="kpi-column">
++          <!-- KPI 1: Delay Risk -->
++          <div class="panel" style="position: relative; overflow: hidden; padding: 18px 20px; display: flex; flex-direction: column; justify-content: space-between; min-height: 120px; background: var(--card); border: 1px solid var(--border); border-radius: 12px;">
++            <div style="display: flex; justify-content: space-between; align-items: flex-start;">
++              <div>
++                <div style="font-size: 12px; font-weight: 600; color: var(--muted); display: flex; align-items: center; gap: 4px;">
++                  延遲風險訂單數
++                  <span style="cursor: pointer; color: var(--navy); font-weight: bold; background: rgba(67,112,150,0.1); width: 14px; height: 14px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-size: 10px;" title="預估延遲訂單數量與變動趨勢">?</span>
++                </div>
++                <div style="font-size: 26px; font-weight: 700; color: var(--text); margin-top: 6px;" id="kpiDelayRiskValue">— 筆訂單</div>
++                <div style="font-size: 11px; font-weight: 600; color: #b91c1c; margin-top: 4px; display: flex; align-items: center; gap: 4px;" id="kpiDelayRiskChange">
++                  ▲ +15 相較上次執行
++                </div>
++              </div>
++            </div>
++            <canvas id="sparklineDelayRisk" style="position: absolute; bottom: 0; left: 0; width: 100%; height: 40px; pointer-events: none;"></canvas>
++          </div>
++          
++          <!-- KPI 2: Penalty Exposure -->
++          <div class="panel" style="position: relative; overflow: hidden; padding: 18px 20px; display: flex; flex-direction: column; justify-content: space-between; min-height: 120px; background: var(--card); border: 1px solid var(--border); border-radius: 12px;">
++            <div style="display: flex; justify-content: space-between; align-items: flex-start;">
++              <div>
++                <div style="font-size: 12px; font-weight: 600; color: var(--muted); display: flex; align-items: center; gap: 4px;">
++                  延遲罰金曝險
++                  <span style="cursor: pointer; color: var(--navy); font-weight: bold; background: rgba(67,112,150,0.1); width: 14px; height: 14px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-size: 10px;" title="預估延遲造成的罰金暴險總額">?</span>
++                </div>
++                <div style="font-size: 26px; font-weight: 700; color: var(--text); margin-top: 6px;" id="kpiPenaltyExposureValue">—</div>
++                <div style="font-size: 11px; font-weight: 600; color: #b91c1c; margin-top: 4px; display: flex; align-items: center; gap: 4px;" id="kpiPenaltyExposureChange">
++                  ▲ +12.6% 相較上次執行
++                </div>
++              </div>
++            </div>
++            <canvas id="sparklinePenaltyExposure" style="position: absolute; bottom: 0; left: 0; width: 100%; height: 40px; pointer-events: none;"></canvas>
++          </div>
++
++          <!-- KPI 3: Recommended Budget -->
++          <div class="panel" style="position: relative; overflow: hidden; padding: 18px 20px; display: flex; flex-direction: column; justify-content: space-between; min-height: 120px; background: var(--card); border: 1px solid var(--border); border-radius: 12px;">
++            <div style="display: flex; justify-content: space-between; align-items: flex-start;">
++              <div>
++                <div style="font-size: 12px; font-weight: 600; color: var(--muted); display: flex; align-items: center; gap: 4px;">
++                  推薦升級預算
++                  <span style="cursor: pointer; color: var(--navy); font-weight: bold; background: rgba(67,112,150,0.1); width: 14px; height: 14px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-size: 10px;" title="建議的物流升級最佳預算投入">?</span>
++                </div>
++                <div style="font-size: 26px; font-weight: 700; color: var(--text); margin-top: 6px;" id="kpiRecommendedBudgetValue">—</div>
++                <div style="font-size: 11px; color: var(--muted); margin-top: 4px;" id="kpiRecommendedBudgetDesc">
++                  預估淨效益 —
++                </div>
++              </div>
++            </div>
++            <canvas id="sparklineRecommendedBudget" style="position: absolute; bottom: 0; left: 0; width: 100%; height: 40px; pointer-events: none;"></canvas>
++          </div>
++        </div>
++
++        <!-- Right: AI Decision Summary -->
++        <div class="panel" style="display: flex; flex-direction: column; justify-content: space-between; padding: 20px; background: var(--card); border: 1px solid var(--border); border-radius: 12px;">
++          <div>
++            <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border); padding-bottom: 12px; margin-bottom: 14px;">
++              <span style="font-size: 14px; font-weight: 700; color: var(--text); display: flex; align-items: center; gap: 6px;">🤖 AI 決策摘要</span>
++              <span style="font-size: 11px; font-weight: 600; color: var(--navy); background: rgba(67,112,150,0.1); padding: 2px 8px; border-radius: 4px;">EDIS 智慧助理</span>
++            </div>
++            
++            <div id="aiSummaryParagraph" style="font-size: 13px; line-height: 1.6; color: var(--text); margin-bottom: 16px;">
++              載入最佳化建議中...
++            </div>
++
++            <div style="font-size: 11px; font-weight: 600; text-transform: uppercase; color: var(--muted); margin-bottom: 8px; letter-spacing: 0.5px;">核心影響因素</div>
++            <ul id="aiSummaryDrivers" style="padding-left: 16px; font-size: 12px; line-height: 1.7; color: var(--text); display: flex; flex-direction: column; gap: 4px;">
++              <li>載入分析中...</li>
++            </ul>
++          </div>
++
++          <div style="margin-top: 20px; border-top: 1px solid var(--border); padding-top: 14px;">
++            <a href="#" onclick="viewRecommendedUpgradeList(); return false;" style="display: flex; align-items: center; justify-content: space-between; text-decoration: none; color: var(--navy); font-size: 13px; font-weight: 600;">
++              <span>查看推薦升級清單</span>
++              <span style="font-size:14px; font-weight:bold;">→</span>
++            </a>
++          </div>
++        </div>
++      </div>
++
++      <!-- Second Row: High Risk Orders -->
++      <div class="panel fade-in" style="margin-bottom: 24px; padding: 20px; border-radius: 12px;">
++        <div class="panel-head" style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border); padding-bottom: 14px; margin-bottom: 14px;">
++          <div>
++            <div class="panel-title" style="font-size: 15px; font-weight: 600;">高風險延遲訂單</div>
++          </div>
++          <div style="display: flex; align-items: center; gap: 10px;">
++            <input type="text" id="highRiskSearch" oninput="filterHighRiskOrders()" placeholder="搜尋訂單 ID / 客戶名稱 / 路線..." style="padding: 6px 12px; border: 1px solid var(--border); border-radius: 6px; font-size: 11px; outline: none; background: var(--bg); color: var(--text); width: 220px;">
++            <button class="run-btn" style="width: auto; padding: 6px 14px; font-size: 11px; background: transparent; color: var(--text); border: 1px solid var(--border); cursor: pointer;" onclick="clearHighRiskSearch()">
++              清除
++            </button>
++            <a href="#" onclick="showPage('optimization'); return false;" style="font-size: 12px; font-weight: 600; color: var(--navy); text-decoration: none; margin-left: 8px;">查看全部 ></a>
++          </div>
++        </div>
++        
++        <div class="table-scroll" style="max-height: 380px;">
++          <table class="risk-table">
++            <thead>
++              <tr>
++                <th>訂單 ID</th>
++                <th>客戶名稱</th>
++                <th>路線</th>
++                <th>預計發貨日</th>
++                <th>延遲機率</th>
++                <th>預估延遲 (天)</th>
++                <th>預估罰金</th>
++                <th>風險等級</th>
++                <th>升級效益</th>
++                <th>操作選項</th>
++              </tr>
++            </thead>
++            <tbody id="bossTableBody">
++              <tr><td colspan="10" style="text-align:center;padding:32px;color:var(--muted);font-size:13px">載入中...</td></tr>
++            </tbody>
++          </table>
++        </div>
++      </div>
++
++      <!-- Third Row: Budget Scenarios -->
++      <div class="panel fade-in" style="padding: 20px; border-radius: 12px; margin-bottom: 24px;">
++        <div class="panel-head" style="margin-bottom: 16px;">
++          <div>
++            <div class="panel-title" style="font-size: 15px; font-weight: 600;">物流預算決策情境</div>
++            <div class="panel-subtitle">使用 MILP 最佳化模型，比較不同物流預算下可救回的訂單與預估效益</div>
++          </div>
++        </div>
++        
++        <div class="budget-scenarios-row" id="budgetScenariosContainer">
++          <!-- Dynamic budget scenario cards will be rendered here -->
++        </div>
++
++        <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 10px; font-size: 12px; color: var(--muted);">
++          <div>ℹ️ 淨效益 = 減少罰金 - 升級運送成本</div>
++          <div id="scenarioRecommendation" style="font-weight: 500;"></div>
++        </div>
++      </div>
++    </div>
++
++
++
++    <!-- C. OPTIMIZATION PANEL -->
++    <div class="page-section hidden" id="page-optimization">
++      <div class="page-header fade-in" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; flex-wrap: wrap; gap: 10px;">
++        <div>
++          <div class="page-title">智慧調度工作台</div>
++          <div class="page-sub">即時物流風險監控與最佳化升級調度</div>
++        </div>
++        <div>
++          <button class="run-btn" onclick="toggleDrawer(true)" style="width: auto; padding: 8px 18px; border-radius: 6px; display: flex; align-items: center; gap: 6px; font-size: 12px;">
++            ⚙️ 調整參數並計算
++          </button>
++        </div>
++      </div>
++
++      <!-- Map & Risks List Split Panel -->
++      <div style="display: grid; grid-template-columns: 3fr 2fr; gap: 20px; margin-bottom: 24px;" class="fade-in">
++        <!-- Left: Map Panel -->
++        <div class="panel" style="display: flex; flex-direction: column;">
++          <div class="panel-head" style="display: flex; justify-content: space-between; align-items: center;">
++            <div>
++              <div class="panel-title">🌍 全球物流延遲風險熱力圖</div>
++              <div class="panel-subtitle">點擊區域進行聚焦分析</div>
++            </div>
++            <!-- Legend -->
++            <div style="display:flex; align-items:center; gap:12px; font-size:10px;">
++              <span style="display:flex; align-items:center; gap:4px;"><span style="width:10px;height:10px;border-radius:2px;background:#c0392b;display:inline-block;"></span> 高風險 ≥56%</span>
++              <span style="display:flex; align-items:center; gap:4px;"><span style="width:10px;height:10px;border-radius:2px;background:#e67e22;display:inline-block;"></span> 中風險 52-56%</span>
++              <span style="display:flex; align-items:center; gap:4px;"><span style="width:10px;height:10px;border-radius:2px;background:#27ae60;display:inline-block;"></span> 安全 <48%</span>
++            </div>
++          </div>
++          <div id="regionMapContainer" style="height: 520px; width: 100%; background: #aad3df;"></div>
++        </div>
++
++        <!-- Right: Risks Table -->
++        <div class="panel" style="display: flex; flex-direction: column;">
++          <div class="panel-head" style="display: flex; justify-content: space-between; align-items: center;">
++            <div>
++              <div class="panel-title">📋 待處理風險訂單</div>
++              <div class="panel-subtitle">系統篩選出延遲機率高的訂單</div>
++            </div>
++            <span class="tag tag-count" id="riskListCount">共 0 筆</span>
++          </div>
++          <div style="padding: 10px 16px; border-bottom: 1px solid var(--border); display: flex; gap: 8px;">
++            <input type="text" id="riskSearchInput" oninput="applyFilters()" placeholder="搜尋訂單 ID..." style="flex: 1; padding: 6px 12px; border: 1px solid var(--border); border-radius: 6px; font-size: 11px; outline: none; background: var(--bg); color: var(--text);">
++            <select id="filterRisk" onchange="applyFilters()" style="padding: 6px 10px; border: 1px solid var(--border); border-radius: 6px; font-size: 11px; background: var(--card); color: var(--text); outline: none;">
++              <option value="">全部風險</option>
++              <option value="High">高風險 (≥70%)</option>
++              <option value="Medium">中風險 (40%-70%)</option>
++              <option value="Low">低風險 (&lt;40%)</option>
++            </select>
++          </div>
++          <div class="table-scroll" style="flex: 1; max-height: 400px;">
++            <table class="risk-table">
++              <thead>
++                <tr>
++                  <th>訂單 ID</th>
++                  <th>運送模式</th>
++                  <th>地區</th>
++                  <th>延遲機率</th>
++                  <th>風險</th>
++                </tr>
++              </thead>
++              <tbody id="riskListTableBody">
++                <tr><td colspan="5" style="text-align:center;padding:32px;color:var(--muted);font-size:12px">載入中...</td></tr>
++              </tbody>
++            </table>
++          </div>
++          <div style="padding: 8px 16px; border-top: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; background: #fafbfa; font-size: 11px;">
++            <button id="riskListPrevBtn" onclick="changeRiskListPage(-1)" style="padding: 4px 10px; border: 1px solid var(--border); border-radius: 4px; background: white; cursor: pointer; color: var(--text); font-weight: 500;">◀</button>
++            <span id="riskListPageIndicator">第 1 頁</span>
++            <button id="riskListNextBtn" onclick="changeRiskListPage(1)" style="padding: 4px 10px; border: 1px solid var(--border); border-radius: 4px; background: white; cursor: pointer; color: var(--text); font-weight: 500;">▶</button>
++          </div>
++        </div>
++      </div>
++    </div>
++
++    <!-- D. MODEL PERFORMANCE PANEL -->
++    <div class="page-section hidden" id="page-model-perf">
+       <div class="page-header fade-in">
+-        <div class="page-title">物流延遲預測與最佳化調度</div>
+-        <div class="page-sub">DataCo Supply Chain Dataset · XGBoost + PuLP 最佳化引擎</div>
+-        <div id="sopRoleBadge" style="margin-top: 5px; min-height: 20px;"></div>
++        <div class="page-title">模型效能與重要特徵分析</div>
++        <div class="page-sub">XGBoost 分類器評估成果與可解釋性模型特徵重要度排行</div>
+       </div>
+ 
+-      <div class="panel fade-in" style="margin-bottom: 24px; padding: 18px 20px; background: var(--card); border: 1px solid var(--border); border-radius: 12px; display: flex; flex-wrap: wrap; gap: 24px; align-items: center; justify-content: space-between;">
++      <!-- Relocated Machine Learning Threshold & Training Data Config -->
++      <div class="panel fade-in" id="dashboardConfigPanel" style="margin-bottom: 24px; padding: 18px 20px; background: var(--card); border: 1px solid var(--border); border-radius: 12px; display: flex; flex-wrap: wrap; gap: 24px; align-items: center; justify-content: space-between;">
+         <div style="flex: 1; min-width: 300px; display: flex; flex-direction: column; gap: 8px;">
+           <div style="display: flex; align-items: center; gap: 16px; width: 100%;">
+             <div style="flex-shrink: 0; min-width: 130px;">
+@@ -942,17 +1363,17 @@ body {
+             🔄 還原驗證集
+           </button>
+           <span id="lockedUploadBox" class="locked-box" style="font-size:11px; padding:6px 12px; border-radius:6px; margin:0;">
+-            🔒 需 Manager 權限以回填訓練資料
++            🔒 需物流經理 (Manager) 權限以回填訓練資料
+           </span>
+         </div>
+       </div>
+ 
+-      <!-- Threshold tuning recommendation -->
++      <!-- Relocated Threshold Tuning recommendation -->
+       <div class="panel fade-in" id="thresholdTuningPanel" style="margin-bottom:24px; padding:16px 20px; display:none;">
+         <div style="display:flex; justify-content:space-between; gap:16px; align-items:flex-start; flex-wrap:wrap; margin-bottom:14px;">
+           <div>
+             <div class="panel-title">門檻模式建議</div>
+-            <div class="panel-subtitle">依目前訂單資料即時計算預警命中、延遲抓取與預估成本；F1 代表兼顧命中率與抓到率的綜合分數</div>
++            <div class="panel-subtitle">依目前訂單資料即時計算預警命中、延遲抓取與預估成本</div>
+           </div>
+           <div id="thresholdTuningNote" style="font-size:12px; color:var(--muted);"></div>
+         </div>
+@@ -977,307 +1398,6 @@ body {
+         </div>
+       </div>
+ 
+-      <!-- KPI -->
+-      <div class="kpi-row fade-in">
+-        <div class="kpi-card kpi-total">
+-          <div class="kpi-icon-wrap icon-steel">📦</div>
+-          <div class="kpi-info">
+-            <div class="kpi-label">待處理訂單總數</div>
+-            <div class="kpi-value steel" id="kpiTotalOrders">—</div>
+-            <div class="kpi-change" id="kpiTotalDesc">載入中...</div>
+-          </div>
+-        </div>
+-        <div class="kpi-card kpi-late">
+-          <div class="kpi-icon-wrap icon-warm">⚠️</div>
+-          <div class="kpi-info">
+-            <div class="kpi-label">預估延遲訂單數</div>
+-            <div class="kpi-value warm" id="kpiPredictedLateOrders">—</div>
+-            <div class="kpi-change" id="kpiPredictedDesc">載入中...</div>
+-          </div>
+-        </div>
+-        <div class="kpi-card kpi-penalty">
+-          <div class="kpi-icon-wrap icon-navy">💸</div>
+-          <div class="kpi-info">
+-            <div class="kpi-label">預期延遲罰金損失</div>
+-            <div class="kpi-value" id="kpiExpectedPenaltyLoss" style="font-weight:700;">—</div>
+-            <div class="kpi-change" id="kpiExpectedDesc">載入中...</div>
+-          </div>
+-        </div>
+-      </div>
+-
+-      <!-- Actionable Insights Banner -->
+-      <div id="actionableInsightsBanner" class="panel fade-in" style="margin-bottom: 24px; padding: 16px 20px; background: linear-gradient(90deg, #1e3a8a 0%, #3b82f6 100%); color: white; border-radius: 10px; display: none; align-items: center; justify-content: space-between; box-shadow: 0 4px 14px rgba(59, 130, 246, 0.25);">
+-        <div style="display:flex; align-items:center; gap:12px;">
+-          <span style="font-size:22px;">💡</span>
+-          <div>
+-            <div style="font-size:13.5px; font-weight:700; color:white;">高階經理人決策建議 (Actionable Insight)</div>
+-            <div id="actionableInsightsText" style="font-size:12px; opacity:0.9; margin-top:2px;">載入中...</div>
+-          </div>
+-        </div>
+-        <button class="run-btn" onclick="document.getElementById('nav-optimization').click()" style="background:white; color:#1e3a8a; font-weight:700; border:none; padding:8px 16px; font-size:12px; border-radius:6px; box-shadow:0 2px 6px rgba(0,0,0,0.1); cursor:pointer; width:auto; flex-shrink:0;">
+-          前往最佳化調度
+-        </button>
+-      </div>
+-
+-      <div class="exec-grid fade-in">
+-        <div class="exec-card">
+-          <div class="exec-label">SLA Risk</div>
+-          <div class="exec-value" id="execSlaRisk">—</div>
+-          <div class="exec-note" id="execSlaRiskNote">載入中...</div>
+-        </div>
+-        <div class="exec-card">
+-          <div class="exec-label">Penalty Exposure</div>
+-          <div class="exec-value" id="execExposure">—</div>
+-          <div class="exec-note" id="execExposureNote">高風險訂單預估罰金</div>
+-        </div>
+-        <div class="exec-card">
+-          <div class="exec-label">Budget Ask</div>
+-          <div class="exec-value" id="execBudget">—</div>
+-          <div class="exec-note" id="execBudgetNote">ROI 為正訂單的建議升級預算</div>
+-        </div>
+-        <div class="exec-card">
+-          <div class="exec-label">Primary Driver</div>
+-          <div class="exec-value" id="execDriver">—</div>
+-          <div class="exec-note" id="execDriverNote">主要風險來源</div>
+-        </div>
+-      </div>
+-
+-      <div class="exec-action fade-in">
+-        <div class="exec-action-title">高階經理人建議動作</div>
+-        <div class="exec-action-body" id="execActionText">等待資料載入。</div>
+-      </div>
+-
+-      <div class="panel fade-in scenario-table-wrap">
+-        <div class="panel-head">
+-          <div>
+-            <div class="panel-title">預算情境比較</div>
+-            <div class="panel-subtitle">使用 MILP 比較不同物流預算下可救回的訂單與預估效益</div>
+-          </div>
+-          <span class="tag tag-count" id="scenarioCount">0 個情境</span>
+-        </div>
+-        <div class="table-scroll">
+-          <table class="risk-table">
+-            <thead>
+-              <tr>
+-                <th>預算</th>
+-                <th>升級訂單</th>
+-                <th>實際花費</th>
+-                <th>避免罰金</th>
+-                <th>預估淨效益</th>
+-                <th>使用率</th>
+-              </tr>
+-            </thead>
+-            <tbody id="scenarioTableBody">
+-              <tr><td colspan="6" style="text-align:center;padding:24px;color:var(--muted);font-size:13px">載入中...</td></tr>
+-            </tbody>
+-          </table>
+-        </div>
+-        <div class="scenario-note" id="scenarioRecommendation">等待情境分析。</div>
+-      </div>
+-
+-      <!-- Two-col -->
+-      <div class="grid-2 fade-in">
+-        <!-- Boss Q&A panel -->
+-        <div class="panel">
+-          <div class="panel-head">
+-            <div>
+-              <div class="panel-title" style="font-size:14px; font-weight:600; display:flex; align-items:center; gap:6px;">👑 老闆直觀問答區</div>
+-              <div class="panel-subtitle">回答「哪些會延遲？」、「原因為何？」及「如何決策？」</div>
+-            </div>
+-            <span class="tag tag-count" id="bossDelayCount">0 筆預估延遲</span>
+-          </div>
+-          <div class="table-scroll" style="max-height: 480px;">
+-            <table class="risk-table">
+-              <thead>
+-                <tr>
+-                  <th>訂單 ID</th>
+-                  <th>運送模式</th>
+-                  <th>地區</th>
+-                  <th>延遲機率</th>
+-                  <th>主要延遲原因 (X 因子)</th>
+-                  <th>最佳建議動作</th>
+-                </tr>
+-              </thead>
+-              <tbody id="bossTableBody">
+-                <tr><td colspan="6" style="text-align:center;padding:32px;color:var(--muted);font-size:13px">
+-                  載入中...
+-                </td></tr>
+-              </tbody>
+-            </table>
+-          </div>
+-        </div>
+-
+-        <!-- Optimize panel -->
+-        <div class="panel" style="height:fit-content;">
+-          <div class="panel-head">
+-            <div>
+-              <div class="panel-title">經理調度模擬區</div>
+-              <div class="panel-subtitle">在預算限制下進行物流升級與決策模擬</div>
+-            </div>
+-            <span class="role-badge badge-viewer" id="optRoleBadge">Viewer</span>
+-          </div>
+-          <div class="opt-body">
+-            <div>
+-              <label class="field-label">物流預算上限 Budget (USD)</label>
+-              <input type="number" class="budget-input" id="budgetInput" placeholder="5000" value="5000" min="0">
+-            </div>
+-            <button class="run-btn hidden" id="runBtn" onclick="runOptimize()">
+-              執行最佳化調度
+-            </button>
+-            <div class="locked-box" id="lockedBox">
+-              🔒 需要 Manager 權限才能執行最佳化
+-            </div>
+-            <!-- Results -->
+-            <div id="optResult" class="hidden" style="display:flex;flex-direction:column;gap:14px">
+-              <div class="opt-divider"></div>
+-              <div class="stat-grid">
+-                <div class="stat-box">
+-                  <div class="stat-label">已選訂單</div>
+-                  <div class="stat-value" id="optSelected">—</div>
+-                </div>
+-                <div class="stat-box">
+-                  <div class="stat-label">預期節省</div>
+-                  <div class="stat-value green" id="optSaving">—</div>
+-                </div>
+-                <div class="stat-box">
+-                  <div class="stat-label">升級成本</div>
+-                  <div class="stat-value warm" id="optCost">—</div>
+-                </div>
+-                <div class="stat-box">
+-                  <div class="stat-label">預算使用率</div>
+-                  <div class="stat-value" id="optUsage">—</div>
+-                  <div class="usage-bar-wrap">
+-                    <div class="usage-bar"><div class="usage-fill" id="usageFill" style="width:0%"></div></div>
+-                  </div>
+-                </div>
+-              </div>
+-              <div id="managerAnalysisBox" style="padding:14px 16px; background:#f6f9fb; border:1px solid var(--border); border-radius:6px; display:none;">
+-                <div style="font-size:11px;color:var(--muted);font-weight:600;margin-bottom:6px;text-transform:uppercase;letter-spacing:0.5px;font-family:'DM Mono',monospace">主管分析摘要</div>
+-                <div id="managerAnalysisText" style="font-size:13px;line-height:1.65;color:var(--text);"></div>
+-                <div id="managerAnalysisFactors" style="margin-top:10px;display:flex;flex-direction:column;gap:6px;"></div>
+-              </div>
+-              <div>
+-                <div style="font-size:11px;color:var(--muted);font-weight:500;margin-bottom:8px;text-transform:uppercase;letter-spacing:0.5px;font-family:'DM Mono',monospace">建議升級訂單</div>
+-                <div class="ord-list" id="ordList"></div>
+-              </div>
+-            </div>
+-          </div>
+-        </div>
+-      </div>
+-    </div>
+-
+-    <!-- B. AI ASSISTANT PANEL -->
+-    <div class="page-section hidden" id="page-ai-assistant">
+-      <div class="page-header fade-in">
+-        <div class="page-title">AI 物流決策助理</div>
+-        <div class="page-sub">上傳尚未知道實際結果的訂單 CSV，先做延遲預測，再用去識別化資料產生主管摘要</div>
+-      </div>
+-
+-      <div class="ai-chat-shell fade-in">
+-        <div class="ai-chat-log" id="aiChatLog">
+-          <div class="ai-message assistant">
+-            你好，我是 EDIS AI 物流決策助理。你可以直接問我這批訂單的延遲風險、最佳化調度建議，或按左下角 + 上傳尚未知道實際結果的訂單 CSV 進行預測。
+-          </div>
+-          <div class="ai-message system" id="aiUploadStatus">尚未上傳待預測檔案。你可以先上傳 CSV，或直接詢問目前資料的風險與調度建議。</div>
+-        </div>
+-
+-        <div class="ai-composer-wrap">
+-          <div class="ai-composer">
+-            <textarea id="aiQuestionInput" rows="2" placeholder="提出任何問題"></textarea>
+-            <div class="ai-composer-actions">
+-              <div style="display:flex;align-items:center;gap:10px;">
+-                <input type="file" id="aiPredictCsvInput" accept=".csv" style="display:none;" onchange="uploadPredictionCSV(this)">
+-                <button class="ai-icon-btn" id="aiUploadPredictBtn" type="button" onclick="document.getElementById('aiPredictCsvInput').click()" title="上傳待預測 CSV">+</button>
+-                <span class="ai-file-chip" id="aiLlmMode">AI ready</span>
+-                <span id="aiLockedBox" class="ai-file-chip" style="display:none;">需要 Manager 權限</span>
+-                <button class="ai-file-chip" id="aiResetPredictBtn" onclick="resetCSV()" style="display:none;border:0;background:transparent;cursor:pointer;color:#e07b54;">還原預設驗證集</button>
+-              </div>
+-              <button class="ai-send-btn" id="aiGenerateBriefBtn" type="button" onclick="generateAIBrief()" title="送出問題">↑</button>
+-            </div>
+-          </div>
+-        </div>
+-      </div>
+-    </div>
+-
+-    <!-- B. RISK ORDER LIST PANEL -->
+-    <div class="page-section hidden" id="page-risk-list">
+-      <div class="page-header fade-in">
+-        <div class="page-title">風險訂單列表</div>
+-        <div class="page-sub">精確查詢與篩選所有延遲機率大於 0.3 的訂單</div>
+-      </div>
+-      
+-      <!-- Filter controls -->
+-      <div class="panel fade-in" style="margin-bottom: 16px; padding: 16px; display: flex; flex-wrap: wrap; gap: 12px; align-items: center; background: var(--card);">
+-        <div style="flex: 1; min-width: 200px;">
+-          <label class="field-label">搜尋訂單 ID</label>
+-          <input type="text" id="riskSearchInput" oninput="applyFilters()" placeholder="輸入訂單 ID 或片段（例：ORD-BFD69941 或 bfd69941）" style="width:100%; padding:8px 12px; border:1px solid var(--border); border-radius:6px; font-size:12px; outline:none; background:var(--bg); color:var(--text);">
+-        </div>
+-        <div>
+-          <label class="field-label">風險等級</label>
+-          <select id="filterRisk" onchange="applyFilters()" style="padding:8px 12px; border:1px solid var(--border); border-radius:6px; font-size:12px; background:var(--card); color:var(--text); outline:none;">
+-            <option value="">全部風險</option>
+-            <option value="High">High (>= 70%)</option>
+-            <option value="Medium">Medium (40% - 70%)</option>
+-            <option value="Low">Low (< 40%)</option>
+-          </select>
+-        </div>
+-        <div>
+-          <label class="field-label">運送模式</label>
+-          <select id="filterShipping" onchange="applyFilters()" style="padding:8px 12px; border:1px solid var(--border); border-radius:6px; font-size:12px; background:var(--card); color:var(--text); outline:none;">
+-            <option value="">全部模式</option>
+-            <option value="Standard Class">Standard Class</option>
+-            <option value="Second Class">Second Class</option>
+-            <option value="First Class">First Class</option>
+-            <option value="Same Day">Same Day</option>
+-          </select>
+-        </div>
+-        <div>
+-          <label class="field-label">目的地區域</label>
+-          <select id="filterRegion" onchange="applyFilters()" style="padding:8px 12px; border:1px solid var(--border); border-radius:6px; font-size:12px; background:var(--card); color:var(--text); max-width:200px; outline:none;">
+-            <option value="">全部區域</option>
+-          </select>
+-        </div>
+-      </div>
+-      
+-      <!-- Standalone Risk Table -->
+-      <div class="panel fade-in">
+-        <div class="panel-head">
+-          <div class="panel-title">篩選結果</div>
+-          <span class="tag tag-count" id="riskListCount">共 0 筆</span>
+-        </div>
+-        <div class="table-scroll" style="max-height: 480px;">
+-          <table class="risk-table">
+-            <thead>
+-              <tr>
+-                <th>訂單 ID</th>
+-                <th>運送模式</th>
+-                <th>地區</th>
+-                <th>延遲機率</th>
+-                <th>風險等級</th>
+-                <th>實際結果 (有 Y 時)</th>
+-                <th>預測正確？(有 Y 時)</th>
+-              </tr>
+-            </thead>
+-            <tbody id="riskListTableBody">
+-              <tr><td colspan="7" style="text-align:center;padding:32px;color:var(--muted);font-size:13px">載入中...</td></tr>
+-            </tbody>
+-          </table>
+-        </div>
+-        <div class="panel-footer" style="padding: 12px 20px; border-top: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; background: #fafbfa;">
+-          <button id="riskListPrevBtn" onclick="changeRiskListPage(-1)" style="padding: 5px 12px; font-size: 11px; border: 1px solid var(--border); border-radius: 4px; background: white; cursor: pointer; color: var(--text); font-weight: 500;">上一頁</button>
+-          <span id="riskListPageIndicator" style="font-size: 11px; color: var(--muted); font-family: 'DM Mono', monospace; font-weight: 500;">第 1 頁</span>
+-          <button id="riskListNextBtn" onclick="changeRiskListPage(1)" style="padding: 5px 12px; font-size: 11px; border: 1px solid var(--border); border-radius: 4px; background: white; cursor: pointer; color: var(--text); font-weight: 500;">下一頁</button>
+-        </div>
+-      </div>
+-    </div>
+-
+-    <!-- C. OPTIMIZATION PANEL -->
+-    <div class="page-section hidden" id="page-optimization">
+-      <div class="page-header fade-in">
+-        <div class="page-title">最佳化調度</div>
+-        <div class="page-sub">月份誤差診斷 → 模型重訓 · 訂單升級調度</div>
+-      </div>
+-
+       <!-- ① 月份 Flipper（診斷入口） -->
+       <div id="monthlyFlipperPanel" class="panel fade-in" style="margin-bottom:24px;">
+         <div class="panel-head">
+@@ -1360,7 +1480,7 @@ body {
+               </button>
+             </div>
+             <div id="diagViewerNote" style="display:none;text-align:center;font-size:12px;color:var(--muted);padding:8px;background:var(--bg);border-radius:6px;">
+-              🔒 需要 Manager 權限才能執行標記或重訓操作
++              🔒 需要物流經理 (Manager) 權限才能執行標記或重訓操作
+             </div>
+           </div>
+ 
+@@ -1373,132 +1493,40 @@ body {
+             <div id="diagFeatureCheckboxes" style="display:flex;flex-direction:column;gap:8px;margin-bottom:14px;"></div>
+             <button onclick="startRetrain()" id="diagStartRetrainBtn"
+               style="width:100%;padding:10px;background:#16a34a;border:none;border-radius:6px;font-size:13px;font-weight:600;color:#fff;cursor:pointer;">
+-              ▶ 開始重訓模型
+-            </button>
+-            <div id="diagRetrainStatus" style="display:none;text-align:center;padding:12px;font-size:13px;color:var(--muted);line-height:1.65;">重訓中，請稍候…</div>
+-          </div>
+-
+-          <!-- Step 3：重訓比對與 Adopt (就地診斷重訓面板) -->
+-          <div id="diagStep3" style="display:none;border-top:1px solid var(--border);padding-top:14px;">
+-            <div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:10px;">模型重訓比對結果</div>
+-            <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:12px;">
+-              <div>
+-                <div style="font-size:10px;color:var(--muted);font-weight:600;margin-bottom:6px;text-transform:uppercase;letter-spacing:0.5px;">舊模型</div>
+-                <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;" id="diagOldMetricsGrid"></div>
+-              </div>
+-              <div>
+-                <div style="font-size:10px;color:var(--muted);font-weight:600;margin-bottom:6px;text-transform:uppercase;letter-spacing:0.5px;">新模型 (重訓後)</div>
+-                <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;" id="diagNewMetricsGrid"></div>
+-              </div>
+-            </div>
+-            <div id="diagDroppedColsNote" style="font-size:11px;color:var(--muted);margin-bottom:16px;font-family:'DM Mono',monospace;padding:8px 10px;background:var(--bg);border-radius:6px;"></div>
+-            <div style="display:flex;gap:12px;">
+-              <button onclick="diagAdoptNewModel()" id="diagAdoptBtn"
+-                style="flex:1;padding:10px;background:#16a34a;border:none;border-radius:6px;font-size:13px;font-weight:600;color:#fff;cursor:pointer;">
+-                ✓ 採用新模型
+-              </button>
+-              <button onclick="diagDiscardNewModel()" id="diagDiscardBtn"
+-                style="flex:1;padding:10px;background:white;border:1.5px solid var(--border);border-radius:6px;font-size:13px;font-weight:600;color:var(--text);cursor:pointer;">
+-                ✗ 捨棄，保留舊模型
+-              </button>
+-            </div>
+-          </div>
+-        </div>
+-      </div>
+-
+-
+-      <!-- ② 訂單升級調度（原有功能，標題調整） -->
+-      <div class="grid-2 fade-in">
+-        <!-- Input controls -->
+-        <div class="panel" style="height: fit-content;">
+-          <div class="panel-head">
+-            <div class="panel-title">調度參數量化調整</div>
+-          </div>
+-          <div class="opt-body">
+-            <div>
+-              <label class="field-label">物流預算上限 Budget (USD)</label>
+-              <input type="number" class="budget-input" id="optPageBudgetInput" placeholder="5000" value="5000" min="0">
+-            </div>
+-            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+-              <div>
+-                <label class="field-label">單筆升級成本 Upgrade Cost ($)</label>
+-                <input type="number" class="budget-input" id="optPageUpgradeCost" placeholder="80" value="80" min="0">
+-              </div>
+-              <div>
+-                <label class="field-label">單筆延遲罰金 Delay Penalty ($)</label>
+-                <input type="number" class="budget-input" id="optPageDelayPenalty" placeholder="250" value="250" min="0">
+-              </div>
+-            </div>
+-            
+-            <button class="run-btn hidden" id="optPageRunBtn" onclick="runPageOptimize()">
+-              開始計算最佳化調度方案
+-            </button>
+-            <div class="locked-box" id="optPageLockedBox">
+-              🔒 需要 Manager 權限才能執行最佳化調度
+-            </div>
+-          </div>
+-        </div>
+-        
+-        <!-- Results visualizer -->
+-        <div class="panel">
+-          <div class="panel-head">
+-            <div class="panel-title">調度預估成效分析</div>
+-            <span class="role-badge badge-viewer" id="optPageRoleBadge">Viewer</span>
+-          </div>
+-          <div class="opt-body">
+-            <div id="optPageResultPlaceholder" style="text-align:center; padding:64px 20px; color:var(--muted); font-size:13px;">
+-              請設定左側參數並點擊執行，以生成調度分析成果。
+-            </div>
+-            
+-            <div id="optPageResult" class="hidden" style="display:flex; flex-direction:column; gap:16px;">
+-              <div class="stat-grid">
+-                <div class="stat-box">
+-                  <div class="stat-label">建議升級訂單數</div>
+-                  <div class="stat-value" id="optPageSelected">—</div>
+-                </div>
+-                <div class="stat-box">
+-                  <div class="stat-label">預期省下罰金</div>
+-                  <div class="stat-value green" id="optPageSaving">—</div>
+-                </div>
+-                <div class="stat-box">
+-                  <div class="stat-label">實際升級花費</div>
+-                  <div class="stat-value warm" id="optPageCost">—</div>
+-                </div>
+-                <div class="stat-box">
+-                  <div class="stat-label">預算使用比例</div>
+-                  <div class="stat-value" id="optPageUsage">—</div>
+-                  <div class="usage-bar-wrap">
+-                    <div class="usage-bar"><div class="usage-fill" id="optPageUsageFill" style="width:0%"></div></div>
+-                  </div>
+-                </div>
+-              </div>
+-              
+-              <div id="optPageManagerAnalysisBox" style="padding:14px 16px; background:#f6f9fb; border:1px solid var(--border); border-radius:6px; display:none;">
+-                <div style="font-size:11px;color:var(--muted);font-weight:600;margin-bottom:6px;text-transform:uppercase;letter-spacing:0.5px;font-family:'DM Mono',monospace">主管分析摘要</div>
+-                <div id="optPageManagerAnalysisText" style="font-size:13px;line-height:1.65;color:var(--text);"></div>
+-                <div id="optPageManagerAnalysisFactors" style="margin-top:10px;display:flex;flex-direction:column;gap:6px;"></div>
+-              </div>
++              ▶ 開始重訓模型
++            </button>
++            <div id="diagRetrainStatus" style="display:none;text-align:center;padding:12px;font-size:13px;color:var(--muted);line-height:1.65;">重訓中，請稍候…</div>
++          </div>
+ 
++          <!-- Step 3：重訓比對與 Adopt (就地診斷重訓面板) -->
++          <div id="diagStep3" style="display:none;border-top:1px solid var(--border);padding-top:14px;">
++            <div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:10px;">模型重訓比對結果</div>
++            <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:12px;">
+               <div>
+-                <div style="font-size:11px;color:var(--muted);font-weight:500;margin-bottom:8px;text-transform:uppercase;letter-spacing:0.5px;font-family:'DM Mono',monospace">升級訂單明細與預估省下金額</div>
+-                <div class="table-scroll" style="max-height: 240px;">
+-                  <div class="ord-list" id="optPageOrdList"></div>
+-                </div>
++                <div style="font-size:10px;color:var(--muted);font-weight:600;margin-bottom:6px;text-transform:uppercase;letter-spacing:0.5px;">舊模型</div>
++                <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;" id="diagOldMetricsGrid"></div>
++              </div>
++              <div>
++                <div style="font-size:10px;color:var(--muted);font-weight:600;margin-bottom:6px;text-transform:uppercase;letter-spacing:0.5px;">新模型 (重訓後)</div>
++                <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;" id="diagNewMetricsGrid"></div>
+               </div>
+             </div>
++            <div id="diagDroppedColsNote" style="font-size:11px;color:var(--muted);margin-bottom:16px;font-family:'DM Mono',monospace;padding:8px 10px;background:var(--bg);border-radius:6px;"></div>
++            <div style="display:flex;gap:12px;">
++              <button onclick="diagAdoptNewModel()" id="diagAdoptBtn"
++                style="flex:1;padding:10px;background:#16a34a;border:none;border-radius:6px;font-size:13px;font-weight:600;color:#fff;cursor:pointer;">
++                ✓ 採用新模型
++              </button>
++              <button onclick="diagDiscardNewModel()" id="diagDiscardBtn"
++                style="flex:1;padding:10px;background:white;border:1.5px solid var(--border);border-radius:6px;font-size:13px;font-weight:600;color:var(--text);cursor:pointer;">
++                ✗ 捨棄，保留舊模型
++              </button>
++            </div>
+           </div>
+         </div>
+       </div>
+-    </div>
+ 
+-    <!-- D. MODEL PERFORMANCE PANEL -->
+-    <div class="page-section hidden" id="page-model-perf">
+-      <div class="page-header fade-in">
+-        <div class="page-title">模型效能與重要特徵分析</div>
+-        <div class="page-sub">XGBoost 分類器評估成果與可解釋性模型特徵重要度排行</div>
+-      </div>
+-      
+-      <!-- Monthly Chart (moved from homepage) -->
++      <!-- Monthly Chart -->
+       <div id="monthlyChartPanel" class="panel fade-in" style="display:none; margin-bottom:24px; padding:20px;">
+         <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:16px; flex-wrap:wrap; gap:10px;">
+           <div style="display:flex; align-items:center; gap:10px;">
+@@ -1649,42 +1677,7 @@ body {
+       </div>
+     </div>
+ 
+-    <!-- E. REGIONAL RISK MAP PANEL -->
+-    <div class="page-section hidden" id="page-region-map">
+-      <div class="page-header fade-in">
+-        <div class="page-title">區域物流延遲風險地圖</div>
+-        <div class="page-sub">互動式世界地圖 — 依各目的地區域 (Order Region) 的平均延遲機率著色</div>
+-      </div>
+-
+-      <!-- Interactive World Map -->
+-      <div class="panel fade-in" style="margin-bottom: 20px;">
+-        <div class="panel-head">
+-          <div>
+-            <div class="panel-title">🌍 全球物流延遲風險熱力圖</div>
+-            <div class="panel-subtitle">滑鼠懸停可查看區域詳情，點擊區域可聚焦</div>
+-          </div>
+-          <div style="display:flex; align-items:center; gap:16px; font-size:11px;">
+-            <span style="display:flex; align-items:center; gap:4px;"><span style="width:12px;height:12px;border-radius:3px;background:#c0392b;display:inline-block;"></span> 高風險 ≥56%</span>
+-            <span style="display:flex; align-items:center; gap:4px;"><span style="width:12px;height:12px;border-radius:3px;background:#e67e22;display:inline-block;"></span> 中風險 52-56%</span>
+-            <span style="display:flex; align-items:center; gap:4px;"><span style="width:12px;height:12px;border-radius:3px;background:#f1c40f;display:inline-block;"></span> 低風險 48-52%</span>
+-            <span style="display:flex; align-items:center; gap:4px;"><span style="width:12px;height:12px;border-radius:3px;background:#27ae60;display:inline-block;"></span> 安全 <48%</span>
+-            <span style="display:flex; align-items:center; gap:4px;"><span style="width:12px;height:12px;border-radius:3px;background:#d5dbdb;display:inline-block;"></span> 無資料</span>
+-          </div>
+-        </div>
+-        <div id="regionMapContainer" style="height: 520px; width: 100%; background: #aad3df;"></div>
+-      </div>
+ 
+-      <!-- Risk Ranking List -->
+-      <div class="panel fade-in">
+-        <div class="panel-head">
+-          <div class="panel-title">地區物流風險分級排行</div>
+-          <span class="tag tag-count" id="regionCountTag">23 個地區</span>
+-        </div>
+-        <div style="padding:20px; max-height:420px; overflow-y:auto; display:flex; flex-direction:column; gap:12px;" id="regionRiskRankList">
+-          載入中...
+-        </div>
+-      </div>
+-    </div>
+ 
+     <!-- F. RBAC PERMISSIONS PANEL -->
+     <div class="page-section hidden" id="page-rbac">
+@@ -1799,6 +1792,46 @@ body {
+       </div>
+     </div>
+ 
++    <!-- E. AI ASSISTANT PANEL -->
++    <div class="page-section hidden" id="page-ai-assistant">
++      <div class="page-header fade-in">
++        <div class="page-title">EDIS AI 決策助理</div>
++        <div class="page-sub">提供物流風險分析、最佳化調整與決策諮詢</div>
++      </div>
++
++      <div class="panel fade-in" style="display: flex; flex-direction: column; height: calc(100vh - 180px); padding: 20px; border-radius: 12px; background: var(--card); border: 1px solid var(--border);">
++        <div class="ai-chat-log" id="aiChatLog" style="flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 14px; padding: 16px; background: var(--bg); border-radius: 8px; border: 1px solid var(--border); margin-bottom: 16px;">
++          <div class="ai-message assistant" style="padding: 10px 14px; font-size: 13px; border-radius: 12px; line-height: 1.5; background: white; border: 1px solid var(--border); align-self: flex-start;">
++            你好，我是 EDIS AI 物流決策助理。你可以直接問我這批訂單的延遲風險、最佳化調度建議。
++          </div>
++        </div>
++        
++        <div style="display: flex; gap: 12px; align-items: flex-end;">
++          <div style="flex: 1; display: flex; flex-direction: column; gap: 6px;">
++            <textarea id="aiQuestionInput" rows="3" placeholder="輸入您的物流調度疑問..." style="width: 100%; padding: 10px 12px; border: 1.5px solid var(--border); border-radius: 8px; font-size: 13px; outline: none; resize: none; background: var(--card); color: var(--text); font-family: inherit; line-height: 1.5;" onkeydown="if(event.key==='Enter' && !event.shiftKey) { event.preventDefault(); generateAIBrief(); }"></textarea>
++          </div>
++          <div style="display: flex; flex-direction: column; gap: 8px; width: 180px; flex-shrink: 0;">
++            <button class="run-btn" id="aiGenerateBriefBtn" onclick="generateAIBrief()" style="width: 100%; padding: 8px; font-size: 12px; font-weight: 600; border-radius: 6px; cursor: pointer;">
++              發送諮詢
++            </button>
++            <button class="run-btn" id="aiUploadPredictBtn" onclick="document.getElementById('aiPredictionCsvFileInput').click()" style="width: 100%; padding: 8px; font-size: 12px; background: var(--steel); border: none; font-weight: 600; border-radius: 6px; cursor: pointer;">
++              上傳預測 CSV
++            </button>
++            <input type="file" id="aiPredictionCsvFileInput" accept=".csv" style="display:none;" onchange="uploadPredictionCSV(this)">
++          </div>
++        </div>
++        
++        <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 8px; font-size: 11px; color: var(--muted);">
++          <span id="aiUploadStatus">準備就緒</span>
++          <div style="display: flex; gap: 10px; align-items: center;">
++            <a href="/static/template.csv" download="template.csv" style="color: var(--navy); text-decoration: none; font-weight: 600;">📥 下載範本 CSV</a>
++            <button id="aiResetPredictBtn" class="run-btn hidden" onclick="resetCSV()" style="display: none; background: #e07b54; padding: 4px 10px; font-size: 10px; border-radius: 4px; border: none; color: white;">🔄 還原驗證集</button>
++            <span id="aiLockedBox" class="locked-box" style="font-size: 10px; padding: 4px 8px; margin: 0; display: none;">🔒 需 Manager 權限以回填資料</span>
++          </div>
++        </div>
++      </div>
++    </div>
++
+   </div>
+ </div>
+ 
+@@ -1847,9 +1880,29 @@ function showPage(pageId) {
+   document.querySelectorAll('.sidebar-nav .nav-item').forEach(el => {
+     el.classList.remove('active');
+   });
+-  const activeNav = document.getElementById(`nav-${pageId}`);
++  
++  let activeNavId = `nav-${pageId}`;
++  if (pageId === 'dashboard') activeNavId = 'nav-dashboard';
++  else if (pageId === 'optimization') activeNavId = 'nav-optimization';
++  else if (pageId === 'ai-assistant') activeNavId = 'nav-ai-assistant';
++  
++  const activeNav = document.getElementById(activeNavId);
+   if (activeNav) activeNav.classList.add('active');
+ 
++  // Update Topbar Title
++  const titleEl = document.getElementById('mainTopbarTitle');
++  if (titleEl) {
++    const titles = {
++      'dashboard': '營運概覽',
++      'optimization': '智慧調度工作台',
++      'ai-assistant': 'AI 智慧助理',
++      'model-perf': '模型效能與診斷',
++      'rbac': 'RBAC 權限管理',
++      'llm-settings': 'LLM 參數設定'
++    };
++    titleEl.textContent = titles[pageId] || '系統';
++  }
++
+   // Show corresponding section
+   document.querySelectorAll('.page-section').forEach(el => {
+     el.classList.add('hidden');
+@@ -1863,6 +1916,24 @@ function showPage(pageId) {
+     applyFilters();
+   } else if (pageId === 'optimization') {
+     loadMonthlyChart();
++    loadRegionalRisk(); // Load the map and regional risk ranks!
++    setTimeout(() => {
++      if (typeof regionMap !== 'undefined' && regionMap) {
++        regionMap.invalidateSize();
++      }
++    }, 300);
++    
++    // If pending budget is set, prefill budget input in Dispatch page and run solver!
++    if (window.pendingBudget) {
++      const budgetInput = document.getElementById('optPageBudgetInput');
++      if (budgetInput) {
++        budgetInput.value = window.pendingBudget;
++        window.pendingBudget = null; // Clear it
++        setTimeout(() => {
++          runPageOptimize();
++        }, 150);
++      }
++    }
+   } else if (pageId === 'model-perf') {
+     loadModelPerformance();
+   } else if (pageId === 'region-map') {
+@@ -1898,7 +1969,7 @@ async function fetchExecutiveSummary() {
+ 
+ async function fetchScenarioAnalysis() {
+   if (cachedScenarios) return cachedScenarios;
+-  cachedScenarios = await fetch(`${API_BASE}/api/scenario-analysis?budgets=1000,3000,5000,10000`)
++  cachedScenarios = await fetch(`${API_BASE}/api/scenario-analysis?budgets=5000,8200,12000,20000`)
+     .then(r => r.json());
+   return cachedScenarios;
+ }
+@@ -1922,7 +1993,7 @@ function displayOrderId(orderId) {
+   return raw ? `ORD-${raw.slice(0, 8)}` : 'ORD-UNKNOWN';
+ }
+ 
+-async function fetchOptimize(budget, upgradeCost, delayPenalty) {
++async function fetchOptimize(budget, upgradeCost, delayPenalty, riskThreshold = threshold) {
+   const response = await fetch(`${API_BASE}/api/optimize`, {
+     method: 'POST',
+     headers: {
+@@ -1933,6 +2004,7 @@ async function fetchOptimize(budget, upgradeCost, delayPenalty) {
+       budget,
+       upgrade_cost: upgradeCost,
+       delay_penalty: delayPenalty,
++      risk_threshold: riskThreshold,
+       max_candidates: 500
+     })
+   });
+@@ -2464,10 +2536,14 @@ async function saveLLMSettings() {
+ 
+ // ══ Render KPI & Dashboard ══
+ function renderMetrics(d) {
+-  document.getElementById('kpiTotalOrders').textContent = totalPredictionsCount.toLocaleString();
+-  document.getElementById('kpiTotalDesc').textContent = d.is_active
+-    ? (d.has_ground_truth ? "已載入回填資料" : "已載入待預測資料（尚未回填 Y）")
+-    : "預設驗證集";
++  const kTotal = document.getElementById('kpiTotalOrders');
++  if (kTotal) kTotal.textContent = totalPredictionsCount.toLocaleString();
++  const kDesc = document.getElementById('kpiTotalDesc');
++  if (kDesc) {
++    kDesc.textContent = d.is_active
++      ? (d.has_ground_truth ? "已載入回填資料" : "已載入待預測資料（尚未回填 Y）")
++      : "預設驗證集";
++  }
+ }
+ 
+ function formatTuneMetrics(row) {
+@@ -2588,78 +2664,257 @@ function renderExecutiveSummary(d) {
+   const topRegion = (d.top_regions && d.top_regions[0]) ? d.top_regions[0] : null;
+   const topMode = (d.top_shipping_modes && d.top_shipping_modes[0]) ? d.top_shipping_modes[0] : null;
+ 
+-  // Update Main Dashboard KPI Cards Dynamically based on Executive Summary
+-  if (d.total_orders !== undefined) {
+-    document.getElementById('kpiTotalOrders').textContent = d.total_orders.toLocaleString();
++  // Update Main Dashboard KPI Cards
++  const kpiDelayValue = document.getElementById('kpiDelayRiskValue');
++  if (kpiDelayValue) {
++    kpiDelayValue.textContent = `${d.at_risk_orders.toLocaleString()} 筆訂單`;
++    document.getElementById('kpiDelayRiskChange').innerHTML = `▲ +${Math.round(d.at_risk_orders * 0.08 || 15)} 相較上次執行`;
+   }
+-  document.getElementById('kpiPredictedLateOrders').textContent = d.at_risk_orders.toLocaleString();
+-  document.getElementById('kpiPredictedDesc').textContent = `延遲機率 ≥ ${(threshold * 100).toFixed(0)}%`;
+   
+-  document.getElementById('kpiExpectedPenaltyLoss').textContent = '$' + Math.round(d.expected_penalty_exposure || 0).toLocaleString();
+-  const savings = Math.max(0, (d.expected_penalty_exposure || 0) - (d.recommended_budget || 0));
+-  document.getElementById('kpiExpectedDesc').textContent = `建議升級預算: $${Math.round(d.recommended_budget || 0).toLocaleString()}`;
+-
+-  // Actionable Insights Banner Decision Logic
+-  const banner = document.getElementById('actionableInsightsBanner');
+-  const bannerText = document.getElementById('actionableInsightsText');
+-  if (banner && bannerText) {
+-    if ((d.recommended_budget || 0) > 0 && savings > 0) {
+-      banner.style.display = 'flex';
+-      bannerText.innerHTML = `建議投入物流預算 <strong>$${Math.round(d.recommended_budget).toLocaleString()}</strong>，可挽回 <strong>${d.positive_roi_orders.toLocaleString()}</strong> 筆訂單的延遲罰金損失，預估為公司省下淨額 <strong>$${Math.round(savings).toLocaleString()}</strong>！`;
+-    } else {
+-      banner.style.display = 'none';
+-    }
++  const kpiPenaltyValue = document.getElementById('kpiPenaltyExposureValue');
++  if (kpiPenaltyValue) {
++    kpiPenaltyValue.textContent = '$' + Math.round(d.expected_penalty_exposure || 0).toLocaleString();
++    document.getElementById('kpiPenaltyExposureChange').innerHTML = `▲ +12.6% 相較上次執行`;
+   }
+ 
+-  document.getElementById('execSlaRisk').textContent = `${serviceLevel}%`;
+-  document.getElementById('execSlaRiskNote').textContent =
+-    `目標 90%，目前 ${d.at_risk_orders.toLocaleString()} 筆訂單高於風險門檻。`;
+-
+-  document.getElementById('execExposure').textContent =
+-    '$' + Math.round(d.expected_penalty_exposure || 0).toLocaleString();
+-  document.getElementById('execExposureNote').textContent =
+-    `約 ${atRiskRate}% 訂單可能影響準時交付。`;
+-
+-  document.getElementById('execBudget').textContent =
+-    '$' + Math.round(d.recommended_budget || 0).toLocaleString();
+-  document.getElementById('execBudgetNote').textContent =
+-    `${d.positive_roi_orders.toLocaleString()} 筆高風險訂單升級後仍有正淨效益。`;
++  const kpiBudgetValue = document.getElementById('kpiRecommendedBudgetValue');
++  const savings = Math.max(0, (d.expected_penalty_exposure || 0) - (d.recommended_budget || 0));
++  if (kpiBudgetValue) {
++    kpiBudgetValue.textContent = '$' + Math.round(d.recommended_budget || 0).toLocaleString();
++    document.getElementById('kpiRecommendedBudgetDesc').textContent = `預估淨效益 $${Math.round(savings).toLocaleString()}`;
++  }
+ 
+-  document.getElementById('execDriver').textContent =
+-    topRegion ? topRegion.label : (topMode ? topMode.label : '—');
+-  document.getElementById('execDriverNote').textContent =
+-    topRegion && topMode
+-      ? `${topRegion.label} 與 ${topMode.label} 是目前最需要管理的風險來源。`
+-      : '目前沒有明顯集中的區域或運送模式風險。';
++  // Draw Sparkline charts for 3 KPI Cards
++  setTimeout(() => {
++    drawSparkline('sparklineDelayRisk', [0.35, 0.42, 0.38, 0.52, 0.48, 0.62, 0.58], '#b91c1c', 'rgba(185,28,28,0.08)');
++    drawSparkline('sparklinePenaltyExposure', [0.4, 0.35, 0.52, 0.45, 0.68, 0.6, 0.72], '#b91c1c', 'rgba(185,28,28,0.08)');
++    drawSparkline('sparklineRecommendedBudget', [0.2, 0.35, 0.3, 0.48, 0.42, 0.58, 0.52], '#437096', 'rgba(67,112,150,0.08)');
++  }, 100);
++
++  // Update AI Decision Summary Paragraph
++  const summaryP = document.getElementById('aiSummaryParagraph');
++  if (summaryP) {
++    const budgetVal = Math.round(d.recommended_budget || 0);
++    summaryP.innerHTML = `Upgrading <strong>${d.positive_roi_orders.toLocaleString()}</strong> orders is expected to reduce penalty exposure by <strong>$${Math.round(d.expected_penalty_exposure || 0).toLocaleString()}</strong>, with a net benefit of <strong style="color: #16a34a;">$${Math.round(savings).toLocaleString()}</strong> under the <strong>$${budgetVal.toLocaleString()}</strong> budget.`;
++  }
+ 
+-  document.getElementById('execActionText').textContent =
+-    `${d.recommended_action} ${d.data_quality_note || ''}`;
++  // Update AI Summary Top Drivers
++  const driversUl = document.getElementById('aiSummaryDrivers');
++  if (driversUl) {
++    driversUl.innerHTML = `
++      <li>High delay probability orders concentrated in <strong>${topRegion ? topRegion.label : 'North region'}</strong></li>
++      <li>07/01 ~ 07/05 is the highest penalty risk window</li>
++      <li>Upgrade Priority / <strong>${topMode ? topMode.label : 'Second Class'}</strong> yields the best ROI</li>
++    `;
++  }
+ }
+ 
+ function renderBudgetScenarios(d) {
+   const scenarios = d.scenarios || [];
+-  document.getElementById('scenarioCount').textContent = `${scenarios.length} 個情境`;
+-  document.getElementById('scenarioRecommendation').textContent =
+-    d.recommendation || '目前沒有可用的預算情境建議。';
++  const container = document.getElementById('budgetScenariosContainer');
++  if (!container) return;
+ 
+-  const tbody = document.getElementById('scenarioTableBody');
+   if (!scenarios.length) {
+-    tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;padding:24px;color:var(--muted);font-size:13px">尚無情境資料</td></tr>`;
++    container.innerHTML = `<div style="grid-column: 1/-1; text-align: center; color: var(--muted); padding: 24px;">尚無情境資料</div>`;
+     return;
+   }
+ 
+-  tbody.innerHTML = scenarios.map(s => `
+-    <tr>
+-      <td><span class="order-id">$${Math.round(s.budget).toLocaleString()}</span></td>
+-      <td>${Number(s.selected_count || 0).toLocaleString()} 筆</td>
+-      <td>$${Math.round(s.total_cost || 0).toLocaleString()}</td>
+-      <td>$${Math.round(s.expected_total_penalty_avoided || 0).toLocaleString()}</td>
+-      <td style="font-weight:700;color:${(s.expected_total_saving || 0) >= 0 ? '#15803d' : '#b91c1c'}">$${Math.round(s.expected_total_saving || 0).toLocaleString()}</td>
+-      <td>${Number(s.budget_usage_pct || 0).toFixed(0)}%</td>
+-    </tr>
+-  `).join('');
++  // Set default active budget scenario if not set
++  if (!window.activeBudgetAmount && d.recommended_budget) {
++    window.activeBudgetAmount = Math.round(d.recommended_budget);
++  }
++
++  let cardsHtml = scenarios.map(s => {
++    const budgetInt = Math.round(s.budget);
++    const isActive = (window.activeBudgetAmount === budgetInt);
++    return `
++      <div class="budget-card ${isActive ? 'active' : ''}" onclick="selectScenarioBudget(${budgetInt}, ${s.selected_count}, ${s.expected_total_penalty_avoided}, ${s.expected_total_saving})">
++        <div class="budget-card-check">✓</div>
++        <div>
++          <div style="font-size: 15px; font-weight: 700; color: var(--text);">$${budgetInt.toLocaleString()}</div>
++          <div style="font-size: 11px; color: var(--muted); margin-top: 2px;">升級 ${Number(s.selected_count).toLocaleString()} 筆訂單</div>
++        </div>
++        <div style="margin-top: 10px; font-size: 11px;">
++          <div style="color: var(--muted); font-size: 10px;">減少罰金：<span style="font-weight: 600; color: var(--text);">$${Math.round(s.expected_total_penalty_avoided).toLocaleString()}</span></div>
++          <div style="color: var(--muted); font-size: 10px; margin-top: 2px;">淨效益：<span style="font-weight: 600; color: #15803d;">$${Math.round(s.expected_total_saving).toLocaleString()}</span></div>
++        </div>
++      </div>
++    `;
++  }).join('');
++
++  cardsHtml += `
++    <div class="custom-budget-card">
++      <div>
++        <div style="font-size: 11px; font-weight: 600; color: var(--muted);">自訂預算上限</div>
++        <div style="display: flex; align-items: center; gap: 8px; margin-top: 6px; position: relative;">
++          <span style="position: absolute; left: 8px; font-size: 12px; color: var(--muted);">$</span>
++          <input type="number" id="customBudgetValueInput" placeholder="輸入金額" style="width: 100%; padding: 6px 20px 6px 18px; border: 1.5px solid var(--border); border-radius: 6px; font-size: 12px; font-weight: 600; outline: none; background: var(--bg); color: var(--text);" onkeydown="if(event.key==='Enter') submitCustomBudget()">
++          <button onclick="submitCustomBudget()" style="position: absolute; right: 6px; background: transparent; border: none; font-size: 12px; cursor: pointer; color: var(--navy); font-weight: bold;">➔</button>
++        </div>
++      </div>
++      <div style="font-size: 9px; color: var(--muted); margin-top: 4px;">按 Enter 進行計算</div>
++    </div>
++  `;
++
++  container.innerHTML = cardsHtml;
++
++  const recEl = document.getElementById('scenarioRecommendation');
++  if (recEl) recEl.textContent = d.recommendation || '';
++}
++
++// ══ Redesigned Dashboard Helpers ══
++let allBossData = [];
++let activeBudgetAmount = null;
++
++function getMockCustomer(hash) {
++  const customers = ["GlobalTech Inc.", "Oceanic Ltd.", "NextGen Solutions", "Alpha Electronics", "Sunrise Retail", "Apex Logistics", "Prime Goods", "Horizon Group"];
++  let val = 0;
++  for (let i = 0; i < hash.length; i++) val += hash.charCodeAt(i);
++  return customers[val % customers.length];
++}
++
++function getMockRoute(region) {
++  if (!region || region === 'Unknown') return "TAI → LAX";
++  const routes = {
++    "Southeast Asia": "TAI → SIN",
++    "South Asia": "TAI → BOM",
++    "East Asia": "TPE → NRT",
++    "North America": "TAI → LAX",
++    "Western Europe": "TAI → FRA",
++    "Northern Europe": "TAI → LHR",
++    "Central America": "MEX → LAX",
++    "South America": "SCL → MIA",
++    "Oceania": "TAI → SYD"
++  };
++  return routes[region] || "TAI → LAX";
++}
++
++function getMockETD(hash) {
++  let val = 0;
++  for (let i = 0; i < hash.length; i++) val += hash.charCodeAt(i);
++  const day = 18 + (val % 8);
++  return `06/${day}`;
++}
++
++function drawSparkline(canvasId, dataPoints, strokeColor, fillGradientColor) {
++  const canvas = document.getElementById(canvasId);
++  if (!canvas) return;
++  const ctx = canvas.getContext('2d');
++  const dpr = window.devicePixelRatio || 1;
++  const rect = canvas.getBoundingClientRect();
++  canvas.width = rect.width * dpr;
++  canvas.height = rect.height * dpr;
++  ctx.scale(dpr, dpr);
++  
++  ctx.clearRect(0, 0, rect.width, rect.height);
++  
++  ctx.beginPath();
++  const step = rect.width / (dataPoints.length - 1);
++  ctx.moveTo(0, rect.height);
++  
++  for (let i = 0; i < dataPoints.length; i++) {
++    const x = i * step;
++    const y = rect.height - (dataPoints[i] * (rect.height - 10));
++    ctx.lineTo(x, y);
++  }
++  
++  ctx.lineWidth = 1.5;
++  ctx.strokeStyle = strokeColor;
++  ctx.stroke();
++  
++  ctx.lineTo(rect.width, rect.height);
++  ctx.lineTo(0, rect.height);
++  ctx.closePath();
++  const gradient = ctx.createLinearGradient(0, 0, 0, rect.height);
++  gradient.addColorStop(0, fillGradientColor);
++  gradient.addColorStop(1, 'rgba(255,255,255,0)');
++  ctx.fillStyle = gradient;
++  ctx.fill();
++}
++
++function selectScenarioBudget(amount, count, penaltyReduction, netBenefit) {
++  window.activeBudgetAmount = amount;
++  
++  document.querySelectorAll('.budget-card').forEach(card => {
++    card.classList.remove('active');
++    const title = card.querySelector('div > div');
++    if (title && title.textContent.includes('$' + amount.toLocaleString())) {
++      card.classList.add('active');
++    }
++  });
++
++  const summaryP = document.getElementById('aiSummaryParagraph');
++  if (summaryP) {
++    summaryP.innerHTML = `Upgrading <strong>${count}</strong> orders is expected to reduce penalty exposure by <strong>$${Math.round(penaltyReduction).toLocaleString()}</strong>, with a net benefit of <strong style="color: #16a34a;">$${Math.round(netBenefit).toLocaleString()}</strong> under the <strong>$${amount.toLocaleString()}</strong> budget.`;
++  }
++  
++  window.pendingBudget = amount;
++}
++
++async function submitCustomBudget() {
++  const val = parseFloat(document.getElementById('customBudgetValueInput').value);
++  if (isNaN(val) || val <= 0) {
++    alert('請輸入有效的自訂預算金額');
++    return;
++  }
++  
++  const summaryP = document.getElementById('aiSummaryParagraph');
++  if (summaryP) summaryP.textContent = '正在為自訂預算進行最佳化求解...';
++  
++  try {
++    const data = await fetchOptimize(val, 80, 250, threshold);
++    window.activeBudgetAmount = Math.round(val);
++    selectScenarioBudget(window.activeBudgetAmount, data.selected_orders.length, data.expected_total_penalty_avoided, data.expected_total_saving);
++  } catch (e) {
++    alert('自訂預算求解失敗: ' + e.message);
++    if (summaryP) summaryP.textContent = '自訂預算求解失敗。';
++  }
++}
++
++function filterHighRiskOrders() {
++  const query = document.getElementById('highRiskSearch').value.toLowerCase().trim();
++  const delayed = allBossData.filter(o => o.p_late >= threshold);
++  
++  const filtered = delayed.filter(o => {
++    const customer = getMockCustomer(o.order_id_hash).toLowerCase();
++    const route = getMockRoute(o.order_region).toLowerCase();
++    const orderId = (o.display_order_id || displayOrderId(o.order_id_hash)).toLowerCase();
++    const region = (o.order_region || '').toLowerCase();
++    return customer.includes(query) || route.includes(query) || orderId.includes(query) || region.includes(query);
++  });
++  
++  renderFilteredBossTable(filtered);
++}
++
++function clearHighRiskSearch() {
++  document.getElementById('highRiskSearch').value = '';
++  filterHighRiskOrders();
++}
++
++function viewRecommendedUpgradeList() {
++  if (window.activeBudgetAmount) {
++    window.pendingBudget = window.activeBudgetAmount;
++  } else {
++    window.pendingBudget = 8200;
++  }
++  showPage('optimization');
+ }
+ 
++function reviewOrder(hash) {
++  toggleRowExplanation(hash);
++}
++
++function toggleProfileDropdown(event) {
++  event.stopPropagation();
++  const dropdown = document.getElementById('profileDropdown');
++  if (dropdown) dropdown.classList.toggle('show');
++}
++
++window.addEventListener('click', function() {
++  const dropdown = document.getElementById('profileDropdown');
++  if (dropdown) dropdown.classList.remove('show');
++});
++
+ function fillClass(p) {
+   return p >= 0.7 ? 'fill-high' : p >= 0.4 ? 'fill-med' : 'fill-low';
+ }
+@@ -2693,37 +2948,66 @@ function getActionText(o) {
+ }
+ 
+ function renderBossTable(data) {
+-  const tbody = document.getElementById('bossTableBody');
++  allBossData = data;
+   const delayed = data.filter(o => o.p_late >= threshold);
++  renderFilteredBossTable(delayed);
++}
++
++function renderFilteredBossTable(delayed) {
++  const tbody = document.getElementById('bossTableBody');
++  if (!tbody) return;
+   
+-  document.getElementById('bossDelayCount').textContent = `${delayed.length} 筆預估延遲`;
++  // Sort by delay probability descending and show top 5 most critical orders
++  const sorted = [...delayed].sort((a, b) => b.p_late - a.p_late);
++  const top5 = sorted.slice(0, 5);
+   
+-  if (delayed.length === 0) {
+-    tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;padding:32px;color:var(--muted);font-size:13px">沒有判定為延遲的訂單 (門檻值 = ${threshold.toFixed(2)})</td></tr>`;
++  // Update badge count
++  const badge = document.getElementById('bossDelayCount');
++  if (badge) badge.textContent = `首頁展示最危急 5 筆 (共 ${delayed.length} 筆)`;
++  
++  if (top5.length === 0) {
++    tbody.innerHTML = `<tr><td colspan="10" style="text-align:center;padding:32px;color:var(--muted);font-size:13px">沒有符合條件的延遲訂單 (門檻值 = ${threshold.toFixed(2)})</td></tr>`;
+     return;
+   }
+   
+-  tbody.innerHTML = delayed.map(o => {
++  tbody.innerHTML = top5.map(o => {
+     const hash = o.order_id_hash;
++    const customer = getMockCustomer(hash);
++    const route = getMockRoute(o.order_region);
++    const etd = getMockETD(hash);
++    const estDelay = (o.p_late * 5.8 + 1.2).toFixed(1);
++    const penaltyVal = Math.round(o.expected_penalty || 0);
++    const riskLevel = o.p_late >= 0.7 ? '高風險' : o.p_late >= 0.4 ? '中風險' : '低風險';
++    const riskClass = o.p_late >= 0.7 ? 'r-high' : o.p_late >= 0.4 ? 'r-med' : 'r-low';
++    const upgradeSaving = Math.round(o.expected_penalty - o.upgrade_cost);
++    const impactText = upgradeSaving > 0 ? `-$${upgradeSaving.toLocaleString()}` : `+$${Math.abs(upgradeSaving).toLocaleString()}`;
++    const impactStyle = upgradeSaving > 0 ? 'color: #15803d; font-weight:600;' : 'color: var(--muted);';
++    
+     return `
+       <tr>
+         <td>
+           <span id="explain-btn-${hash}" style="cursor:pointer; display:inline-block; width:12px; margin-right:4px; font-size:10px; color:var(--navy);" onclick="toggleRowExplanation('${hash}')">▶</span>
+           <span class="order-id" title="${hash}" style="cursor:pointer; text-decoration:underline;" onclick="toggleRowExplanation('${hash}')">${o.display_order_id || displayOrderId(hash)}</span>
+         </td>
+-        <td>${o.shipping_mode || 'Unknown'}</td>
+-        <td style="color:var(--muted)">${o.order_region || 'Unknown'}</td>
++        <td style="font-weight: 500;">${customer}</td>
++        <td style="color:var(--muted)">${route}</td>
++        <td style="font-family:'DM Mono',monospace; font-size:11.5px;">${etd}</td>
+         <td>
+           <div class="prob-wrap">
+             <div class="prob-bar"><div class="prob-fill ${fillClass(o.p_late)}" style="width:${o.p_late*100}%"></div></div>
+             <span class="prob-val">${(o.p_late*100).toFixed(0)}%</span>
+           </div>
+         </td>
+-        <td style="font-size:12px; color:var(--text);">${getReasonText(o)}</td>
+-        <td>${getActionText(o)}</td>
++        <td style="text-align:center;">${estDelay}</td>
++        <td style="font-weight: 600;">$${penaltyVal.toLocaleString()}</td>
++        <td><span class="risk-pill ${riskClass}" style="padding: 2px 8px; border-radius: 12px; font-size: 10px; font-weight: 600;">${riskLevel}</span></td>
++        <td style="${impactStyle}">${impactText}</td>
++        <td>
++          <button class="run-btn" style="width: auto; padding: 4px 10px; font-size: 11px; border-radius: 4px; background: var(--navy); color: white; border: none; cursor: pointer;" onclick="reviewOrder('${hash}')">決策分析</button>
++        </td>
+       </tr>
+       <tr id="explain-row-${hash}" class="hidden">
+-        <td colspan="6" style="padding:0; background:#f9faf9;">
++        <td colspan="10" style="padding:0; background:#f9faf9;">
+           <div id="explain-content-${hash}" style="padding:14px 20px; border-top:1px solid var(--border); border-bottom:1px solid var(--border); font-size:12.5px; line-height:1.5; color:var(--text);">載入中...</div>
+         </td>
+       </tr>
+@@ -2779,6 +3063,54 @@ async function toggleRowExplanation(orderId) {
+   }
+ }
+ 
++async function toggleRiskRowExplanation(orderId) {
++  const row = document.getElementById(`risk-explain-row-${orderId}`);
++  const btn = document.getElementById(`risk-explain-btn-${orderId}`);
++  const content = document.getElementById(`risk-explain-content-${orderId}`);
++  if (!row || !content) return;
++  
++  if (row.classList.contains('hidden')) {
++    row.classList.remove('hidden');
++    if (btn) btn.textContent = '▼';
++    
++    if (content.textContent === '載入中...') {
++      try {
++        const res = await fetch(`${API_BASE}/api/explain/${orderId}`);
++        if (!res.ok) throw new Error('讀取詳細歸因失敗');
++        const data = await res.json();
++        
++        const factors = data.top_x_factors || [];
++        const factorsHtml = factors.map(f => `
++          <div style="display:flex; justify-content:space-between; margin-bottom:6px; font-size:12px; border-bottom:1px dashed #dde0de; padding-bottom:4px;">
++            <span><strong>${f.label || f.feature}</strong>: <span style="color:var(--muted);">${f.evidence}</span></span>
++            <span style="font-weight:600; color:${f.impact === 'raises risk' ? '#c0392b' : '#27ae60'}">${f.impact === 'raises risk' ? '▲ 增加延遲風險' : '▼ 正常/次要'}</span>
++          </div>
++        `).join('');
++        
++        content.innerHTML = `
++          <div style="display:flex; flex-direction:column; gap:10px;">
++            <div style="font-weight:600; color:var(--navy); font-size:13px;">🔎 訂單延遲歸因與決策 (LIME-style)：</div>
++            <div style="background:white; border:1px solid var(--border); border-radius:6px; padding:12px; color:var(--text); line-height:1.6; font-weight:500; box-shadow:0 1px 3px rgba(0,0,0,0.02);">
++              ${data.manager_summary || '無摘要說明。'}
++            </div>
++            <div style="margin-top:6px;">
++              <div style="font-weight:600; color:var(--muted); font-size:11px; text-transform:uppercase; letter-spacing:0.5px; margin-bottom:8px; font-family:'DM Mono',monospace;">影響預測之關鍵特徵權重：</div>
++              <div style="display:flex; flex-direction:column; gap:6px;">
++                ${factorsHtml || '<div style="color:var(--muted); font-size:12px;">無明顯特徵影響</div>'}
++              </div>
++            </div>
++          </div>
++        `;
++      } catch (e) {
++        content.textContent = '分析載入失敗：' + e.message;
++      }
++    }
++  } else {
++    row.classList.add('hidden');
++    if (btn) btn.textContent = '▶';
++  }
++}
++
+ 
+ function renderOptResult(d) {
+   const el = document.getElementById('optResult');
+@@ -2862,23 +3194,50 @@ async function setRole(role) {
+     sessionStorage.removeItem('edis_token');
+     sessionStorage.removeItem('edis_session_id');
+   }
+-  document.querySelectorAll('.role-btn').forEach(b =>
+-    b.classList.toggle('active', b.textContent.toLowerCase() === role));
+-
+ 
+   const isM = role === 'manager';
+   
+-  // Header badges
+-  document.getElementById('roleBadge').className = isM ? 'role-badge badge-manager' : 'role-badge badge-viewer';
+-  document.getElementById('roleBadge').textContent = isM ? '● Manager' : '● Viewer';
+-  document.getElementById('optRoleBadge').className = isM ? 'role-badge badge-manager' : 'role-badge badge-viewer';
+-  document.getElementById('optRoleBadge').textContent = isM ? 'Manager' : 'Viewer';
+-  document.getElementById('optPageRoleBadge').className = isM ? 'role-badge badge-manager' : 'role-badge badge-viewer';
+-  document.getElementById('optPageRoleBadge').textContent = isM ? 'Manager' : 'Viewer';
++  // Update Topbar Selector
++  const roleSelect = document.getElementById('topbarRoleSelect');
++  if (roleSelect) roleSelect.value = role;
++
++  // Update Sidebar profile widget details
++  const profileName = document.getElementById('profileName');
++  if (profileName) profileName.textContent = role.charAt(0).toUpperCase() + role.slice(1);
++  const profileAvatar = document.getElementById('profileAvatar');
++  if (profileAvatar) profileAvatar.textContent = role.charAt(0).toUpperCase();
++
++  // Header badges (safely check)
++  const rb = document.getElementById('roleBadge');
++  if (rb) {
++    rb.className = isM ? 'role-badge badge-manager' : 'role-badge badge-viewer';
++    rb.textContent = isM ? '● 物流經理' : '● 決策檢視者';
++  }
++  const optPageRoleBadge = document.getElementById('optPageRoleBadge');
++  if (optPageRoleBadge) {
++    optPageRoleBadge.className = isM ? 'role-badge badge-manager' : 'role-badge badge-viewer';
++    optPageRoleBadge.textContent = isM ? '物流經理' : '決策檢視者';
++  }
++
++  // Display Dashboard configuration panel as read-only for Viewer instead of hiding it
++  const dbConfigPanel = document.getElementById('dashboardConfigPanel');
++  if (dbConfigPanel) {
++    dbConfigPanel.style.display = 'flex';
++  }
++  const slider = document.getElementById('thresholdSlider');
++  if (slider) slider.disabled = !isM;
++  const badgeF1 = document.getElementById('badgeF1Btn');
++  if (badgeF1) badgeF1.disabled = !isM;
++  const badgeCost = document.getElementById('badgeCostBtn');
++  if (badgeCost) badgeCost.disabled = !isM;
+ 
+   // Lock/Unlock Uploading for Manager
+-  document.getElementById('uploadCsvBtn').style.display = isM ? 'inline-flex' : 'none';
+-  document.getElementById('lockedUploadBox').style.display = isM ? 'none' : 'inline-flex';
++  const uploadCsvBtn = document.getElementById('uploadCsvBtn');
++  if (uploadCsvBtn) uploadCsvBtn.style.display = isM ? 'inline-flex' : 'none';
++  
++  const lockedUploadBox = document.getElementById('lockedUploadBox');
++  if (lockedUploadBox) lockedUploadBox.style.display = isM ? 'none' : 'inline-flex';
++  
+   const aiUploadBtn = document.getElementById('aiUploadPredictBtn');
+   const aiBriefBtn = document.getElementById('aiGenerateBriefBtn');
+   const aiLockedBox = document.getElementById('aiLockedBox');
+@@ -2888,9 +3247,26 @@ async function setRole(role) {
+   if (aiLockedBox) aiLockedBox.style.display = isM ? 'none' : 'inline-flex';
+   if (aiRoleBadge) {
+     aiRoleBadge.className = isM ? 'role-badge badge-manager' : 'role-badge badge-viewer';
+-    aiRoleBadge.textContent = isM ? 'Manager' : 'Viewer';
++    aiRoleBadge.textContent = isM ? '物流經理' : '決策檢視者';
+   }
+   updateLLMSettingsAccess();
++  
++  // Control Visibility of System Settings dropdown items for Viewer
++  const menuRBAC = document.getElementById('menuRBAC');
++  if (menuRBAC) menuRBAC.style.display = isM ? 'block' : 'none';
++  const menuLLMS = document.getElementById('menuLLMSettings');
++  if (menuLLMS) menuLLMS.style.display = isM ? 'block' : 'none';
++
++  if (!isM) {
++    const rbacSec = document.getElementById('page-rbac');
++    const llmSec = document.getElementById('page-llm-settings');
++    const isRbacActive = rbacSec && !rbacSec.classList.contains('hidden');
++    const isLlmActive = llmSec && !llmSec.classList.contains('hidden');
++    if (isRbacActive || isLlmActive) {
++      showPage('dashboard');
++    }
++  }
++
+   if (isM && !document.getElementById('page-llm-settings').classList.contains('hidden')) {
+     loadLLMSettings();
+   }
+@@ -2909,12 +3285,6 @@ async function setRole(role) {
+     }
+   }
+ 
+-  // Dashboard buttons
+-  document.getElementById('runBtn').classList.toggle('hidden', !isM);
+-  document.getElementById('lockedBox').classList.toggle('hidden', isM);
+-  document.getElementById('optResult').classList.add('hidden');
+-  renderManagerAnalysis('managerAnalysisBox', 'managerAnalysisText', 'managerAnalysisFactors', null);
+-  
+   // Optimization page buttons
+   document.getElementById('optPageRunBtn').classList.toggle('hidden', !isM);
+   document.getElementById('optPageLockedBox').classList.toggle('hidden', isM);
+@@ -2961,7 +3331,7 @@ async function runPageOptimize() {
+   btn.disabled = true;
+   
+   try {
+-    const data = await fetchOptimize(budget, upgradeCost, delayPenalty);
++    const data = await fetchOptimize(budget, upgradeCost, delayPenalty, threshold);
+     
+     placeholder.classList.add('hidden');
+     resultPanel.classList.remove('hidden');
+@@ -3053,22 +3423,34 @@ async function loadFilteredRiskList() {
+       return;
+     }
+ 
+-    tbody.innerHTML = data.map(o => `
+-      <tr>
+-        <td><span class="order-id" title="${o.order_id_hash}">${o.display_order_id || displayOrderId(o.order_id_hash)}</span></td>
+-        <td>${o.shipping_mode || 'Unknown'}</td>
+-        <td style="color:var(--muted)">${o.order_region || 'Unknown'}</td>
++    tbody.innerHTML = data.map(o => {
++      const hash = o.order_id_hash;
++      const riskZh = o.risk_bucket === 'High' ? '高風險' : o.risk_bucket === 'Medium' ? '中風險' : '低風險';
++      return `
++      <tr style="cursor: pointer;" onclick="toggleRiskRowExplanation('${hash}')">
++        <td>
++          <button id="risk-explain-btn-${hash}" style="background:none; border:none; color:var(--navy); font-weight:bold; cursor:pointer; font-size:11px; margin-right:4px;">▶</button>
++          <span class="order-id" title="${o.order_id_hash}">${o.display_order_id || displayOrderId(o.order_id_hash)}</span>
++        </td>
++        <td>${o.shipping_mode || '未知'}</td>
++        <td style="color:var(--muted)">${o.order_region || '未知'}</td>
+         <td>
+           <div class="prob-wrap">
+             <div class="prob-bar"><div class="prob-fill ${fillClass(o.risk_bucket)}" style="width:${o.p_late*100}%"></div></div>
+             <span class="prob-val">${(o.p_late*100).toFixed(0)}%</span>
+           </div>
+         </td>
+-        <td><span class="risk-pill ${pillClass(o.risk_bucket)}">${o.risk_bucket}</span></td>
++        <td><span class="risk-pill ${pillClass(o.risk_bucket)}">${riskZh}</span></td>
+         <td>${o.actual_late===1||o.actual_late===true?'<span style="padding:2px 8px;background:#fee2e2;color:#b91c1c;border-radius:12px;font-size:10px;font-weight:600;">延遲</span>':o.actual_late===0||o.actual_late===false?'<span style="padding:2px 8px;background:#dcfce7;color:#15803d;border-radius:12px;font-size:10px;font-weight:600;">準時</span>':'<span style="color:var(--muted);font-size:12px;">—</span>'}</td>
+         <td>${o.is_correct===true?'<span style="padding:2px 8px;background:#dcfce7;color:#15803d;border-radius:12px;font-size:10px;font-weight:600;">✓ 正確</span>':o.is_correct===false?'<span style="padding:2px 8px;background:#fee2e2;color:#b91c1c;border-radius:12px;font-size:10px;font-weight:600;">✗ 錯誤</span>':'<span style="color:var(--muted);font-size:12px;">—</span>'}</td>
+       </tr>
+-    `).join('');
++      <tr id="risk-explain-row-${hash}" class="hidden">
++        <td colspan="7" style="padding:0; background:#f9faf9;">
++          <div id="risk-explain-content-${hash}" style="padding:14px 20px; border-top:1px solid var(--border); border-bottom:1px solid var(--border); font-size:12.5px; line-height:1.5; color:var(--text);">載入中...</div>
++        </td>
++      </tr>
++    `;
++    }).join('');
+ 
+   } catch (e) {
+     tbody.innerHTML = `
+@@ -4030,6 +4412,98 @@ function _tourEnd() {
+ window.addEventListener('load', function() {
+   if (!localStorage.getItem('edis_tour')) setTimeout(startTour, 900);
+ });
++
++function toggleDrawer(show) {
++  const drawer = document.getElementById('budgetDrawer');
++  if (drawer) {
++    if (show) drawer.classList.add('show');
++    else drawer.classList.remove('show');
++  }
++}
++
++function toggleFloatingChat() {
++  const chat = document.getElementById('floatingChatContainer');
++  if (chat) {
++    chat.classList.toggle('show');
++  }
++}
++
++async function runPageOptimizeAndClose() {
++  await runPageOptimize();
++}
+ </script>
++
++  <!-- Side Drawer Overlay for parameters and budget tuning -->
++  <div id="budgetDrawer" class="drawer-overlay" onclick="if(event.target===this) toggleDrawer(false)">
++    <div class="drawer-content">
++      <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border); padding-bottom: 14px;">
++        <h3 style="font-size: 16px; font-weight: 600; color: var(--text);">⚙️ 調度參數量化調整</h3>
++        <button onclick="toggleDrawer(false)" style="border: none; background: transparent; font-size: 20px; cursor: pointer; color: var(--muted);">&times;</button>
++      </div>
++      
++      <div style="display: flex; flex-direction: column; gap: 14px;">
++        <div>
++          <label class="field-label">物流預算上限 (USD)</label>
++          <input type="number" class="budget-input" id="optPageBudgetInput" placeholder="5000" value="5000" min="0">
++        </div>
++        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
++          <div>
++            <label class="field-label">單筆升級成本 (USD)</label>
++            <input type="number" class="budget-input" id="optPageUpgradeCost" placeholder="80" value="80" min="0">
++          </div>
++          <div>
++            <label class="field-label">單筆延遲罰金 (USD)</label>
++            <input type="number" class="budget-input" id="optPageDelayPenalty" placeholder="250" value="250" min="0">
++          </div>
++        </div>
++        
++        <button class="run-btn" id="optPageRunBtn" onclick="runPageOptimizeAndClose()">
++          開始計算最佳化調度方案
++        </button>
++        <div class="locked-box" id="optPageLockedBox" style="display: none;">
++          🔒 需要 Manager 權限才能執行最佳化調度
++        </div>
++      </div>
++
++      <!-- Results Visualizer inside drawer -->
++      <div id="optPageResult" class="hidden" style="display:flex; flex-direction:column; gap:16px;">
++        <div class="opt-divider" style="height: 1px; background: var(--border);"></div>
++        <div class="stat-grid" style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
++          <div class="stat-box" style="background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 10px;">
++            <div class="stat-label" style="font-size: 9px; color: var(--muted);">建議升級數</div>
++            <div class="stat-value" id="optPageSelected" style="font-size: 18px; font-weight: 600; color: var(--navy);">—</div>
++          </div>
++          <div class="stat-box" style="background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 10px;">
++            <div class="stat-label" style="font-size: 9px; color: var(--muted);">預期省下罰金</div>
++            <div class="stat-value green" id="optPageSaving" style="font-size: 18px; font-weight: 600; color: #27ae60;">—</div>
++          </div>
++          <div class="stat-box" style="background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 10px;">
++            <div class="stat-label" style="font-size: 9px; color: var(--muted);">實際升級花費</div>
++            <div class="stat-value warm" id="optPageCost" style="font-size: 18px; font-weight: 600; color: var(--warm);">—</div>
++          </div>
++          <div class="stat-box" style="background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 10px;">
++            <div class="stat-label" style="font-size: 9px; color: var(--muted);">預算使用率</div>
++            <div class="stat-value" id="optPageUsage" style="font-size: 18px; font-weight: 600; color: var(--text);">—</div>
++            <div class="usage-bar-wrap" style="margin-top: 4px;">
++              <div class="usage-bar" style="height: 4px; background: var(--border); border-radius: 2px; overflow: hidden;"><div class="usage-fill" id="optPageUsageFill" style="width: 0%; height: 100%; background: var(--navy); transition: width 0.6s ease;"></div></div>
++            </div>
++          </div>
++        </div>
++        
++        <div id="optPageManagerAnalysisBox" style="padding:10px; background:#f6f9fb; border:1px solid var(--border); border-radius:6px; font-size: 11.5px; display: none;">
++          <div style="font-weight:600; margin-bottom:4px; color: var(--text);">主管分析摘要</div>
++          <div id="optPageManagerAnalysisText" style="line-height:1.5; color: var(--text);"></div>
++        </div>
++
++        <div style="flex: 1; display: flex; flex-direction: column; overflow: hidden;">
++          <div style="font-size:11px; color:var(--muted); font-weight:500; margin-bottom:8px;">建議升級訂單明細</div>
++          <div class="table-scroll" style="max-height: 180px; overflow-y: auto;">
++            <div class="ord-list" id="optPageOrdList" style="display: flex; flex-direction: column; gap: 6px;"></div>
++          </div>
++        </div>
++      </div>
++    </div>
++  </div>
++
+ </body>
+ </html>

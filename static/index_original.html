@@ -1,0 +1,4035 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>EDIS Dashboard</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&family=DM+Mono:wght@400;500&family=Noto+Sans+TC:wght@300;400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<style>
+:root {
+  --white:   #F4F5F2;
+  --steel:   #8AA1AD;
+  --mauve:   #B1ABB6;
+  --warm:    #968C91;
+  --navy:    #437096;
+  --navy-dk: #335a7a;
+  --navy-lt: #5a8aab;
+
+  --bg:      #eef0ed;
+  --surface: #F4F5F2;
+  --card:    #ffffff;
+  --border:  #dde0de;
+  --text:    #2d3340;
+  --muted:   #8a939e;
+  --sidebar-w: 220px;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font-family: 'DM Sans', 'Noto Sans TC', sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  display: flex;
+  min-height: 100vh;
+}
+
+/* ── Sidebar ── */
+.sidebar {
+  width: var(--sidebar-w);
+  background: var(--navy);
+  min-height: 100vh;
+  position: fixed;
+  top: 0; left: 0;
+  display: flex;
+  flex-direction: column;
+  z-index: 100;
+}
+
+.sidebar-brand {
+  padding: 28px 24px 20px;
+  border-bottom: 1px solid rgba(255,255,255,0.1);
+}
+
+.brand-mark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 38px; height: 38px;
+  background: rgba(255,255,255,0.15);
+  border-radius: 8px;
+  font-family: 'DM Mono', monospace;
+  font-size: 12px;
+  color: white;
+  margin-bottom: 10px;
+}
+
+.brand-name {
+  font-size: 17px;
+  font-weight: 600;
+  color: white;
+  letter-spacing: 0.3px;
+}
+
+.brand-sub {
+  font-size: 10px;
+  color: rgba(255,255,255,0.5);
+  margin-top: 2px;
+  line-height: 1.4;
+}
+
+.sidebar-nav {
+  flex: 1;
+  padding: 16px 0;
+}
+
+.nav-section {
+  font-family: 'DM Mono', monospace;
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: 1.5px;
+  color: rgba(255,255,255,0.35);
+  padding: 16px 24px 6px;
+}
+
+.nav-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 24px;
+  color: rgba(255,255,255,0.65);
+  font-size: 13px;
+  font-weight: 400;
+  cursor: pointer;
+  transition: all 0.15s;
+  border-left: 3px solid transparent;
+  text-decoration: none;
+}
+
+.nav-item:hover { color: white; background: rgba(255,255,255,0.08); }
+
+.nav-item.active {
+  color: white;
+  background: rgba(255,255,255,0.12);
+  border-left-color: var(--white);
+  font-weight: 500;
+}
+
+.nav-icon { width: 16px; opacity: 0.8; font-style: normal; }
+
+.sidebar-footer {
+  padding: 16px 24px;
+  border-top: 1px solid rgba(255,255,255,0.1);
+  font-size: 11px;
+  color: rgba(255,255,255,0.4);
+}
+
+/* ── Main area ── */
+.main {
+  margin-left: var(--sidebar-w);
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+}
+
+/* ── Topbar ── */
+.topbar {
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  padding: 0 32px;
+  height: 58px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  position: sticky;
+  top: 0;
+  z-index: 50;
+}
+
+.topbar-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.topbar-right {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.role-switch {
+  display: flex;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+/* ── AI assistant chat ── */
+.ai-chat-shell {
+  min-height: calc(100vh - 170px);
+  display: grid;
+  grid-template-rows: 1fr auto;
+  gap: 18px;
+}
+
+.ai-chat-log {
+  min-height: 420px;
+  padding: 8px 4px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  overflow: auto;
+}
+
+.ai-message {
+  max-width: 760px;
+  padding: 13px 15px;
+  border-radius: 14px;
+  font-size: 14px;
+  line-height: 1.7;
+  white-space: pre-wrap;
+  box-shadow: 0 4px 14px rgba(45,51,64,0.06);
+}
+
+.ai-message.assistant {
+  align-self: flex-start;
+  background: white;
+  border: 1px solid var(--border);
+}
+
+.ai-message.user {
+  align-self: flex-end;
+  background: var(--navy);
+  color: white;
+}
+
+.ai-message.system {
+  align-self: center;
+  max-width: 680px;
+  background: #f6f9fb;
+  border: 1px solid var(--border);
+  color: var(--muted);
+  font-size: 13px;
+  text-align: center;
+}
+
+.ai-composer-wrap {
+  position: sticky;
+  bottom: 18px;
+  display: flex;
+  justify-content: center;
+  padding-bottom: 2px;
+}
+
+.ai-composer {
+  width: min(760px, 100%);
+  min-height: 108px;
+  background: white;
+  border: 1px solid #d9dee5;
+  border-radius: 24px;
+  box-shadow: 0 10px 30px rgba(45,51,64,0.12);
+  display: grid;
+  grid-template-rows: 1fr auto;
+  padding: 16px 18px 12px;
+}
+
+.ai-composer textarea {
+  width: 100%;
+  min-height: 42px;
+  max-height: 130px;
+  border: 0;
+  outline: none;
+  resize: none;
+  background: transparent;
+  color: var(--text);
+  font-family: inherit;
+  font-size: 15px;
+  line-height: 1.55;
+}
+
+.ai-composer-actions {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+}
+
+.ai-icon-btn {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  border: 0;
+  background: #f1f3f5;
+  color: #111827;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 24px;
+  line-height: 1;
+  cursor: pointer;
+  transition: background 0.15s, transform 0.15s;
+}
+
+.ai-icon-btn:hover {
+  background: #e7eaee;
+  transform: translateY(-1px);
+}
+
+.ai-send-btn {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  border: 0;
+  background: transparent;
+  color: #111827;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 22px;
+  cursor: pointer;
+}
+
+.ai-send-btn:disabled,
+.ai-icon-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.ai-file-chip {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.role-btn {
+  padding: 5px 16px;
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  font-family: 'DM Sans', sans-serif;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.role-btn.active {
+  background: var(--navy);
+  color: white;
+}
+
+.role-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 12px;
+  border-radius: 20px;
+  font-size: 11px;
+  font-weight: 500;
+}
+
+.badge-viewer  { background: #f0f2f4; color: var(--muted); }
+.badge-manager { background: rgba(67,112,150,0.12); color: var(--navy); }
+
+.exec-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+  margin-bottom: 18px;
+}
+
+.exec-card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 14px;
+}
+
+.exec-label {
+  font-family: 'DM Mono', monospace;
+  font-size: 10px;
+  letter-spacing: 0.6px;
+  text-transform: uppercase;
+  color: var(--muted);
+  font-weight: 600;
+}
+
+.exec-value {
+  margin-top: 7px;
+  font-size: 22px;
+  line-height: 1.1;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.exec-note {
+  margin-top: 7px;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--muted);
+}
+
+.exec-action {
+  margin-bottom: 18px;
+  padding: 14px 16px;
+  border: 1px solid var(--border);
+  border-left: 4px solid var(--navy);
+  border-radius: 8px;
+  background: #f7fafb;
+}
+
+.exec-action-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text);
+  margin-bottom: 4px;
+}
+
+.exec-action-body {
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--muted);
+}
+
+.scenario-table-wrap {
+  margin-bottom: 18px;
+}
+
+.scenario-note {
+  margin-top: 8px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--muted);
+}
+
+@media (max-width: 1100px) {
+  .exec-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+@media (max-width: 700px) {
+  .exec-grid { grid-template-columns: 1fr; }
+}
+
+.status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: var(--muted);
+  font-family: 'DM Mono', monospace;
+}
+
+.dot { width: 6px; height: 6px; border-radius: 50%; }
+.dot-green { background: #5cb85c; animation: blink 2s infinite; }
+@keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.4} }
+
+/* ── Content ── */
+.content {
+  padding: 28px 32px;
+  flex: 1;
+}
+
+.page-header {
+  margin-bottom: 24px;
+}
+
+.page-title {
+  font-size: 22px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.page-sub {
+  font-size: 13px;
+  color: var(--muted);
+  margin-top: 3px;
+}
+
+/* ── KPI Cards ── */
+.kpi-row {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.kpi-card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 22px 26px;
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03);
+}
+
+.kpi-card:hover { 
+  transform: translateY(-4px);
+  box-shadow: 0 12px 20px -8px rgba(67, 112, 150, 0.35);
+}
+
+.kpi-card.kpi-total {
+  background: linear-gradient(135deg, #ffffff 0%, #f1f5f9 100%);
+  border-left: 5px solid var(--steel);
+}
+.kpi-card.kpi-late {
+  background: linear-gradient(135deg, #ffffff 0%, #fffbeb 100%);
+  border-left: 5px solid #d97706;
+}
+.kpi-card.kpi-penalty {
+  background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+  color: #ffffff;
+  border-left: 5px solid #ef4444;
+  box-shadow: 0 10px 15px -3px rgba(15, 23, 42, 0.25);
+}
+.kpi-card.kpi-penalty .kpi-label {
+  color: #94a3b8;
+}
+.kpi-card.kpi-penalty .kpi-value {
+  color: #fca5a5;
+  text-shadow: 0 2px 4px rgba(0,0,0,0.3);
+}
+.kpi-card.kpi-penalty .kpi-change {
+  color: #cbd5e1;
+}
+
+.kpi-icon-wrap {
+  width: 52px; height: 52px;
+  border-radius: 12px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 22px;
+  flex-shrink: 0;
+}
+
+.icon-steel  { background: rgba(138,161,173,0.15); }
+.icon-navy   { background: rgba(67,112,150,0.12); }
+.icon-warm   { background: rgba(150,140,145,0.15); }
+.icon-mauve  { background: rgba(177,171,182,0.2); }
+
+.kpi-info { flex: 1; }
+
+.kpi-label {
+  font-size: 11px;
+  color: var(--muted);
+  font-weight: 400;
+  margin-bottom: 4px;
+}
+
+.kpi-value {
+  font-size: 28px;
+  font-weight: 600;
+  color: var(--text);
+  line-height: 1;
+}
+
+.kpi-value.navy  { color: var(--navy); }
+.kpi-value.steel { color: var(--steel); }
+.kpi-value.warm  { color: var(--warm); }
+
+.kpi-change {
+  font-size: 11px;
+  color: var(--muted);
+  margin-top: 4px;
+}
+
+/* ── Two-col layout ── */
+.grid-2 {
+  display: grid;
+  grid-template-columns: 1fr 360px;
+  gap: 16px;
+}
+
+/* ── Panel ── */
+.panel {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.panel-head {
+  padding: 14px 20px;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.panel-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.panel-subtitle {
+  font-size: 11px;
+  color: var(--muted);
+  margin-top: 1px;
+}
+
+.tag {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 10px;
+  border-radius: 20px;
+  font-size: 10px;
+  font-weight: 500;
+  font-family: 'DM Mono', monospace;
+}
+
+.tag-count { background: var(--bg); color: var(--muted); border: 1px solid var(--border); }
+
+/* ── Risk table ── */
+.risk-table { width: 100%; border-collapse: collapse; }
+
+.risk-table th {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  color: var(--muted);
+  font-weight: 500;
+  padding: 10px 16px;
+  text-align: left;
+  background: #fafbfa;
+  border-bottom: 1px solid var(--border);
+  font-family: 'DM Mono', monospace;
+}
+
+.risk-table td {
+  padding: 11px 16px;
+  font-size: 12.5px;
+  border-bottom: 1px solid #f0f2f0;
+  color: var(--text);
+}
+
+.risk-table tr:last-child td { border-bottom: none; }
+.risk-table tr:hover td { background: #f8f9f8; }
+
+.order-id {
+  font-family: 'DM Mono', monospace;
+  font-size: 11px;
+  color: var(--navy);
+}
+
+.risk-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 9px;
+  border-radius: 12px;
+  font-size: 10px;
+  font-weight: 500;
+}
+
+.r-high { background: #fdecea; color: #c0392b; }
+.r-med  { background: #fef6e4; color: #d68910; }
+.r-low  { background: #eaf4ea; color: #27ae60; }
+
+.prob-wrap { display: flex; align-items: center; gap: 8px; }
+.prob-bar  { width: 56px; height: 5px; background: #eef0ee; border-radius: 3px; overflow: hidden; }
+.prob-fill { height: 100%; border-radius: 3px; }
+.fill-high { background: linear-gradient(90deg, #e67e73, #c0392b); }
+.fill-med  { background: linear-gradient(90deg, #f0c070, #d68910); }
+.fill-low  { background: linear-gradient(90deg, #82c882, #27ae60); }
+.prob-val  { font-family: 'DM Mono', monospace; font-size: 11px; color: var(--muted); }
+
+.table-scroll { max-height: 380px; overflow-y: auto; }
+.table-scroll::-webkit-scrollbar { width: 3px; }
+.table-scroll::-webkit-scrollbar-track { background: transparent; }
+.table-scroll::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+/* ── Optimize panel ── */
+.opt-body { padding: 20px; display: flex; flex-direction: column; gap: 16px; }
+
+.field-label {
+  font-size: 11px;
+  color: var(--muted);
+  font-weight: 500;
+  margin-bottom: 6px;
+  display: block;
+}
+
+.budget-input {
+  width: 100%;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  padding: 9px 14px;
+  font-family: 'DM Sans', sans-serif;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text);
+  outline: none;
+  transition: border-color 0.15s;
+}
+
+.budget-input:focus { border-color: var(--navy); }
+
+.run-btn {
+  width: 100%;
+  padding: 10px;
+  background: var(--navy);
+  color: white;
+  border: none;
+  border-radius: 7px;
+  font-family: 'DM Sans', sans-serif;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.run-btn:hover { background: var(--navy-dk); }
+.run-btn:disabled { background: var(--border); color: var(--muted); cursor: not-allowed; }
+
+.locked-box {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  background: #f5f5f5;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+/* Opt results */
+.opt-divider { height: 1px; background: var(--border); }
+
+.stat-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.stat-box {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 12px;
+}
+
+.stat-label {
+  font-size: 10px;
+  color: var(--muted);
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 4px;
+  font-family: 'DM Mono', monospace;
+}
+
+.stat-value {
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--navy);
+}
+
+.stat-value.green { color: #27ae60; }
+.stat-value.warm  { color: var(--warm); }
+
+.ord-list { display: flex; flex-direction: column; gap: 6px; }
+
+.ord-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 9px 12px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  font-size: 12px;
+  animation: slideUp 0.25s ease both;
+}
+
+@keyframes slideUp {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.ord-id { font-family: 'DM Mono', monospace; font-size: 11px; color: var(--navy); }
+.ord-sub { font-size: 10px; color: var(--muted); margin-top: 1px; }
+.ord-saving { font-weight: 600; color: #27ae60; font-size: 12px; }
+
+.hidden { display: none !important; }
+
+.fade-in { animation: fadeUp 0.35s ease both; }
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(10px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.spinner {
+  display: inline-block;
+  width: 12px; height: 12px;
+  border: 2px solid rgba(255,255,255,0.3);
+  border-top-color: white;
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+  vertical-align: middle;
+  margin-right: 5px;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* progress bar for budget usage */
+.usage-bar-wrap { margin-top: 4px; }
+.usage-bar { height: 4px; background: var(--border); border-radius: 2px; margin-top: 6px; overflow: hidden; }
+.usage-fill { height: 100%; background: var(--navy); border-radius: 2px; transition: width 0.6s ease; }
+
+/* ── Leaflet Map ── */
+#regionMapContainer { border-radius: 0 0 10px 10px; }
+.region-tooltip {
+  background: white !important;
+  border: 1px solid var(--border) !important;
+  border-radius: 8px !important;
+  padding: 10px 14px !important;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.12) !important;
+  font-family: 'DM Sans', 'Noto Sans TC', sans-serif !important;
+}
+.region-tooltip::before { display: none !important; }
+.leaflet-tooltip-top:before, .leaflet-tooltip-bottom:before,
+.leaflet-tooltip-left:before, .leaflet-tooltip-right:before {
+  border: none !important;
+}
+.region-rank-item:hover {
+  border-color: var(--navy) !important;
+  box-shadow: 0 2px 8px rgba(67,112,150,0.15);
+  transform: translateX(3px);
+}
+.leaflet-control-attribution { font-size: 9px !important; opacity: 0.6; }
+
+/* ── Login Modal ── */
+.modal-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.4); z-index:999; align-items:center; justify-content:center; }
+.modal-overlay.show { display:flex; }
+.modal-box { background:var(--card); border:1px solid var(--border); border-radius:12px; padding:32px; width:340px; box-shadow:0 8px 32px rgba(67,112,150,0.15); }
+.modal-title { font-size:16px; font-weight:600; color:var(--text); margin-bottom:6px; }
+.modal-sub { font-size:12px; color:var(--muted); margin-bottom:24px; }
+.modal-field { margin-bottom:14px; }
+.modal-field label { display:block; font-size:11px; color:var(--muted); font-weight:500; margin-bottom:6px; text-transform:uppercase; letter-spacing:0.5px; }
+.modal-input { width:100%; background:var(--bg); border:1px solid var(--border); border-radius:7px; padding:9px 14px; font-size:14px; color:var(--text); outline:none; transition:border-color 0.15s; }
+.modal-input:focus { border-color:var(--navy); }
+.modal-error { font-size:12px; color:#c0392b; margin-bottom:12px; display:none; }
+.modal-error.show { display:block; }
+.modal-btns { display:flex; gap:8px; margin-top:8px; }
+.modal-confirm { flex:1; padding:10px; background:var(--navy); color:white; border:none; border-radius:7px; font-size:13px; font-weight:600; cursor:pointer; }
+.modal-confirm:hover { background:var(--navy-dk); }
+.modal-cancel { padding:10px 16px; background:var(--bg); color:var(--muted); border:1px solid var(--border); border-radius:7px; font-size:13px; cursor:pointer; }
+</style>
+</head>
+<body>
+
+<!-- ── Sidebar ── -->
+<aside class="sidebar">
+  <div class="sidebar-brand">
+    <div class="brand-mark">ED</div>
+    <div class="brand-name">EDIS</div>
+    <div class="brand-sub">物流延遲預測<br>最佳化調度系統</div>
+  </div>
+
+  <nav class="sidebar-nav">
+    <div class="nav-section">主選單</div>
+    <a class="nav-item active" id="nav-dashboard" onclick="showPage('dashboard')">
+      <i class="nav-icon">▪</i> Dashboard
+    </a>
+    <a class="nav-item" id="nav-risk-list" onclick="showPage('risk-list')">
+      <i class="nav-icon">◈</i> 風險訂單列表
+    </a>
+    <a class="nav-item" id="nav-optimization" onclick="showPage('optimization')">
+      <i class="nav-icon">◉</i> 最佳化調度
+    </a>
+    <a class="nav-item" id="nav-ai-assistant" onclick="showPage('ai-assistant')">
+      <i class="nav-icon">✦</i> AI 助理
+    </a>
+    <div class="nav-section">分析</div>
+    <a class="nav-item" id="nav-model-perf" onclick="showPage('model-perf')">
+      <i class="nav-icon">◇</i> 模型效能
+    </a>
+    <a class="nav-item" id="nav-region-map" onclick="showPage('region-map')">
+      <i class="nav-icon">◆</i> 區域風險地圖
+    </a>
+    <div class="nav-section">系統</div>
+    <a class="nav-item" id="nav-rbac" onclick="showPage('rbac')">
+      <i class="nav-icon">○</i> RBAC 權限
+    </a>
+    <a class="nav-item" id="nav-llm-settings" onclick="showPage('llm-settings')">
+      <i class="nav-icon">⚙</i> LLM 設定
+    </a>
+  </nav>
+
+  <div class="sidebar-footer">
+    DataCo EDIS v1.0<br>
+    2026 · 五人組專案
+  </div>
+</aside>
+
+<!-- ── Main ── -->
+<div class="main">
+
+  <!-- Topbar -->
+  <div class="topbar">
+    <div>
+      <div class="topbar-title">Dashboard</div>
+    </div>
+    <div class="topbar-right">
+      <div class="status-pill">
+        <span class="dot dot-green"></span>
+        <span id="statusText">Mock Data</span>
+      </div>
+
+      <span class="role-badge badge-viewer" id="roleBadge">● Viewer</span>
+
+      <div class="role-switch">
+        <button class="role-btn active" onclick="setRole('viewer')">Viewer</button>
+        <button class="role-btn" onclick="setRole('manager')">Manager</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Content -->
+  <div class="content">
+
+    <!-- A. DASHBOARD PANEL -->
+    <div class="page-section" id="page-dashboard">
+      <div class="page-header fade-in">
+        <div class="page-title">物流延遲預測與最佳化調度</div>
+        <div class="page-sub">DataCo Supply Chain Dataset · XGBoost + PuLP 最佳化引擎</div>
+        <div id="sopRoleBadge" style="margin-top: 5px; min-height: 20px;"></div>
+      </div>
+
+      <div class="panel fade-in" style="margin-bottom: 24px; padding: 18px 20px; background: var(--card); border: 1px solid var(--border); border-radius: 12px; display: flex; flex-wrap: wrap; gap: 24px; align-items: center; justify-content: space-between;">
+        <div style="flex: 1; min-width: 300px; display: flex; flex-direction: column; gap: 8px;">
+          <div style="display: flex; align-items: center; gap: 16px; width: 100%;">
+            <div style="flex-shrink: 0; min-width: 130px;">
+              <label class="field-label" style="font-weight:600; font-size:11px; margin-bottom:2px; display: flex; align-items: center; gap: 4px;">
+                延遲判定門檻值 (Threshold)
+                <span style="cursor: pointer; color: var(--navy); font-weight: bold; background: rgba(67,112,150,0.1); width: 14px; height: 14px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-size: 10px;" title="機器學習模型預測延遲機率大於此門檻時，即判定為延遲並啟動後續調度考量。">?</span>
+              </label>
+              <span style="font-size: 15px; font-weight: 700; color: var(--navy); font-family:'DM Mono',monospace;" id="thresholdValDisplay">0.50</span>
+            </div>
+            <input type="range" id="thresholdSlider" min="0.10" max="0.90" step="0.05" value="0.50" oninput="updateThreshold(this.value)" style="flex: 1; height: 6px; background: var(--border); border-radius: 3px; outline: none; cursor: pointer;">
+          </div>
+          <!-- Presets and SOP Status -->
+          <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap; font-size: 11px;">
+            <span style="color: var(--muted); font-weight: 500;">快速套用：</span>
+            <button id="badgeF1Btn" onclick="applyThresholdRecommendation('f1')" style="background: rgba(16, 185, 129, 0.1); color: #059669; border: 1px solid rgba(16, 185, 129, 0.2); border-radius: 4px; padding: 2px 6px; cursor: pointer; font-size: 10px; font-weight: 600;">
+              ⚖ 平衡模式 (F1): <span id="badgeF1Val">0.45</span>
+            </button>
+            <button id="badgeCostBtn" onclick="applyThresholdRecommendation('cost')" style="background: rgba(245, 158, 11, 0.1); color: #d97706; border: 1px solid rgba(245, 158, 11, 0.2); border-radius: 4px; padding: 2px 6px; cursor: pointer; font-size: 10px; font-weight: 600;">
+              💰 成本最低模式: <span id="badgeCostVal">0.35</span>
+            </button>
+            <span id="sopStatusLockWrap" style="margin-left: auto; display: flex; align-items: center; gap: 4px;">
+              <!-- SOP lock widgets dynamically populated -->
+            </span>
+          </div>
+        </div>
+        <div style="display: flex; gap: 12px; align-items: center;">
+          <input type="file" id="csvFileInput" accept=".csv" style="display:none;" onchange="uploadTrainingCSV(this)">
+          <a href="/static/template.csv" download="template.csv" class="run-btn" id="downloadTemplateBtn" style="width:auto; padding: 8px 16px; background: var(--steel); border-radius: 6px; font-size:12px; display:flex; align-items:center; gap:6px; text-decoration:none; color:white;">
+            📥 下載回填範本 CSV
+          </a>
+          <button class="run-btn" id="uploadCsvBtn" onclick="document.getElementById('csvFileInput').click()" style="width:auto; padding: 8px 16px; background: var(--navy); border-radius: 6px; font-size:12px; display:flex; align-items:center; gap:6px;">
+            📤 回填已知結果 CSV
+          </button>
+          <button class="run-btn hidden" id="resetCsvBtn" onclick="resetCSV()" style="width:auto; padding: 8px 16px; background: #e07b54; border-radius: 6px; font-size:12px; display:none;">
+            🔄 還原驗證集
+          </button>
+          <span id="lockedUploadBox" class="locked-box" style="font-size:11px; padding:6px 12px; border-radius:6px; margin:0;">
+            🔒 需 Manager 權限以回填訓練資料
+          </span>
+        </div>
+      </div>
+
+      <!-- Threshold tuning recommendation -->
+      <div class="panel fade-in" id="thresholdTuningPanel" style="margin-bottom:24px; padding:16px 20px; display:none;">
+        <div style="display:flex; justify-content:space-between; gap:16px; align-items:flex-start; flex-wrap:wrap; margin-bottom:14px;">
+          <div>
+            <div class="panel-title">門檻模式建議</div>
+            <div class="panel-subtitle">依目前訂單資料即時計算預警命中、延遲抓取與預估成本；F1 代表兼顧命中率與抓到率的綜合分數</div>
+          </div>
+          <div id="thresholdTuningNote" style="font-size:12px; color:var(--muted);"></div>
+        </div>
+        <div style="display:grid; grid-template-columns:repeat(3, minmax(0, 1fr)); gap:12px;" id="thresholdTuningCards">
+          <div class="stat-box">
+            <div class="stat-label">目前門檻</div>
+            <div class="stat-value" id="tuneCurrentThreshold">--</div>
+            <div class="exec-note" id="tuneCurrentMetrics">載入中...</div>
+          </div>
+          <div class="stat-box">
+            <div class="stat-label" title="F1 是兼顧命中率與抓到率的綜合分數，用來挑選不過度漏判、也不過度誤報的門檻。">平衡模式 (F1)</div>
+            <div class="stat-value green" id="tuneBestF1Threshold">--</div>
+            <div class="exec-note" id="tuneBestF1Metrics">載入中...</div>
+            <button class="run-btn" onclick="applyThresholdRecommendation('f1')" style="margin-top:10px; padding:7px 10px; font-size:12px;">套用平衡模式 (F1)</button>
+          </div>
+          <div class="stat-box">
+            <div class="stat-label" title="依升級成本與漏判延遲成本估算總損失最低的門檻。">成本最低模式</div>
+            <div class="stat-value warm" id="tuneBestCostThreshold">--</div>
+            <div class="exec-note" id="tuneBestCostMetrics">載入中...</div>
+            <button class="run-btn" onclick="applyThresholdRecommendation('cost')" style="margin-top:10px; padding:7px 10px; font-size:12px; background:var(--warm);">套用成本最低模式</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- KPI -->
+      <div class="kpi-row fade-in">
+        <div class="kpi-card kpi-total">
+          <div class="kpi-icon-wrap icon-steel">📦</div>
+          <div class="kpi-info">
+            <div class="kpi-label">待處理訂單總數</div>
+            <div class="kpi-value steel" id="kpiTotalOrders">—</div>
+            <div class="kpi-change" id="kpiTotalDesc">載入中...</div>
+          </div>
+        </div>
+        <div class="kpi-card kpi-late">
+          <div class="kpi-icon-wrap icon-warm">⚠️</div>
+          <div class="kpi-info">
+            <div class="kpi-label">預估延遲訂單數</div>
+            <div class="kpi-value warm" id="kpiPredictedLateOrders">—</div>
+            <div class="kpi-change" id="kpiPredictedDesc">載入中...</div>
+          </div>
+        </div>
+        <div class="kpi-card kpi-penalty">
+          <div class="kpi-icon-wrap icon-navy">💸</div>
+          <div class="kpi-info">
+            <div class="kpi-label">預期延遲罰金損失</div>
+            <div class="kpi-value" id="kpiExpectedPenaltyLoss" style="font-weight:700;">—</div>
+            <div class="kpi-change" id="kpiExpectedDesc">載入中...</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Actionable Insights Banner -->
+      <div id="actionableInsightsBanner" class="panel fade-in" style="margin-bottom: 24px; padding: 16px 20px; background: linear-gradient(90deg, #1e3a8a 0%, #3b82f6 100%); color: white; border-radius: 10px; display: none; align-items: center; justify-content: space-between; box-shadow: 0 4px 14px rgba(59, 130, 246, 0.25);">
+        <div style="display:flex; align-items:center; gap:12px;">
+          <span style="font-size:22px;">💡</span>
+          <div>
+            <div style="font-size:13.5px; font-weight:700; color:white;">高階經理人決策建議 (Actionable Insight)</div>
+            <div id="actionableInsightsText" style="font-size:12px; opacity:0.9; margin-top:2px;">載入中...</div>
+          </div>
+        </div>
+        <button class="run-btn" onclick="document.getElementById('nav-optimization').click()" style="background:white; color:#1e3a8a; font-weight:700; border:none; padding:8px 16px; font-size:12px; border-radius:6px; box-shadow:0 2px 6px rgba(0,0,0,0.1); cursor:pointer; width:auto; flex-shrink:0;">
+          前往最佳化調度
+        </button>
+      </div>
+
+      <div class="exec-grid fade-in">
+        <div class="exec-card">
+          <div class="exec-label">SLA Risk</div>
+          <div class="exec-value" id="execSlaRisk">—</div>
+          <div class="exec-note" id="execSlaRiskNote">載入中...</div>
+        </div>
+        <div class="exec-card">
+          <div class="exec-label">Penalty Exposure</div>
+          <div class="exec-value" id="execExposure">—</div>
+          <div class="exec-note" id="execExposureNote">高風險訂單預估罰金</div>
+        </div>
+        <div class="exec-card">
+          <div class="exec-label">Budget Ask</div>
+          <div class="exec-value" id="execBudget">—</div>
+          <div class="exec-note" id="execBudgetNote">ROI 為正訂單的建議升級預算</div>
+        </div>
+        <div class="exec-card">
+          <div class="exec-label">Primary Driver</div>
+          <div class="exec-value" id="execDriver">—</div>
+          <div class="exec-note" id="execDriverNote">主要風險來源</div>
+        </div>
+      </div>
+
+      <div class="exec-action fade-in">
+        <div class="exec-action-title">高階經理人建議動作</div>
+        <div class="exec-action-body" id="execActionText">等待資料載入。</div>
+      </div>
+
+      <div class="panel fade-in scenario-table-wrap">
+        <div class="panel-head">
+          <div>
+            <div class="panel-title">預算情境比較</div>
+            <div class="panel-subtitle">使用 MILP 比較不同物流預算下可救回的訂單與預估效益</div>
+          </div>
+          <span class="tag tag-count" id="scenarioCount">0 個情境</span>
+        </div>
+        <div class="table-scroll">
+          <table class="risk-table">
+            <thead>
+              <tr>
+                <th>預算</th>
+                <th>升級訂單</th>
+                <th>實際花費</th>
+                <th>避免罰金</th>
+                <th>預估淨效益</th>
+                <th>使用率</th>
+              </tr>
+            </thead>
+            <tbody id="scenarioTableBody">
+              <tr><td colspan="6" style="text-align:center;padding:24px;color:var(--muted);font-size:13px">載入中...</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="scenario-note" id="scenarioRecommendation">等待情境分析。</div>
+      </div>
+
+      <!-- Two-col -->
+      <div class="grid-2 fade-in">
+        <!-- Boss Q&A panel -->
+        <div class="panel">
+          <div class="panel-head">
+            <div>
+              <div class="panel-title" style="font-size:14px; font-weight:600; display:flex; align-items:center; gap:6px;">👑 老闆直觀問答區</div>
+              <div class="panel-subtitle">回答「哪些會延遲？」、「原因為何？」及「如何決策？」</div>
+            </div>
+            <span class="tag tag-count" id="bossDelayCount">0 筆預估延遲</span>
+          </div>
+          <div class="table-scroll" style="max-height: 480px;">
+            <table class="risk-table">
+              <thead>
+                <tr>
+                  <th>訂單 ID</th>
+                  <th>運送模式</th>
+                  <th>地區</th>
+                  <th>延遲機率</th>
+                  <th>主要延遲原因 (X 因子)</th>
+                  <th>最佳建議動作</th>
+                </tr>
+              </thead>
+              <tbody id="bossTableBody">
+                <tr><td colspan="6" style="text-align:center;padding:32px;color:var(--muted);font-size:13px">
+                  載入中...
+                </td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Optimize panel -->
+        <div class="panel" style="height:fit-content;">
+          <div class="panel-head">
+            <div>
+              <div class="panel-title">經理調度模擬區</div>
+              <div class="panel-subtitle">在預算限制下進行物流升級與決策模擬</div>
+            </div>
+            <span class="role-badge badge-viewer" id="optRoleBadge">Viewer</span>
+          </div>
+          <div class="opt-body">
+            <div>
+              <label class="field-label">物流預算上限 Budget (USD)</label>
+              <input type="number" class="budget-input" id="budgetInput" placeholder="5000" value="5000" min="0">
+            </div>
+            <button class="run-btn hidden" id="runBtn" onclick="runOptimize()">
+              執行最佳化調度
+            </button>
+            <div class="locked-box" id="lockedBox">
+              🔒 需要 Manager 權限才能執行最佳化
+            </div>
+            <!-- Results -->
+            <div id="optResult" class="hidden" style="display:flex;flex-direction:column;gap:14px">
+              <div class="opt-divider"></div>
+              <div class="stat-grid">
+                <div class="stat-box">
+                  <div class="stat-label">已選訂單</div>
+                  <div class="stat-value" id="optSelected">—</div>
+                </div>
+                <div class="stat-box">
+                  <div class="stat-label">預期節省</div>
+                  <div class="stat-value green" id="optSaving">—</div>
+                </div>
+                <div class="stat-box">
+                  <div class="stat-label">升級成本</div>
+                  <div class="stat-value warm" id="optCost">—</div>
+                </div>
+                <div class="stat-box">
+                  <div class="stat-label">預算使用率</div>
+                  <div class="stat-value" id="optUsage">—</div>
+                  <div class="usage-bar-wrap">
+                    <div class="usage-bar"><div class="usage-fill" id="usageFill" style="width:0%"></div></div>
+                  </div>
+                </div>
+              </div>
+              <div id="managerAnalysisBox" style="padding:14px 16px; background:#f6f9fb; border:1px solid var(--border); border-radius:6px; display:none;">
+                <div style="font-size:11px;color:var(--muted);font-weight:600;margin-bottom:6px;text-transform:uppercase;letter-spacing:0.5px;font-family:'DM Mono',monospace">主管分析摘要</div>
+                <div id="managerAnalysisText" style="font-size:13px;line-height:1.65;color:var(--text);"></div>
+                <div id="managerAnalysisFactors" style="margin-top:10px;display:flex;flex-direction:column;gap:6px;"></div>
+              </div>
+              <div>
+                <div style="font-size:11px;color:var(--muted);font-weight:500;margin-bottom:8px;text-transform:uppercase;letter-spacing:0.5px;font-family:'DM Mono',monospace">建議升級訂單</div>
+                <div class="ord-list" id="ordList"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- B. AI ASSISTANT PANEL -->
+    <div class="page-section hidden" id="page-ai-assistant">
+      <div class="page-header fade-in">
+        <div class="page-title">AI 物流決策助理</div>
+        <div class="page-sub">上傳尚未知道實際結果的訂單 CSV，先做延遲預測，再用去識別化資料產生主管摘要</div>
+      </div>
+
+      <div class="ai-chat-shell fade-in">
+        <div class="ai-chat-log" id="aiChatLog">
+          <div class="ai-message assistant">
+            你好，我是 EDIS AI 物流決策助理。你可以直接問我這批訂單的延遲風險、最佳化調度建議，或按左下角 + 上傳尚未知道實際結果的訂單 CSV 進行預測。
+          </div>
+          <div class="ai-message system" id="aiUploadStatus">尚未上傳待預測檔案。你可以先上傳 CSV，或直接詢問目前資料的風險與調度建議。</div>
+        </div>
+
+        <div class="ai-composer-wrap">
+          <div class="ai-composer">
+            <textarea id="aiQuestionInput" rows="2" placeholder="提出任何問題"></textarea>
+            <div class="ai-composer-actions">
+              <div style="display:flex;align-items:center;gap:10px;">
+                <input type="file" id="aiPredictCsvInput" accept=".csv" style="display:none;" onchange="uploadPredictionCSV(this)">
+                <button class="ai-icon-btn" id="aiUploadPredictBtn" type="button" onclick="document.getElementById('aiPredictCsvInput').click()" title="上傳待預測 CSV">+</button>
+                <span class="ai-file-chip" id="aiLlmMode">AI ready</span>
+                <span id="aiLockedBox" class="ai-file-chip" style="display:none;">需要 Manager 權限</span>
+                <button class="ai-file-chip" id="aiResetPredictBtn" onclick="resetCSV()" style="display:none;border:0;background:transparent;cursor:pointer;color:#e07b54;">還原預設驗證集</button>
+              </div>
+              <button class="ai-send-btn" id="aiGenerateBriefBtn" type="button" onclick="generateAIBrief()" title="送出問題">↑</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- B. RISK ORDER LIST PANEL -->
+    <div class="page-section hidden" id="page-risk-list">
+      <div class="page-header fade-in">
+        <div class="page-title">風險訂單列表</div>
+        <div class="page-sub">精確查詢與篩選所有延遲機率大於 0.3 的訂單</div>
+      </div>
+      
+      <!-- Filter controls -->
+      <div class="panel fade-in" style="margin-bottom: 16px; padding: 16px; display: flex; flex-wrap: wrap; gap: 12px; align-items: center; background: var(--card);">
+        <div style="flex: 1; min-width: 200px;">
+          <label class="field-label">搜尋訂單 ID</label>
+          <input type="text" id="riskSearchInput" oninput="applyFilters()" placeholder="輸入訂單 ID 或片段（例：ORD-BFD69941 或 bfd69941）" style="width:100%; padding:8px 12px; border:1px solid var(--border); border-radius:6px; font-size:12px; outline:none; background:var(--bg); color:var(--text);">
+        </div>
+        <div>
+          <label class="field-label">風險等級</label>
+          <select id="filterRisk" onchange="applyFilters()" style="padding:8px 12px; border:1px solid var(--border); border-radius:6px; font-size:12px; background:var(--card); color:var(--text); outline:none;">
+            <option value="">全部風險</option>
+            <option value="High">High (>= 70%)</option>
+            <option value="Medium">Medium (40% - 70%)</option>
+            <option value="Low">Low (< 40%)</option>
+          </select>
+        </div>
+        <div>
+          <label class="field-label">運送模式</label>
+          <select id="filterShipping" onchange="applyFilters()" style="padding:8px 12px; border:1px solid var(--border); border-radius:6px; font-size:12px; background:var(--card); color:var(--text); outline:none;">
+            <option value="">全部模式</option>
+            <option value="Standard Class">Standard Class</option>
+            <option value="Second Class">Second Class</option>
+            <option value="First Class">First Class</option>
+            <option value="Same Day">Same Day</option>
+          </select>
+        </div>
+        <div>
+          <label class="field-label">目的地區域</label>
+          <select id="filterRegion" onchange="applyFilters()" style="padding:8px 12px; border:1px solid var(--border); border-radius:6px; font-size:12px; background:var(--card); color:var(--text); max-width:200px; outline:none;">
+            <option value="">全部區域</option>
+          </select>
+        </div>
+      </div>
+      
+      <!-- Standalone Risk Table -->
+      <div class="panel fade-in">
+        <div class="panel-head">
+          <div class="panel-title">篩選結果</div>
+          <span class="tag tag-count" id="riskListCount">共 0 筆</span>
+        </div>
+        <div class="table-scroll" style="max-height: 480px;">
+          <table class="risk-table">
+            <thead>
+              <tr>
+                <th>訂單 ID</th>
+                <th>運送模式</th>
+                <th>地區</th>
+                <th>延遲機率</th>
+                <th>風險等級</th>
+                <th>實際結果 (有 Y 時)</th>
+                <th>預測正確？(有 Y 時)</th>
+              </tr>
+            </thead>
+            <tbody id="riskListTableBody">
+              <tr><td colspan="7" style="text-align:center;padding:32px;color:var(--muted);font-size:13px">載入中...</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="panel-footer" style="padding: 12px 20px; border-top: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; background: #fafbfa;">
+          <button id="riskListPrevBtn" onclick="changeRiskListPage(-1)" style="padding: 5px 12px; font-size: 11px; border: 1px solid var(--border); border-radius: 4px; background: white; cursor: pointer; color: var(--text); font-weight: 500;">上一頁</button>
+          <span id="riskListPageIndicator" style="font-size: 11px; color: var(--muted); font-family: 'DM Mono', monospace; font-weight: 500;">第 1 頁</span>
+          <button id="riskListNextBtn" onclick="changeRiskListPage(1)" style="padding: 5px 12px; font-size: 11px; border: 1px solid var(--border); border-radius: 4px; background: white; cursor: pointer; color: var(--text); font-weight: 500;">下一頁</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- C. OPTIMIZATION PANEL -->
+    <div class="page-section hidden" id="page-optimization">
+      <div class="page-header fade-in">
+        <div class="page-title">最佳化調度</div>
+        <div class="page-sub">月份誤差診斷 → 模型重訓 · 訂單升級調度</div>
+      </div>
+
+      <!-- ① 月份 Flipper（診斷入口） -->
+      <div id="monthlyFlipperPanel" class="panel fade-in" style="margin-bottom:24px;">
+        <div class="panel-head">
+          <div style="display:flex;align-items:center;gap:10px;">
+            <span style="font-size:16px;">📈</span>
+            <div>
+              <div class="panel-title">月份延遲誤差追蹤</div>
+              <div style="font-size:12px;color:var(--muted);margin-top:2px;">
+                預測 Ŷ vs 實際 Y · 誤差超過
+                <span id="flipThresholdLabel" style="font-weight:700;color:var(--navy);">5%</span>
+                才顯示診斷按鈕
+              </div>
+              <div id="monthlyPeriodNote" style="font-size:11px;color:var(--muted);margin-top:3px;"></div>
+            </div>
+          </div>
+          <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+            <div style="display:flex;align-items:center;gap:6px;">
+              <span style="font-size:11px;color:var(--muted);white-space:nowrap;">診斷閾值：</span>
+              <input type="number" id="flipThresholdInput" value="5" min="1" max="50" step="1"
+                onchange="updateFlipThreshold(this.value)"
+                style="width:52px;padding:4px 6px;border:1px solid var(--border);border-radius:6px;font-size:12px;font-weight:700;color:var(--navy);text-align:center;outline:none;">
+              <span style="font-size:11px;color:var(--muted);">%</span>
+            </div>
+            <div style="display:flex;align-items:center;gap:6px;">
+              <span style="font-size:11px;color:var(--muted);">跳至：</span>
+              <select id="monthFlipSelect" onchange="jumpToFlipPage(parseInt(this.value))"
+                style="padding:5px 10px;border:1px solid var(--border);border-radius:6px;font-size:12px;background:var(--card);color:var(--text);outline:none;cursor:pointer;">
+              </select>
+            </div>
+          </div>
+        </div>
+        <div style="padding:16px 20px 20px;">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
+            <button onclick="flipPage(-1)" id="flipPrevBtn"
+              style="display:flex;align-items:center;gap:6px;padding:6px 14px;border-radius:6px;border:1.5px solid var(--border);background:white;font-size:12px;font-weight:600;cursor:pointer;color:var(--text);transition:all 0.15s;"
+              onmouseover="this.style.background='var(--navy)';this.style.color='#fff';this.style.borderColor='var(--navy)'"
+              onmouseout="this.style.background='white';this.style.color='var(--text)';this.style.borderColor='var(--border)'">&#9664; 上一組</button>
+            <div id="flipPageRangeLabel" style="font-size:13px;font-weight:600;color:var(--text);font-family:'DM Mono',monospace;">載入中…</div>
+            <button onclick="flipPage(1)" id="flipNextBtn"
+              style="display:flex;align-items:center;gap:6px;padding:6px 14px;border-radius:6px;border:1.5px solid var(--border);background:white;font-size:12px;font-weight:600;cursor:pointer;color:var(--text);transition:all 0.15s;"
+              onmouseover="this.style.background='var(--navy)';this.style.color='#fff';this.style.borderColor='var(--navy)'"
+              onmouseout="this.style.background='white';this.style.color='var(--text)';this.style.borderColor='var(--border)'">下一組 &#9654;</button>
+          </div>
+          <div id="flipperGrid" style="display:grid;grid-template-columns:repeat(6,1fr);gap:12px;"></div>
+        </div>
+      </div>
+
+      <!-- 診斷 Modal -->
+      <div id="monthDiagnoseModal" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.45);z-index:1000;align-items:center;justify-content:center;padding:20px;">
+        <div style="background:white;border-radius:10px;width:100%;max-width:560px;padding:24px;box-shadow:0 10px 30px rgba(0,0,0,0.15);position:relative;max-height:90vh;overflow-y:auto;">
+          <button onclick="closeDiagnoseModal()" style="position:absolute;top:14px;right:18px;border:none;background:transparent;font-size:22px;cursor:pointer;color:var(--muted);">&times;</button>
+          <div style="font-size:15px;font-weight:700;color:var(--text);margin-bottom:4px;">🔎 <span id="diagMonthTitle">—</span> 誤差診斷</div>
+          <div id="diagMonthSummary" style="font-size:12px;color:var(--muted);font-family:'DM Mono',monospace;margin-bottom:16px;">—</div>
+
+          <!-- LIME 特徵 -->
+          <div style="margin-bottom:16px;">
+            <div style="font-size:11px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:0.5px;font-family:'DM Mono',monospace;margin-bottom:8px;">主要誤差貢獻特徵（LIME 聚合）</div>
+            <div id="diagFactors" style="display:flex;flex-direction:column;gap:8px;"><div style="color:var(--muted);font-size:12px;">載入中…</div></div>
+          </div>
+
+          <!-- 分步驟區（Step 1 事件判斷 / Step 2 重訓）-->
+          <div id="diagStep1" style="border-top:1px solid var(--border);padding-top:14px;">
+            <div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:10px;">此月誤差是否來自外部偶發事件？</div>
+            <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:10px;">
+              <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;"><input type="radio" name="diagEventType" value="颱風/天災" style="accent-color:var(--navy);"> 颱風 / 天災</label>
+              <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;"><input type="radio" name="diagEventType" value="假期/節慶" style="accent-color:var(--navy);"> 假期 / 節慶（春節、聖誕等）</label>
+              <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;"><input type="radio" name="diagEventType" value="供應鏈中斷" style="accent-color:var(--navy);"> 供應鏈中斷（港口罷工、疫情等）</label>
+              <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;"><input type="radio" name="diagEventType" value="其他" style="accent-color:var(--navy);"> 其他</label>
+            </div>
+            <input type="text" id="diagEventNote" placeholder="備註說明（選填）"
+              style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:6px;font-size:12px;outline:none;box-sizing:border-box;margin-bottom:12px;">
+            <div id="diagManagerActions" style="display:flex;flex-direction:column;gap:8px;">
+              <button onclick="flagMonthEvent()" id="diagFlagBtn"
+                style="padding:10px;background:#fff7ed;border:1.5px solid #fed7aa;border-radius:6px;font-size:13px;font-weight:600;color:#c2410c;cursor:pointer;">
+                標記為外部事件，排除重訓考量
+              </button>
+              <button onclick="showRetrainStep()" id="diagRetrainBtn"
+                style="padding:10px;background:var(--navy);border:none;border-radius:6px;font-size:13px;font-weight:600;color:#fff;cursor:pointer;">
+                非偶發事件 → 繼續重訓模型
+              </button>
+            </div>
+            <div id="diagViewerNote" style="display:none;text-align:center;font-size:12px;color:var(--muted);padding:8px;background:var(--bg);border-radius:6px;">
+              🔒 需要 Manager 權限才能執行標記或重訓操作
+            </div>
+          </div>
+
+          <!-- Step 2：特徵排除 + 重訓 -->
+          <div id="diagStep2" style="display:none;border-top:1px solid var(--border);padding-top:14px;">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
+              <div style="font-size:13px;font-weight:600;color:var(--text);">選擇要排除的問題特徵</div>
+              <button onclick="backToStep1()" style="font-size:11px;color:var(--muted);background:transparent;border:none;cursor:pointer;">← 返回</button>
+            </div>
+            <div id="diagFeatureCheckboxes" style="display:flex;flex-direction:column;gap:8px;margin-bottom:14px;"></div>
+            <button onclick="startRetrain()" id="diagStartRetrainBtn"
+              style="width:100%;padding:10px;background:#16a34a;border:none;border-radius:6px;font-size:13px;font-weight:600;color:#fff;cursor:pointer;">
+              ▶ 開始重訓模型
+            </button>
+            <div id="diagRetrainStatus" style="display:none;text-align:center;padding:12px;font-size:13px;color:var(--muted);line-height:1.65;">重訓中，請稍候…</div>
+          </div>
+
+          <!-- Step 3：重訓比對與 Adopt (就地診斷重訓面板) -->
+          <div id="diagStep3" style="display:none;border-top:1px solid var(--border);padding-top:14px;">
+            <div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:10px;">模型重訓比對結果</div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:12px;">
+              <div>
+                <div style="font-size:10px;color:var(--muted);font-weight:600;margin-bottom:6px;text-transform:uppercase;letter-spacing:0.5px;">舊模型</div>
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;" id="diagOldMetricsGrid"></div>
+              </div>
+              <div>
+                <div style="font-size:10px;color:var(--muted);font-weight:600;margin-bottom:6px;text-transform:uppercase;letter-spacing:0.5px;">新模型 (重訓後)</div>
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;" id="diagNewMetricsGrid"></div>
+              </div>
+            </div>
+            <div id="diagDroppedColsNote" style="font-size:11px;color:var(--muted);margin-bottom:16px;font-family:'DM Mono',monospace;padding:8px 10px;background:var(--bg);border-radius:6px;"></div>
+            <div style="display:flex;gap:12px;">
+              <button onclick="diagAdoptNewModel()" id="diagAdoptBtn"
+                style="flex:1;padding:10px;background:#16a34a;border:none;border-radius:6px;font-size:13px;font-weight:600;color:#fff;cursor:pointer;">
+                ✓ 採用新模型
+              </button>
+              <button onclick="diagDiscardNewModel()" id="diagDiscardBtn"
+                style="flex:1;padding:10px;background:white;border:1.5px solid var(--border);border-radius:6px;font-size:13px;font-weight:600;color:var(--text);cursor:pointer;">
+                ✗ 捨棄，保留舊模型
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+
+      <!-- ② 訂單升級調度（原有功能，標題調整） -->
+      <div class="grid-2 fade-in">
+        <!-- Input controls -->
+        <div class="panel" style="height: fit-content;">
+          <div class="panel-head">
+            <div class="panel-title">調度參數量化調整</div>
+          </div>
+          <div class="opt-body">
+            <div>
+              <label class="field-label">物流預算上限 Budget (USD)</label>
+              <input type="number" class="budget-input" id="optPageBudgetInput" placeholder="5000" value="5000" min="0">
+            </div>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+              <div>
+                <label class="field-label">單筆升級成本 Upgrade Cost ($)</label>
+                <input type="number" class="budget-input" id="optPageUpgradeCost" placeholder="80" value="80" min="0">
+              </div>
+              <div>
+                <label class="field-label">單筆延遲罰金 Delay Penalty ($)</label>
+                <input type="number" class="budget-input" id="optPageDelayPenalty" placeholder="250" value="250" min="0">
+              </div>
+            </div>
+            
+            <button class="run-btn hidden" id="optPageRunBtn" onclick="runPageOptimize()">
+              開始計算最佳化調度方案
+            </button>
+            <div class="locked-box" id="optPageLockedBox">
+              🔒 需要 Manager 權限才能執行最佳化調度
+            </div>
+          </div>
+        </div>
+        
+        <!-- Results visualizer -->
+        <div class="panel">
+          <div class="panel-head">
+            <div class="panel-title">調度預估成效分析</div>
+            <span class="role-badge badge-viewer" id="optPageRoleBadge">Viewer</span>
+          </div>
+          <div class="opt-body">
+            <div id="optPageResultPlaceholder" style="text-align:center; padding:64px 20px; color:var(--muted); font-size:13px;">
+              請設定左側參數並點擊執行，以生成調度分析成果。
+            </div>
+            
+            <div id="optPageResult" class="hidden" style="display:flex; flex-direction:column; gap:16px;">
+              <div class="stat-grid">
+                <div class="stat-box">
+                  <div class="stat-label">建議升級訂單數</div>
+                  <div class="stat-value" id="optPageSelected">—</div>
+                </div>
+                <div class="stat-box">
+                  <div class="stat-label">預期省下罰金</div>
+                  <div class="stat-value green" id="optPageSaving">—</div>
+                </div>
+                <div class="stat-box">
+                  <div class="stat-label">實際升級花費</div>
+                  <div class="stat-value warm" id="optPageCost">—</div>
+                </div>
+                <div class="stat-box">
+                  <div class="stat-label">預算使用比例</div>
+                  <div class="stat-value" id="optPageUsage">—</div>
+                  <div class="usage-bar-wrap">
+                    <div class="usage-bar"><div class="usage-fill" id="optPageUsageFill" style="width:0%"></div></div>
+                  </div>
+                </div>
+              </div>
+              
+              <div id="optPageManagerAnalysisBox" style="padding:14px 16px; background:#f6f9fb; border:1px solid var(--border); border-radius:6px; display:none;">
+                <div style="font-size:11px;color:var(--muted);font-weight:600;margin-bottom:6px;text-transform:uppercase;letter-spacing:0.5px;font-family:'DM Mono',monospace">主管分析摘要</div>
+                <div id="optPageManagerAnalysisText" style="font-size:13px;line-height:1.65;color:var(--text);"></div>
+                <div id="optPageManagerAnalysisFactors" style="margin-top:10px;display:flex;flex-direction:column;gap:6px;"></div>
+              </div>
+
+              <div>
+                <div style="font-size:11px;color:var(--muted);font-weight:500;margin-bottom:8px;text-transform:uppercase;letter-spacing:0.5px;font-family:'DM Mono',monospace">升級訂單明細與預估省下金額</div>
+                <div class="table-scroll" style="max-height: 240px;">
+                  <div class="ord-list" id="optPageOrdList"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- D. MODEL PERFORMANCE PANEL -->
+    <div class="page-section hidden" id="page-model-perf">
+      <div class="page-header fade-in">
+        <div class="page-title">模型效能與重要特徵分析</div>
+        <div class="page-sub">XGBoost 分類器評估成果與可解釋性模型特徵重要度排行</div>
+      </div>
+      
+      <!-- Monthly Chart (moved from homepage) -->
+      <div id="monthlyChartPanel" class="panel fade-in" style="display:none; margin-bottom:24px; padding:20px;">
+        <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:16px; flex-wrap:wrap; gap:10px;">
+          <div style="display:flex; align-items:center; gap:10px;">
+            <span style="font-size:16px;">📈</span>
+            <div>
+              <div style="font-size:14px;font-weight:600;color:var(--text);">月份延遲趨勢誤差追蹤</div>
+              <div style="font-size:12px;color:var(--muted);margin-top:2px;">預測延遲率 Ŷ vs 實際延遲率 Y（每月平均）</div>
+            </div>
+          </div>
+          <div style="display:flex;gap:6px;">
+            <button id="btnLine" onclick="switchChartType('line')" style="padding:5px 14px;border-radius:20px;border:1.5px solid var(--navy);background:var(--navy);color:#fff;font-size:11px;font-weight:600;cursor:pointer;">折線圖</button>
+            <button id="btnBar"  onclick="switchChartType('bar')"  style="padding:5px 14px;border-radius:20px;border:1.5px solid var(--border);background:transparent;color:var(--muted);font-size:11px;font-weight:600;cursor:pointer;">長條圖</button>
+          </div>
+        </div>
+        <div style="position:relative;height:260px;width:100%;"><canvas id="monthlyChartCanvas"></canvas></div>
+      </div>
+
+      <div class="grid-2 fade-in">
+        <!-- Metrics Matrix -->
+        <div style="display:flex; flex-direction:column; gap:16px;">
+          <div class="panel">
+            <div class="panel-head"><div class="panel-title">評估指標細節</div></div>
+            <div style="padding:20px; display:grid; grid-template-columns:1fr 1fr; gap:16px;">
+              <div class="stat-box">
+                <div class="stat-label">ROC-AUC</div>
+                <div class="stat-value" id="perfAuc">—</div>
+              </div>
+              <div class="stat-box">
+                <div class="stat-label">Precision (精準率)</div>
+                <div class="stat-value green" id="perfPrecision">—</div>
+              </div>
+              <div class="stat-box">
+                <div class="stat-label">Recall (召回率)</div>
+                <div class="stat-value warm" id="perfRecall">—</div>
+              </div>
+              <div class="stat-box">
+                <div class="stat-label">F1-Score</div>
+                <div class="stat-value" id="perfF1">—</div>
+              </div>
+            </div>
+          </div>
+          
+          <!-- Confusion Matrix -->
+          <div class="panel">
+            <div class="panel-head"><div class="panel-title">混淆矩陣 Confusion Matrix</div></div>
+            <div style="padding:20px; display:flex; justify-content:center; align-items:center; background: var(--bg); min-height: 180px;">
+              <table style="border-collapse: collapse; font-size:12px; text-align:center; font-family:'DM Mono',monospace; color:var(--text);">
+                <tr>
+                  <td></td>
+                  <td colspan="2" style="font-weight:600; padding-bottom:8px;">預測值 (Predicted)</td>
+                </tr>
+                <tr>
+                  <td></td>
+                  <td style="padding:6px 12px; background:var(--card); border:1px solid var(--border); font-weight:500;">準時 (0)</td>
+                  <td style="padding:6px 12px; background:var(--card); border:1px solid var(--border); font-weight:500;">延遲 (1)</td>
+                </tr>
+                <tr>
+                  <td rowspan="2" style="font-weight:600; padding-right:8px; writing-mode: vertical-lr; transform: rotate(180deg);">真實值 (Actual)</td>
+                  <td style="padding:16px; background:#eaf4ea; border:1px solid var(--border); color:#27ae60; font-weight:600;" id="cm-tn">0</td>
+                  <td style="padding:16px; background:#fdecea; border:1px solid var(--border); color:#c0392b;" id="cm-fp">0</td>
+                </tr>
+                <tr>
+                  <td style="padding:16px; background:#fef6e4; border:1px solid var(--border); color:#d68910;" id="cm-fn">0</td>
+                  <td style="padding:16px; background:#eaf4ea; border:1px solid var(--border); color:#27ae60; font-weight:600;" id="cm-tp">0</td>
+                </tr>
+              </table>
+            </div>
+          </div>
+        </div>
+        
+        <!-- Top 10 Features chart -->
+        <div class="panel" style="height:fit-content;">
+          <div class="panel-head">
+            <div class="panel-title">整體預測影響特徵統計 (Global Feature Importance)</div>
+          </div>
+          <div style="padding:20px; display:flex; flex-direction:column; gap:14px;" id="featureImportanceList">
+            載入中...
+          </div>
+        </div>
+      </div>
+
+      <!-- Historical Predict Error List -->
+      <div class="panel fade-in" style="margin-top:24px;">
+        <div class="panel-head">
+          <div>
+            <div class="panel-title" style="font-size:14px; font-weight:600;">⚠️ 歷史預測誤差明細列表 (Y ≠ Ŷ)</div>
+            <div class="panel-subtitle">列出所有模型預測與實際結果不一致的訂單，可點選深入查看 X 因子</div>
+          </div>
+          <span class="tag tag-count" id="errorListCount">共 0 筆誤差</span>
+        </div>
+        <div class="table-scroll" style="max-height: 360px;">
+          <table class="risk-table">
+            <thead>
+              <tr>
+                <th>訂單 ID</th>
+                <th>運送模式</th>
+                <th>目的地區域</th>
+                <th>延遲機率</th>
+                <th>實際結果 (Y)</th>
+                <th>預測判定 (Ŷ)</th>
+                <th>動作</th>
+              </tr>
+            </thead>
+            <tbody id="errorListTableBody">
+              <tr><td colspan="7" style="text-align:center;padding:32px;color:var(--muted);font-size:13px">
+                載入中...
+              </td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- 重訓比對區塊（從最佳化調度點繼續重訓後顯示） -->
+      <div id="retrainResultPanel" style="display:none;margin-top:24px;" class="panel fade-in">
+        <div class="panel-head">
+          <div style="display:flex;align-items:center;gap:10px;">
+            <span style="font-size:16px;">🔧</span>
+            <div>
+              <div class="panel-title">模型重訓比對結果</div>
+              <div id="retrainResultSubtitle" style="font-size:12px;color:var(--muted);margin-top:2px;">—</div>
+            </div>
+          </div>
+          <span id="retrainResultBadge" style="padding:4px 10px;border-radius:12px;font-size:11px;font-weight:600;background:#dcfce7;color:#16a34a;">新模型就緒</span>
+        </div>
+        <div style="padding:20px;">
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:24px;margin-bottom:20px;">
+            <div>
+              <div style="font-size:11px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:12px;">舊模型</div>
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;" id="oldMetricsGrid"></div>
+            </div>
+            <div>
+              <div style="font-size:11px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:12px;">新模型（重訓後）</div>
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;" id="newMetricsGrid"></div>
+            </div>
+          </div>
+          <div id="droppedColsNote" style="font-size:11px;color:var(--muted);padding:8px 12px;background:var(--bg);border-radius:6px;margin-bottom:16px;font-family:'DM Mono',monospace;"></div>
+          <div id="retrainManagerBtns" style="display:flex;gap:12px;">
+            <button onclick="adoptNewModel()" id="adoptBtn"
+              style="flex:1;padding:10px;background:#16a34a;border:none;border-radius:6px;font-size:13px;font-weight:600;color:#fff;cursor:pointer;">
+              ✓ 採用新模型
+            </button>
+            <button onclick="discardNewModel()" id="discardBtn"
+              style="flex:1;padding:10px;background:white;border:1.5px solid var(--border);border-radius:6px;font-size:13px;font-weight:600;color:var(--text);cursor:pointer;">
+              ✗ 捨棄，保留舊模型
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- E. REGIONAL RISK MAP PANEL -->
+    <div class="page-section hidden" id="page-region-map">
+      <div class="page-header fade-in">
+        <div class="page-title">區域物流延遲風險地圖</div>
+        <div class="page-sub">互動式世界地圖 — 依各目的地區域 (Order Region) 的平均延遲機率著色</div>
+      </div>
+
+      <!-- Interactive World Map -->
+      <div class="panel fade-in" style="margin-bottom: 20px;">
+        <div class="panel-head">
+          <div>
+            <div class="panel-title">🌍 全球物流延遲風險熱力圖</div>
+            <div class="panel-subtitle">滑鼠懸停可查看區域詳情，點擊區域可聚焦</div>
+          </div>
+          <div style="display:flex; align-items:center; gap:16px; font-size:11px;">
+            <span style="display:flex; align-items:center; gap:4px;"><span style="width:12px;height:12px;border-radius:3px;background:#c0392b;display:inline-block;"></span> 高風險 ≥56%</span>
+            <span style="display:flex; align-items:center; gap:4px;"><span style="width:12px;height:12px;border-radius:3px;background:#e67e22;display:inline-block;"></span> 中風險 52-56%</span>
+            <span style="display:flex; align-items:center; gap:4px;"><span style="width:12px;height:12px;border-radius:3px;background:#f1c40f;display:inline-block;"></span> 低風險 48-52%</span>
+            <span style="display:flex; align-items:center; gap:4px;"><span style="width:12px;height:12px;border-radius:3px;background:#27ae60;display:inline-block;"></span> 安全 <48%</span>
+            <span style="display:flex; align-items:center; gap:4px;"><span style="width:12px;height:12px;border-radius:3px;background:#d5dbdb;display:inline-block;"></span> 無資料</span>
+          </div>
+        </div>
+        <div id="regionMapContainer" style="height: 520px; width: 100%; background: #aad3df;"></div>
+      </div>
+
+      <!-- Risk Ranking List -->
+      <div class="panel fade-in">
+        <div class="panel-head">
+          <div class="panel-title">地區物流風險分級排行</div>
+          <span class="tag tag-count" id="regionCountTag">23 個地區</span>
+        </div>
+        <div style="padding:20px; max-height:420px; overflow-y:auto; display:flex; flex-direction:column; gap:12px;" id="regionRiskRankList">
+          載入中...
+        </div>
+      </div>
+    </div>
+
+    <!-- F. RBAC PERMISSIONS PANEL -->
+    <div class="page-section hidden" id="page-rbac">
+      <div class="page-header fade-in">
+        <div class="page-title">RBAC 角色存取權限矩陣</div>
+        <div class="page-sub">基於後端身分驗證控制 (Role-Based Access Control) 的系統安全設計</div>
+      </div>
+      
+      <div class="panel fade-in">
+        <div class="panel-head">
+          <div class="panel-title">端點存取控制矩陣 (API Access Matrix)</div>
+        </div>
+        <table class="risk-table">
+          <thead>
+            <tr>
+              <th>API 端點 (Endpoint)</th>
+              <th>請求類型</th>
+              <th>功能說明</th>
+              <th>Viewer 權限</th>
+              <th>Logistics_Manager 權限</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><span class="order-id">/api/metrics</span></td>
+              <td><span class="tag" style="background:#eaf4ea; color:#27ae60;">GET</span></td>
+              <td>取得機器學習模型評估 KPI 與特徵重要性</td>
+              <td><span class="risk-pill r-low">允許存取</span></td>
+              <td><span class="risk-pill r-low">允許存取</span></td>
+            </tr>
+            <tr>
+              <td><span class="order-id">/api/predict</span></td>
+              <td><span class="tag" style="background:#eaf4ea; color:#27ae60;">GET</span></td>
+              <td>取得去識別化延遲風險訂單列表 (支援分頁)</td>
+              <td><span class="risk-pill r-low">允許存取</span></td>
+              <td><span class="risk-pill r-low">允許存取</span></td>
+            </tr>
+            <tr>
+              <td><span class="order-id">/api/explain/{order_id_hash}</span></td>
+              <td><span class="tag" style="background:#eaf4ea; color:#27ae60;">GET</span></td>
+              <td>回傳單筆訂單的 LIME-style X 因子與主管分析</td>
+              <td><span class="risk-pill r-low">允許存取</span></td>
+              <td><span class="risk-pill r-low">允許存取</span></td>
+            </tr>
+            <tr>
+              <td><span class="order-id">/api/optimize</span></td>
+              <td><span class="tag" style="background:#fdecea; color:#c0392b;">POST</span></td>
+              <td>匯入訂單調度最佳化求解器 (PuLP / SciPy)</td>
+              <td><span class="risk-pill r-high">拒絕 (403)</span></td>
+              <td><span class="risk-pill r-low">允許存取</span></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- G. LLM SETTINGS PANEL -->
+    <div class="page-section hidden" id="page-llm-settings">
+      <div class="page-header fade-in">
+        <div class="page-title">LLM 設定</div>
+        <div class="page-sub">Manager 可設定 AI 助理使用的 Provider、模型與 API Key</div>
+      </div>
+
+      <div class="panel fade-in" style="max-width:760px;">
+        <div class="panel-head">
+          <div>
+            <div class="panel-title">AI 助理連線設定</div>
+            <div class="panel-subtitle">設定會加密儲存在本機專案資料夾，重啟服務後仍會套用。</div>
+          </div>
+          <span class="role-badge badge-viewer" id="llmSettingsRoleBadge">Viewer</span>
+        </div>
+
+        <div id="llmSettingsLocked" class="locked-box" style="margin-bottom:16px;">
+          🔒 需要 Manager 權限才能查看與修改 LLM 設定
+        </div>
+
+        <div id="llmSettingsForm" style="display:none;grid-template-columns:1fr 1fr;gap:16px;">
+          <div>
+            <label class="field-label">Provider</label>
+            <select id="llmProviderInput" class="budget-input" style="width:100%;" onchange="handleLLMProviderChange()">
+              <option value="local">local</option>
+              <option value="openai">openai</option>
+              <option value="openai_compatible">openai_compatible</option>
+              <option value="gemini">gemini</option>
+              <option value="claude">claude</option>
+              <option value="ollama">ollama</option>
+            </select>
+          </div>
+          <div>
+            <label class="field-label">Model</label>
+            <select id="llmModelInput" class="budget-input" style="width:100%;" onchange="updateLLMCustomModelState()"></select>
+            <input id="llmCustomModelInput" class="budget-input" style="width:100%;display:none;margin-top:8px;" placeholder="輸入自訂模型 ID，例如 gpt-5.4-mini 或 llama3.1:8b">
+          </div>
+          <div style="grid-column:1 / -1;">
+            <label class="field-label">API URL（選填）</label>
+            <input id="llmApiUrlInput" class="budget-input" style="width:100%;" placeholder="使用 provider 預設端點">
+          </div>
+          <div style="grid-column:1 / -1;">
+            <label class="field-label">API Key</label>
+            <input id="llmApiKeyInput" class="budget-input" type="password" style="width:100%;" placeholder="貼上新的 API Key，或勾選下方保留目前金鑰">
+            <label id="llmKeepKeyRow" style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--muted);margin-top:8px;">
+              <input type="checkbox" id="llmKeepKeyInput" style="accent-color:var(--navy);" onchange="updateLLMKeyInputState()">
+              保留目前已儲存的 API Key
+            </label>
+            <div id="llmKeyHint" style="font-size:11px;color:var(--muted);margin-top:6px;">若要更換 Key，取消勾選後貼上新的 API Key。</div>
+          </div>
+          <div style="grid-column:1 / -1;display:flex;justify-content:space-between;gap:12px;align-items:center;flex-wrap:wrap;">
+            <div id="llmSettingsStatus" style="font-size:12px;color:var(--muted);">尚未讀取設定。</div>
+            <button class="run-btn" id="llmSaveBtn" onclick="saveLLMSettings()" style="width:auto;padding:9px 18px;">儲存設定</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+<script>
+// ══ API BASE ══
+const API_BASE = window.location.origin;
+
+// ══ Fetch Interceptor for JWT Auth & Session ID ══
+const originalFetch = window.fetch;
+window.fetch = function (url, options) {
+  options = options || {};
+  options.headers = options.headers || {};
+  
+  const token = sessionStorage.getItem('edis_token');
+  if (token) {
+    options.headers['Authorization'] = 'Bearer ' + token;
+  }
+  const sessionId = sessionStorage.getItem('edis_session_id');
+  if (sessionId) {
+    options.headers['X-Session-ID'] = sessionId;
+  }
+  return originalFetch(url, options);
+};
+
+
+// ══ State ══
+let currentRole = 'viewer';
+let currentPage = 1;
+const limit = 50;
+let totalPredictionsCount = 0;
+let threshold = 0.50; // Dynamic threshold
+let lastThresholdTuning = null;
+
+// Risk List page state
+let currentRiskListPage = 1;
+let totalRiskListCount = 0;
+
+// Cache for metrics & region risk
+let cachedRegions = null;
+let cachedScenarios = null;
+
+// ══ Navigation (SPA) ══
+function showPage(pageId) {
+  // Update nav item active states
+  document.querySelectorAll('.sidebar-nav .nav-item').forEach(el => {
+    el.classList.remove('active');
+  });
+  const activeNav = document.getElementById(`nav-${pageId}`);
+  if (activeNav) activeNav.classList.add('active');
+
+  // Show corresponding section
+  document.querySelectorAll('.page-section').forEach(el => {
+    el.classList.add('hidden');
+  });
+  const targetPage = document.getElementById(`page-${pageId}`);
+  if (targetPage) targetPage.classList.remove('hidden');
+
+  // Trigger page-specific loads
+  if (pageId === 'risk-list') {
+    populateRegionDropdown();
+    applyFilters();
+  } else if (pageId === 'optimization') {
+    loadMonthlyChart();
+  } else if (pageId === 'model-perf') {
+    loadModelPerformance();
+  } else if (pageId === 'region-map') {
+    loadRegionalRisk();
+  } else if (pageId === 'llm-settings') {
+    loadLLMSettings();
+  }
+}
+
+// ══ API Calls ══
+async function fetchMetrics() {
+  const d = await fetch(`${API_BASE}/api/metrics?threshold=${threshold}`).then(r => r.json());
+  return d;
+}
+
+async function fetchThresholdTuning() {
+  const url = `${API_BASE}/api/threshold-tuning?current_threshold=${threshold}`;
+  const res = await fetch(url);
+  if (!res.ok) throw new Error('Threshold tuning unavailable');
+  return res.json();
+}
+
+async function fetchRegions() {
+  if (cachedRegions) return cachedRegions;
+  cachedRegions = await fetch(`${API_BASE}/api/regions`).then(r => r.json());
+  return cachedRegions;
+}
+
+async function fetchExecutiveSummary() {
+  return fetch(`${API_BASE}/api/executive-summary?threshold=${threshold}`)
+    .then(r => r.json());
+}
+
+async function fetchScenarioAnalysis() {
+  if (cachedScenarios) return cachedScenarios;
+  cachedScenarios = await fetch(`${API_BASE}/api/scenario-analysis?budgets=1000,3000,5000,10000`)
+    .then(r => r.json());
+  return cachedScenarios;
+}
+
+async function fetchPredictions(page = 1, search = '', risk = '', shipping = '', region = '') {
+  let url = `${API_BASE}/api/predict?page=${page}&limit=${limit}&threshold=${threshold}`;
+  if (search) url += `&search=${encodeURIComponent(search)}`;
+  if (risk) url += `&risk=${encodeURIComponent(risk)}`;
+  if (shipping) url += `&shipping=${encodeURIComponent(shipping)}`;
+  if (region) url += `&region=${encodeURIComponent(region)}`;
+
+  const payload = await fetch(url, {
+    headers: { 'X-Role': currentRole === 'manager' ? 'Logistics_Manager' : 'Viewer' }
+  }).then(r => r.json());
+  
+  return payload;
+}
+
+function displayOrderId(orderId) {
+  const raw = String(orderId || '').replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
+  return raw ? `ORD-${raw.slice(0, 8)}` : 'ORD-UNKNOWN';
+}
+
+async function fetchOptimize(budget, upgradeCost, delayPenalty) {
+  const response = await fetch(`${API_BASE}/api/optimize`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-Role': 'Logistics_Manager'
+    },
+    body: JSON.stringify({
+      budget,
+      upgrade_cost: upgradeCost,
+      delay_penalty: delayPenalty,
+      max_candidates: 500
+    })
+  });
+  if (!response.ok) {
+    const errorPayload = await response.json().catch(() => ({}));
+    throw new Error(errorPayload.detail?.message || errorPayload.detail || `HTTP ${response.status}`);
+  }
+  return response.json();
+}
+
+// ══ Populate Region Filter Options ══
+async function populateRegionDropdown() {
+  const dropdown = document.getElementById('filterRegion');
+  if (dropdown.options.length > 1) return;
+
+  try {
+    const regionsData = await fetchRegions();
+    regionsData.forEach(r => {
+      if (r.order_region) {
+        const opt = document.createElement('option');
+        opt.value = r.order_region;
+        opt.textContent = r.order_region;
+        dropdown.appendChild(opt);
+      }
+    });
+  } catch (e) {
+    console.error('Failed to load regions filter', e);
+  }
+}
+
+// ══ Dynamic Threshold Handler ══
+function updateThreshold(val) {
+  threshold = parseFloat(val);
+  document.getElementById('thresholdValDisplay').textContent = threshold.toFixed(2);
+  refreshDashboard();
+}
+
+// ══ CSV Import & Reset Handlers ══
+async function uploadTrainingCSV(input) {
+  const file = input.files[0];
+  if (!file) return;
+  
+  const uploadBtn = document.getElementById('uploadCsvBtn');
+  const originalHtml = uploadBtn.innerHTML;
+  uploadBtn.innerHTML = '<span class="spinner"></span>回填中...';
+  uploadBtn.disabled = true;
+  
+  const formData = new FormData();
+  formData.append('file', file);
+  
+  try {
+    const res = await fetch(`${API_BASE}/api/upload-training`, {
+      method: 'POST',
+      body: formData
+    });
+    
+    if (!res.ok) {
+      const err = await res.json();
+      throw new Error(err.detail || '回填失敗');
+    }
+    
+    const data = await res.json();
+    alert(data.message);
+  } catch (e) {
+    alert('訓練資料回填失敗: ' + e.message);
+  } finally {
+    uploadBtn.innerHTML = originalHtml;
+    uploadBtn.disabled = false;
+    input.value = '';
+  }
+}
+
+async function resetCSV() {
+  const resetBtn = document.getElementById('resetCsvBtn');
+  resetBtn.disabled = true;
+  try {
+    const res = await fetch(`${API_BASE}/api/reset-orders`, {
+      method: 'POST',
+      headers: { 'X-Role': 'Logistics_Manager' }
+    });
+    if (res.ok) {
+      resetBtn.style.display = 'none';
+      const aiResetBtn = document.getElementById('aiResetPredictBtn');
+      if (aiResetBtn) aiResetBtn.style.display = 'none';
+      const aiStatus = document.getElementById('aiUploadStatus');
+      if (aiStatus) aiStatus.textContent = '已還原為預設驗證集。';
+      appendAIMessage('system', '已還原為預設驗證集。');
+      refreshDashboard();
+    } else {
+      const err = await res.json();
+      alert('重設失敗: ' + (err.detail || '未知錯誤'));
+    }
+  } catch (e) {
+    alert('重設失敗: ' + e.message);
+  } finally {
+    resetBtn.disabled = false;
+  }
+}
+
+function appendAIMessage(type, text) {
+  const log = document.getElementById('aiChatLog');
+  if (!log) return;
+  const msg = document.createElement('div');
+  msg.className = `ai-message ${type}`;
+  msg.textContent = text;
+  log.appendChild(msg);
+  log.scrollTop = log.scrollHeight;
+}
+
+async function uploadPredictionCSV(input) {
+  const file = input.files[0];
+  if (!file) return;
+
+  const btn = document.getElementById('aiUploadPredictBtn');
+  const status = document.getElementById('aiUploadStatus');
+  const originalText = btn.textContent;
+  btn.textContent = '...';
+  btn.disabled = true;
+  status.textContent = '正在上傳並產生延遲預測...';
+  appendAIMessage('user', `上傳檔案：${file.name}`);
+  appendAIMessage('system', '正在上傳並產生延遲預測...');
+
+  const formData = new FormData();
+  formData.append('file', file);
+
+  try {
+    const res = await fetch(`${API_BASE}/api/upload`, {
+      method: 'POST',
+      body: formData
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || '預測上傳失敗');
+    }
+    const data = await res.json();
+    status.textContent = `${data.message} 目前 Dashboard 與風險清單已切換到此 session 的預測結果。`;
+    appendAIMessage('assistant', `${data.message}\n目前 Dashboard 與風險清單已切換到此 session 的預測結果。你可以接著問我這批訂單的延遲風險或最佳化調度建議。`);
+    document.getElementById('aiResetPredictBtn').style.display = 'inline-flex';
+    document.getElementById('resetCsvBtn').style.display = 'inline-flex';
+    await refreshDashboard();
+  } catch (e) {
+    status.textContent = '預測上傳失敗：' + e.message;
+    appendAIMessage('system', '預測上傳失敗：' + e.message);
+  } finally {
+    btn.textContent = originalText;
+    btn.disabled = false;
+    input.value = '';
+  }
+}
+
+async function generateAIBrief() {
+  const btn = document.getElementById('aiGenerateBriefBtn');
+  const mode = document.getElementById('aiLlmMode');
+  const question = document.getElementById('aiQuestionInput').value.trim();
+  const originalText = btn.textContent;
+  btn.textContent = '...';
+  btn.disabled = true;
+  appendAIMessage('user', question || '請產生本批物流調度的主管摘要。');
+  appendAIMessage('system', '正在整理去識別化預測結果與最佳化摘要...');
+
+  try {
+    const res = await fetch(`${API_BASE}/api/llm/manager-brief`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        budget: parseFloat(document.getElementById('budgetInput')?.value) || 5000,
+        upgrade_cost: 80,
+        delay_penalty: 250,
+        risk_threshold: threshold,
+        question
+      })
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      const detail = err.detail?.message || err.detail || 'AI 摘要產生失敗';
+      throw new Error(detail);
+    }
+    const data = await res.json();
+    mode.textContent = data.llm?.used_external_llm
+      ? `${data.llm.configured_provider || data.llm.provider}: ${data.llm.model || 'external'}`
+      : 'local answer';
+    if (!data.llm?.used_external_llm && data.llm?.error) {
+      appendAIMessage('system', formatLLMUnavailableMessage(data.llm));
+    }
+    appendAIMessage('assistant', data.brief_text || '沒有產生摘要。');
+    document.getElementById('aiQuestionInput').value = '';
+  } catch (e) {
+    appendAIMessage('system', 'AI 摘要產生失敗：' + e.message);
+  } finally {
+    btn.textContent = originalText;
+    btn.disabled = false;
+  }
+}
+
+function formatLLMError(errorText) {
+  const text = String(errorText || '');
+  if (text.includes('insufficient_quota') || text.includes('exceeded your current quota')) {
+    return 'OpenAI API 額度或帳單狀態不足，請到 OpenAI Billing 檢查方案與用量。';
+  }
+  if (text.includes('401') || text.toLowerCase().includes('unauthorized')) {
+    return 'API Key 無效或沒有授權，請到 LLM 設定重新貼上正確 key。';
+  }
+  if (text.includes('400')) {
+    return '模型或 API 端點參數不相容，請確認 Provider、Model 與 API URL。';
+  }
+  return text.slice(0, 180);
+}
+
+function formatLLMUnavailableMessage(llm) {
+  const provider = llm?.configured_provider || llm?.provider || 'local';
+  const errorText = String(llm?.error || '');
+  if (provider === 'ollama') {
+    if (errorText.includes('10061') || errorText.toLowerCase().includes('connection refused')) {
+      return '本機 Ollama 未連線：請先啟動 Ollama，確認 http://localhost:11434/api/chat 可連線，並已 pull 所選模型。';
+    }
+    return `本機 Ollama 暫時不可用：${formatLLMError(errorText)}`;
+  }
+  if (provider === 'local') {
+    return '目前使用系統內建摘要。';
+  }
+  return `外部 LLM 未使用：${formatLLMError(errorText)}`;
+}
+
+const LLM_MODEL_OPTIONS = {
+  local: [
+    { value: '', label: '不使用外部模型' }
+  ],
+  openai: [
+    { value: 'gpt-5.5', label: 'gpt-5.5' },
+    { value: 'gpt-5.4', label: 'gpt-5.4' },
+    { value: 'gpt-5.4-mini', label: 'gpt-5.4-mini' },
+    { value: 'gpt-5.4-nano', label: 'gpt-5.4-nano' },
+    { value: 'gpt-4.1', label: 'gpt-4.1' },
+    { value: 'gpt-4.1-mini', label: 'gpt-4.1-mini' },
+    { value: 'gpt-4.1-nano', label: 'gpt-4.1-nano' },
+    { value: 'gpt-4o', label: 'gpt-4o' },
+    { value: 'gpt-4o-mini', label: 'gpt-4o-mini' },
+    { value: 'gpt-4-turbo', label: 'gpt-4-turbo' },
+    { value: 'gpt-4', label: 'gpt-4' },
+    { value: 'gpt-3.5-turbo', label: 'gpt-3.5-turbo' },
+    { value: '__custom__', label: '自訂模型...' }
+  ],
+  openai_compatible: [
+    { value: 'gpt-4o-mini', label: 'gpt-4o-mini' },
+    { value: 'gpt-4o', label: 'gpt-4o' },
+    { value: 'gpt-4.1-mini', label: 'gpt-4.1-mini' },
+    { value: 'gpt-4.1', label: 'gpt-4.1' },
+    { value: 'deepseek-chat', label: 'deepseek-chat' },
+    { value: 'deepseek-reasoner', label: 'deepseek-reasoner' },
+    { value: 'qwen-plus', label: 'qwen-plus' },
+    { value: 'qwen-max', label: 'qwen-max' },
+    { value: 'llama-3.1-8b-instruct', label: 'llama-3.1-8b-instruct' },
+    { value: '__custom__', label: '自訂模型...' }
+  ],
+  gemini: [
+    { value: 'gemini-2.5-pro', label: 'gemini-2.5-pro' },
+    { value: 'gemini-2.5-flash', label: 'gemini-2.5-flash' },
+    { value: 'gemini-1.5-flash', label: 'gemini-1.5-flash' },
+    { value: 'gemini-1.5-pro', label: 'gemini-1.5-pro' },
+    { value: 'gemini-2.0-flash', label: 'gemini-2.0-flash' },
+    { value: '__custom__', label: '自訂模型...' }
+  ],
+  claude: [
+    { value: 'claude-opus-4-1-20250805', label: 'claude-opus-4-1-20250805' },
+    { value: 'claude-opus-4-20250514', label: 'claude-opus-4-20250514' },
+    { value: 'claude-sonnet-4-20250514', label: 'claude-sonnet-4-20250514' },
+    { value: 'claude-3-haiku-20240307', label: 'claude-3-haiku-20240307' },
+    { value: 'claude-3-5-haiku-20241022', label: 'claude-3-5-haiku-20241022' },
+    { value: 'claude-3-5-sonnet-20241022', label: 'claude-3-5-sonnet-20241022' },
+    { value: 'claude-3-opus-20240229', label: 'claude-3-opus-20240229' },
+    { value: 'claude-3-sonnet-20240229', label: 'claude-3-sonnet-20240229' },
+    { value: '__custom__', label: '自訂模型...' }
+  ],
+  ollama: [
+    { value: 'llama3.1', label: 'llama3.1' },
+    { value: 'llama3.2', label: 'llama3.2' },
+    { value: 'llama3.3', label: 'llama3.3' },
+    { value: 'mistral', label: 'mistral' },
+    { value: 'qwen2.5', label: 'qwen2.5' },
+    { value: 'qwen3', label: 'qwen3' },
+    { value: 'gemma3', label: 'gemma3' },
+    { value: 'deepseek-r1', label: 'deepseek-r1' },
+    { value: '__custom__', label: '自訂模型...' }
+  ]
+};
+
+const LLM_PROVIDER_DEFAULT_URLS = {
+  local: '',
+  openai: 'https://api.openai.com/v1/responses',
+  openai_compatible: 'https://api.openai.com/v1/chat/completions',
+  gemini: '',
+  claude: 'https://api.anthropic.com/v1/messages',
+  ollama: 'http://localhost:11434/api/chat'
+};
+
+let savedLLMProvider = null;
+
+function providerNeedsApiKey(provider) {
+  return !['local', 'ollama'].includes(provider);
+}
+
+function handleLLMProviderChange() {
+  const providerInput = document.getElementById('llmProviderInput');
+  const apiUrlInput = document.getElementById('llmApiUrlInput');
+  const keep = document.getElementById('llmKeepKeyInput');
+  const keyInput = document.getElementById('llmApiKeyInput');
+  updateLLMModelOptions('', false);
+  if (providerInput && apiUrlInput) {
+    apiUrlInput.value = LLM_PROVIDER_DEFAULT_URLS[providerInput.value] || '';
+  }
+  if (keep) keep.checked = false;
+  if (keyInput) keyInput.value = '';
+  updateLLMKeyInputState();
+}
+
+function updateLLMModelOptions(selectedModel = '', allowCustomFallback = true) {
+  const providerInput = document.getElementById('llmProviderInput');
+  const modelInput = document.getElementById('llmModelInput');
+  const customInput = document.getElementById('llmCustomModelInput');
+  if (!providerInput || !modelInput) return;
+
+  const provider = providerInput.value || 'local';
+  const options = LLM_MODEL_OPTIONS[provider] || LLM_MODEL_OPTIONS.local;
+  const previous = selectedModel || '';
+  modelInput.innerHTML = '';
+
+  options.forEach(item => {
+    const opt = document.createElement('option');
+    opt.value = item.value;
+    opt.textContent = item.label;
+    modelInput.appendChild(opt);
+  });
+
+  const matched = options.some(item => item.value === previous);
+  if (matched) {
+    modelInput.value = previous;
+    if (customInput) customInput.value = '';
+  } else if (allowCustomFallback && previous && options.some(item => item.value === '__custom__')) {
+    modelInput.value = '__custom__';
+    if (customInput) customInput.value = previous;
+  } else {
+    modelInput.value = options[0].value;
+    if (customInput) customInput.value = '';
+  }
+  updateLLMCustomModelState();
+}
+
+function updateLLMCustomModelState() {
+  const modelInput = document.getElementById('llmModelInput');
+  const customInput = document.getElementById('llmCustomModelInput');
+  if (!modelInput || !customInput) return;
+  const isCustom = modelInput.value === '__custom__';
+  customInput.style.display = isCustom ? 'block' : 'none';
+  customInput.disabled = !isCustom;
+  if (isCustom && document.activeElement === modelInput) customInput.focus();
+}
+
+function getSelectedLLMModel() {
+  const modelInput = document.getElementById('llmModelInput');
+  const customInput = document.getElementById('llmCustomModelInput');
+  if (!modelInput) return '';
+  if (modelInput.value === '__custom__') {
+    return (customInput?.value || '').trim();
+  }
+  return modelInput.value.trim();
+}
+
+function updateLLMKeyInputState() {
+  const keep = document.getElementById('llmKeepKeyInput');
+  const keepRow = document.getElementById('llmKeepKeyRow');
+  const input = document.getElementById('llmApiKeyInput');
+  const hint = document.getElementById('llmKeyHint');
+  const provider = document.getElementById('llmProviderInput')?.value || 'local';
+  if (!keep || !input) return;
+
+  if (!providerNeedsApiKey(provider)) {
+    if (keepRow) keepRow.style.display = 'none';
+    keep.checked = false;
+    keep.disabled = true;
+    input.value = '';
+    input.disabled = true;
+    input.placeholder = provider === 'ollama'
+      ? 'Ollama 為本機服務，不需要 API Key'
+      : 'Local 模式不需要 API Key';
+    input.style.opacity = '0.72';
+    if (hint) hint.textContent = provider === 'ollama'
+      ? '請確認本機 Ollama 已啟動，並已 pull 所選模型。'
+      : 'Local 模式會使用系統內建摘要，不呼叫外部模型。';
+  } else if (keep.checked) {
+    if (keepRow) keepRow.style.display = 'flex';
+    keep.disabled = false;
+    input.value = '';
+    input.disabled = true;
+    input.placeholder = '已保留目前儲存的 API Key';
+    input.style.opacity = '0.72';
+    if (hint) hint.textContent = '儲存時會沿用目前已加密保存的 API Key。';
+  } else {
+    if (keepRow) keepRow.style.display = 'flex';
+    keep.disabled = savedLLMProvider !== provider;
+    input.disabled = false;
+    input.placeholder = savedLLMProvider === provider
+      ? '貼上新的 API Key；留空儲存會清除目前 Key'
+      : '請貼上此 Provider 的 API Key';
+    input.style.opacity = '1';
+    if (hint) hint.textContent = savedLLMProvider === provider
+      ? '若要更換 Key，取消勾選後貼上新的 API Key。'
+      : '切換 Provider 後不會沿用其他 Provider 的 API Key。';
+  }
+}
+
+function formatLLMSettingsStatus(prefix, settings, model) {
+  const provider = settings.provider || 'local';
+  const modelText = model || '未指定模型';
+  if (!providerNeedsApiKey(provider)) {
+    const keyText = provider === 'ollama' ? '不需 API Key' : '不使用 API Key';
+    return `${prefix}：${provider} / ${modelText}，${keyText}`;
+  }
+  return settings.api_key_set
+    ? `${prefix}：${provider} / ${modelText}，API Key ${settings.api_key_masked}`
+    : `${prefix}：${provider} / ${modelText}，尚未設定 API Key`;
+}
+
+function updateLLMSettingsAccess() {
+  const isM = currentRole === 'manager';
+  const badge = document.getElementById('llmSettingsRoleBadge');
+  const locked = document.getElementById('llmSettingsLocked');
+  const form = document.getElementById('llmSettingsForm');
+  if (badge) {
+    badge.className = isM ? 'role-badge badge-manager' : 'role-badge badge-viewer';
+    badge.textContent = isM ? 'Manager' : 'Viewer';
+  }
+  if (locked) locked.style.display = isM ? 'none' : 'block';
+  if (form) form.style.display = isM ? 'grid' : 'none';
+}
+
+async function loadLLMSettings() {
+  updateLLMSettingsAccess();
+  if (currentRole !== 'manager') return;
+
+  const status = document.getElementById('llmSettingsStatus');
+  status.textContent = '讀取設定中...';
+  try {
+    const res = await fetch(`${API_BASE}/api/llm/settings`, {
+      headers: { 'X-Role': 'Logistics_Manager' }
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail?.message || err.detail || '讀取失敗');
+    }
+    const data = await res.json();
+    const s = data.settings || {};
+    savedLLMProvider = s.api_key_set ? (s.provider || null) : null;
+    document.getElementById('llmProviderInput').value = s.provider || 'local';
+    updateLLMModelOptions(s.model || '');
+    const selectedModel = getSelectedLLMModel();
+    document.getElementById('llmApiUrlInput').value = s.api_url || '';
+    document.getElementById('llmApiKeyInput').value = '';
+    document.getElementById('llmKeepKeyInput').checked = !!s.api_key_set && providerNeedsApiKey(s.provider || 'local');
+    updateLLMKeyInputState();
+    status.textContent = formatLLMSettingsStatus('目前設定', s, selectedModel);
+  } catch (e) {
+    status.textContent = '讀取設定失敗：' + e.message;
+  }
+}
+
+async function saveLLMSettings() {
+  if (currentRole !== 'manager') return;
+
+  const btn = document.getElementById('llmSaveBtn');
+  const status = document.getElementById('llmSettingsStatus');
+  const originalText = btn.textContent;
+  btn.textContent = '儲存中...';
+  btn.disabled = true;
+
+  const keepKey = document.getElementById('llmKeepKeyInput').checked;
+  const apiKeyInput = document.getElementById('llmApiKeyInput').value.trim();
+  const selectedModel = getSelectedLLMModel();
+  const selectedProvider = document.getElementById('llmProviderInput').value;
+  if (document.getElementById('llmModelInput').value === '__custom__' && !selectedModel) {
+    status.textContent = '請輸入自訂模型 ID。';
+    btn.textContent = originalText;
+    btn.disabled = false;
+    return;
+  }
+  if (providerNeedsApiKey(selectedProvider) && !keepKey && !apiKeyInput && savedLLMProvider === selectedProvider) {
+    if (!confirm('API Key 欄位為空，儲存後將清除目前已儲存的 Key，確定繼續嗎？')) {
+      btn.textContent = originalText;
+      btn.disabled = false;
+      return;
+    }
+  }
+  try {
+    const res = await fetch(`${API_BASE}/api/llm/settings`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Role': 'Logistics_Manager'
+      },
+      body: JSON.stringify({
+        provider: selectedProvider,
+        model: selectedModel,
+        api_url: document.getElementById('llmApiUrlInput').value.trim(),
+        api_key: providerNeedsApiKey(selectedProvider)
+          ? (keepKey && savedLLMProvider === selectedProvider && !apiKeyInput ? '__KEEP_EXISTING__' : apiKeyInput)
+          : ''
+      })
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || '儲存失敗');
+    }
+    const data = await res.json();
+    const s = data.settings || {};
+    savedLLMProvider = s.api_key_set ? (s.provider || null) : null;
+    document.getElementById('llmProviderInput').value = s.provider || 'local';
+    updateLLMModelOptions(s.model || '');
+    const savedModel = getSelectedLLMModel();
+    document.getElementById('llmApiKeyInput').value = '';
+    document.getElementById('llmKeepKeyInput').checked = !!s.api_key_set && providerNeedsApiKey(s.provider || 'local');
+    updateLLMKeyInputState();
+    status.textContent = formatLLMSettingsStatus('已儲存', s, savedModel);
+  } catch (e) {
+    status.textContent = '儲存失敗：' + e.message;
+  } finally {
+    btn.textContent = originalText;
+    btn.disabled = false;
+  }
+}
+
+// ══ Render KPI & Dashboard ══
+function renderMetrics(d) {
+  document.getElementById('kpiTotalOrders').textContent = totalPredictionsCount.toLocaleString();
+  document.getElementById('kpiTotalDesc').textContent = d.is_active
+    ? (d.has_ground_truth ? "已載入回填資料" : "已載入待預測資料（尚未回填 Y）")
+    : "預設驗證集";
+}
+
+function formatTuneMetrics(row) {
+  if (!row) return '無資料';
+  return `命中率 ${(row.precision * 100).toFixed(1)}% · 抓到率 ${(row.recall * 100).toFixed(1)}% · 平衡分數 ${row.f1.toFixed(4)} · 預估成本 $${Math.round(row.expected_cost).toLocaleString()}`;
+}
+
+let isSandboxMode = false;
+let sopDefaultThreshold = 0.50;
+
+function updateSopUI() {
+  const slider = document.getElementById('thresholdSlider');
+  const lockWrap = document.getElementById('sopStatusLockWrap');
+  const badge = document.getElementById('sopRoleBadge');
+  if (!slider || !lockWrap) return;
+
+  const badgeSpan = (bg, color, border, text) =>
+    `<span style="background:${bg}; color:${color}; border:1px solid ${border}; border-radius:20px; padding:3px 12px; font-size:11px; font-weight:700; display:inline-block;">${text}</span>`;
+
+  if (currentRole === 'manager') {
+    isSandboxMode = false;
+    slider.disabled = false;
+    if (badge) badge.innerHTML = badgeSpan('rgba(5,150,105,0.1)', '#059669', 'rgba(5,150,105,0.3)', '● 管理者模式');
+    lockWrap.innerHTML = `
+      <button onclick="publishSopThreshold()" class="run-btn" style="width:auto; padding:2px 8px; font-size:10px; font-weight:bold; background:var(--navy);">發佈為公司 SOP 基準</button>
+    `;
+  } else {
+    if (isSandboxMode) {
+      slider.disabled = false;
+      if (badge) badge.innerHTML = badgeSpan('rgba(217,119,6,0.1)', '#d97706', 'rgba(217,119,6,0.3)', '🔓 沙盒模擬中（不影響正式 SOP）');
+      lockWrap.innerHTML = `
+        <button onclick="toggleSandboxMode()" style="background:#dc2626; color:white; border:none; border-radius:4px; padding:2px 8px; cursor:pointer; font-size:10px; font-weight:bold;">恢復 SOP</button>
+      `;
+    } else {
+      slider.disabled = true;
+      slider.value = sopDefaultThreshold.toFixed(2);
+      document.getElementById('thresholdValDisplay').textContent = sopDefaultThreshold.toFixed(2);
+      threshold = sopDefaultThreshold;
+      if (badge) badge.innerHTML = badgeSpan('rgba(220,38,38,0.08)', '#dc2626', 'rgba(220,38,38,0.2)', '🔒 SOP 已鎖定');
+      lockWrap.innerHTML = `
+        <button onclick="toggleSandboxMode()" style="background:var(--steel); color:white; border:none; border-radius:4px; padding:2px 8px; cursor:pointer; font-size:10px; font-weight:bold;">啟動沙盒模擬</button>
+      `;
+    }
+  }
+}
+
+function toggleSandboxMode() {
+  isSandboxMode = !isSandboxMode;
+  updateSopUI();
+  if (!isSandboxMode) {
+    refreshDashboard();
+  }
+}
+
+async function publishSopThreshold() {
+  const newSop = parseFloat(document.getElementById('thresholdSlider').value);
+  sopDefaultThreshold = newSop;
+  alert(`已將門檻值 ${newSop.toFixed(2)} 發佈為公司新季度 SOP 基準門檻！`);
+  updateSopUI();
+  refreshDashboard();
+}
+
+function renderThresholdTuning(data) {
+  lastThresholdTuning = data;
+  const panel = document.getElementById('thresholdTuningPanel');
+  if (!panel || !data) return;
+  panel.style.display = 'block';
+
+  document.getElementById('thresholdTuningNote').textContent =
+    `${data.row_count.toLocaleString()} 筆資料 · 升級成本 $${data.cost_model.upgrade_cost} · 漏判成本 $${data.cost_model.delay_penalty}`
+    + (data.basis_note ? ` · ${data.basis_note}` : '');
+
+  document.getElementById('tuneCurrentThreshold').textContent = data.current.threshold.toFixed(2);
+  document.getElementById('tuneCurrentMetrics').textContent = formatTuneMetrics(data.current);
+
+  document.getElementById('tuneBestF1Threshold').textContent = data.best_f1.threshold.toFixed(2);
+  document.getElementById('tuneBestF1Metrics').textContent = formatTuneMetrics(data.best_f1);
+
+  document.getElementById('tuneBestCostThreshold').textContent = data.best_expected_cost.threshold.toFixed(2);
+  document.getElementById('tuneBestCostMetrics').textContent = formatTuneMetrics(data.best_expected_cost);
+  
+  // Update recommendation badges directly under slider
+  if (document.getElementById('badgeF1Val')) {
+    document.getElementById('badgeF1Val').textContent = data.best_f1.threshold.toFixed(2);
+  }
+  if (document.getElementById('badgeCostVal')) {
+    document.getElementById('badgeCostVal').textContent = data.best_expected_cost.threshold.toFixed(2);
+  }
+  
+  // Initialize default threshold once
+  if (!window._sopDefaultThresholdInitialized) {
+    sopDefaultThreshold = data.best_f1.threshold;
+    window._sopDefaultThresholdInitialized = true;
+    updateSopUI();
+  }
+}
+
+function applyThresholdRecommendation(type) {
+  if (!lastThresholdTuning) return;
+  const selected = type === 'cost'
+    ? lastThresholdTuning.best_expected_cost
+    : lastThresholdTuning.best_f1;
+    
+  if (currentRole === 'manager' && !isSandboxMode) {
+    isSandboxMode = true;
+  }
+  
+  threshold = parseFloat(selected.threshold);
+  document.getElementById('thresholdSlider').value = threshold.toFixed(2);
+  document.getElementById('thresholdValDisplay').textContent = threshold.toFixed(2);
+  updateSopUI();
+  refreshDashboard();
+}
+
+function renderExecutiveSummary(d) {
+  const serviceLevel = ((d.estimated_service_level || 0) * 100).toFixed(1);
+  const atRiskRate = ((d.at_risk_rate || 0) * 100).toFixed(1);
+  const topRegion = (d.top_regions && d.top_regions[0]) ? d.top_regions[0] : null;
+  const topMode = (d.top_shipping_modes && d.top_shipping_modes[0]) ? d.top_shipping_modes[0] : null;
+
+  // Update Main Dashboard KPI Cards Dynamically based on Executive Summary
+  if (d.total_orders !== undefined) {
+    document.getElementById('kpiTotalOrders').textContent = d.total_orders.toLocaleString();
+  }
+  document.getElementById('kpiPredictedLateOrders').textContent = d.at_risk_orders.toLocaleString();
+  document.getElementById('kpiPredictedDesc').textContent = `延遲機率 ≥ ${(threshold * 100).toFixed(0)}%`;
+  
+  document.getElementById('kpiExpectedPenaltyLoss').textContent = '$' + Math.round(d.expected_penalty_exposure || 0).toLocaleString();
+  const savings = Math.max(0, (d.expected_penalty_exposure || 0) - (d.recommended_budget || 0));
+  document.getElementById('kpiExpectedDesc').textContent = `建議升級預算: $${Math.round(d.recommended_budget || 0).toLocaleString()}`;
+
+  // Actionable Insights Banner Decision Logic
+  const banner = document.getElementById('actionableInsightsBanner');
+  const bannerText = document.getElementById('actionableInsightsText');
+  if (banner && bannerText) {
+    if ((d.recommended_budget || 0) > 0 && savings > 0) {
+      banner.style.display = 'flex';
+      bannerText.innerHTML = `建議投入物流預算 <strong>$${Math.round(d.recommended_budget).toLocaleString()}</strong>，可挽回 <strong>${d.positive_roi_orders.toLocaleString()}</strong> 筆訂單的延遲罰金損失，預估為公司省下淨額 <strong>$${Math.round(savings).toLocaleString()}</strong>！`;
+    } else {
+      banner.style.display = 'none';
+    }
+  }
+
+  document.getElementById('execSlaRisk').textContent = `${serviceLevel}%`;
+  document.getElementById('execSlaRiskNote').textContent =
+    `目標 90%，目前 ${d.at_risk_orders.toLocaleString()} 筆訂單高於風險門檻。`;
+
+  document.getElementById('execExposure').textContent =
+    '$' + Math.round(d.expected_penalty_exposure || 0).toLocaleString();
+  document.getElementById('execExposureNote').textContent =
+    `約 ${atRiskRate}% 訂單可能影響準時交付。`;
+
+  document.getElementById('execBudget').textContent =
+    '$' + Math.round(d.recommended_budget || 0).toLocaleString();
+  document.getElementById('execBudgetNote').textContent =
+    `${d.positive_roi_orders.toLocaleString()} 筆高風險訂單升級後仍有正淨效益。`;
+
+  document.getElementById('execDriver').textContent =
+    topRegion ? topRegion.label : (topMode ? topMode.label : '—');
+  document.getElementById('execDriverNote').textContent =
+    topRegion && topMode
+      ? `${topRegion.label} 與 ${topMode.label} 是目前最需要管理的風險來源。`
+      : '目前沒有明顯集中的區域或運送模式風險。';
+
+  document.getElementById('execActionText').textContent =
+    `${d.recommended_action} ${d.data_quality_note || ''}`;
+}
+
+function renderBudgetScenarios(d) {
+  const scenarios = d.scenarios || [];
+  document.getElementById('scenarioCount').textContent = `${scenarios.length} 個情境`;
+  document.getElementById('scenarioRecommendation').textContent =
+    d.recommendation || '目前沒有可用的預算情境建議。';
+
+  const tbody = document.getElementById('scenarioTableBody');
+  if (!scenarios.length) {
+    tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;padding:24px;color:var(--muted);font-size:13px">尚無情境資料</td></tr>`;
+    return;
+  }
+
+  tbody.innerHTML = scenarios.map(s => `
+    <tr>
+      <td><span class="order-id">$${Math.round(s.budget).toLocaleString()}</span></td>
+      <td>${Number(s.selected_count || 0).toLocaleString()} 筆</td>
+      <td>$${Math.round(s.total_cost || 0).toLocaleString()}</td>
+      <td>$${Math.round(s.expected_total_penalty_avoided || 0).toLocaleString()}</td>
+      <td style="font-weight:700;color:${(s.expected_total_saving || 0) >= 0 ? '#15803d' : '#b91c1c'}">$${Math.round(s.expected_total_saving || 0).toLocaleString()}</td>
+      <td>${Number(s.budget_usage_pct || 0).toFixed(0)}%</td>
+    </tr>
+  `).join('');
+}
+
+function fillClass(p) {
+  return p >= 0.7 ? 'fill-high' : p >= 0.4 ? 'fill-med' : 'fill-low';
+}
+function pillClass(p) {
+  return p >= 0.7 ? 'r-high' : p >= 0.4 ? 'r-med' : 'r-low';
+}
+
+function getReasonText(o) {
+  let factors = [];
+  if (o.shipping_mode === "Standard Class") {
+    factors.push("Standard Class (運送天數較長，風險高)");
+  } else if (o.shipping_mode === "Same Day") {
+    factors.push("Same Day (計劃天數緊湊，容錯低)");
+  }
+  if (o.p_late >= 0.7) {
+    factors.push(`目的地區域 (${o.order_region || '未知'}) 風險性高`);
+  }
+  if (factors.length === 0) {
+    factors.push("時效要求高與承諾天數過緊");
+  }
+  return factors.join(" 且 ");
+}
+
+function getActionText(o) {
+  // Action logic mimicking optimizer expected savings
+  const expected_saving = o.expected_penalty - o.upgrade_cost;
+  if (o.p_late >= threshold && expected_saving > 0) {
+    return `<span class="risk-pill r-high" style="font-weight:600; cursor:pointer;" onclick="openExplainModal('${o.order_id_hash}')">💡 建議升級運送</span>`;
+  }
+  return `<span class="risk-pill r-low" style="font-weight:500; cursor:pointer;" onclick="openExplainModal('${o.order_id_hash}')">✔ 監控並維持原狀</span>`;
+}
+
+function renderBossTable(data) {
+  const tbody = document.getElementById('bossTableBody');
+  const delayed = data.filter(o => o.p_late >= threshold);
+  
+  document.getElementById('bossDelayCount').textContent = `${delayed.length} 筆預估延遲`;
+  
+  if (delayed.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;padding:32px;color:var(--muted);font-size:13px">沒有判定為延遲的訂單 (門檻值 = ${threshold.toFixed(2)})</td></tr>`;
+    return;
+  }
+  
+  tbody.innerHTML = delayed.map(o => {
+    const hash = o.order_id_hash;
+    return `
+      <tr>
+        <td>
+          <span id="explain-btn-${hash}" style="cursor:pointer; display:inline-block; width:12px; margin-right:4px; font-size:10px; color:var(--navy);" onclick="toggleRowExplanation('${hash}')">▶</span>
+          <span class="order-id" title="${hash}" style="cursor:pointer; text-decoration:underline;" onclick="toggleRowExplanation('${hash}')">${o.display_order_id || displayOrderId(hash)}</span>
+        </td>
+        <td>${o.shipping_mode || 'Unknown'}</td>
+        <td style="color:var(--muted)">${o.order_region || 'Unknown'}</td>
+        <td>
+          <div class="prob-wrap">
+            <div class="prob-bar"><div class="prob-fill ${fillClass(o.p_late)}" style="width:${o.p_late*100}%"></div></div>
+            <span class="prob-val">${(o.p_late*100).toFixed(0)}%</span>
+          </div>
+        </td>
+        <td style="font-size:12px; color:var(--text);">${getReasonText(o)}</td>
+        <td>${getActionText(o)}</td>
+      </tr>
+      <tr id="explain-row-${hash}" class="hidden">
+        <td colspan="6" style="padding:0; background:#f9faf9;">
+          <div id="explain-content-${hash}" style="padding:14px 20px; border-top:1px solid var(--border); border-bottom:1px solid var(--border); font-size:12.5px; line-height:1.5; color:var(--text);">載入中...</div>
+        </td>
+      </tr>
+    `;
+  }).join('');
+}
+
+async function toggleRowExplanation(orderId) {
+  const row = document.getElementById(`explain-row-${orderId}`);
+  const btn = document.getElementById(`explain-btn-${orderId}`);
+  const content = document.getElementById(`explain-content-${orderId}`);
+  if (!row || !content) return;
+  
+  if (row.classList.contains('hidden')) {
+    row.classList.remove('hidden');
+    if (btn) btn.textContent = '▼';
+    
+    if (content.textContent === '載入中...') {
+      try {
+        const res = await fetch(`${API_BASE}/api/explain/${orderId}`);
+        if (!res.ok) throw new Error('讀取詳細歸因失敗');
+        const data = await res.json();
+        
+        const factors = data.top_x_factors || [];
+        const factorsHtml = factors.map(f => `
+          <div style="display:flex; justify-content:space-between; margin-bottom:6px; font-size:12px; border-bottom:1px dashed #dde0de; padding-bottom:4px;">
+            <span><strong>${f.label || f.feature}</strong>: <span style="color:var(--muted);">${f.evidence}</span></span>
+            <span style="font-weight:600; color:${f.impact === 'raises risk' ? '#c0392b' : '#27ae60'}">${f.impact === 'raises risk' ? '▲ 增加延遲風險' : '▼ 正常/次要'}</span>
+          </div>
+        `).join('');
+        
+        content.innerHTML = `
+          <div style="display:flex; flex-direction:column; gap:10px;">
+            <div style="font-weight:600; color:var(--navy); font-size:13px;">🔎 訂單延遲歸因與決策 (LIME-style)：</div>
+            <div style="background:white; border:1px solid var(--border); border-radius:6px; padding:12px; color:var(--text); line-height:1.6; font-weight:500; box-shadow:0 1px 3px rgba(0,0,0,0.02);">
+              ${data.manager_summary || '無摘要說明。'}
+            </div>
+            <div style="margin-top:6px;">
+              <div style="font-weight:600; color:var(--muted); font-size:11px; text-transform:uppercase; letter-spacing:0.5px; margin-bottom:8px; font-family:'DM Mono',monospace;">影響預測之關鍵特徵權重：</div>
+              <div style="display:flex; flex-direction:column; gap:6px;">
+                ${factorsHtml || '<div style="color:var(--muted); font-size:12px;">無明顯特徵影響</div>'}
+              </div>
+            </div>
+          </div>
+        `;
+      } catch (e) {
+        content.textContent = '分析載入失敗：' + e.message;
+      }
+    }
+  } else {
+    row.classList.add('hidden');
+    if (btn) btn.textContent = '▶';
+  }
+}
+
+
+function renderOptResult(d) {
+  const el = document.getElementById('optResult');
+  el.classList.remove('hidden');
+  el.style.display = 'flex';
+  const _sel = Array.isArray(d.selected_orders) ? d.selected_orders : [];
+  document.getElementById('optSelected').textContent = _sel.length;
+  document.getElementById('optSaving').textContent = '$' + d.expected_total_saving.toLocaleString();
+  document.getElementById('optCost').textContent = '$' + d.total_cost.toLocaleString();
+  const pct = ((d.total_cost / d.budget) * 100).toFixed(0);
+  document.getElementById('optUsage').textContent = pct + '%';
+  document.getElementById('usageFill').style.width = pct + '%';
+  renderManagerAnalysis('managerAnalysisBox', 'managerAnalysisText', 'managerAnalysisFactors', d.manager_analysis);
+
+  document.getElementById('ordList').innerHTML = _sel.map((o, i) => `
+    <div class="ord-item" style="animation-delay:${i*0.07}s">
+      <div>
+        <div class="ord-id" title="${o.order_id_hash}">${o.display_order_id || displayOrderId(o.order_id_hash)}</div>
+        <div class="ord-sub">升級成本 $${o.upgrade_cost} · 延遲率 ${(o.p_late*100).toFixed(0)}% · ${o.reason || 'positive net benefit'}</div>
+      </div>
+      <div class="ord-saving">+$${(o.net_benefit ?? o.expected_saving).toLocaleString()}</div>
+    </div>
+  `).join('');
+}
+
+function renderManagerAnalysis(boxId, textId, factorsId, analysis) {
+  const box = document.getElementById(boxId);
+  const text = document.getElementById(textId);
+  const factors = document.getElementById(factorsId);
+  if (!box || !text || !factors) return;
+
+  if (!analysis) {
+    box.style.display = 'none';
+    text.textContent = '';
+    factors.innerHTML = '';
+    return;
+  }
+
+  box.style.display = 'block';
+  text.textContent = analysis.headline || analysis.recommended_policy || '目前沒有可顯示的主管分析摘要。';
+  renderManagerFactors(factorsId, analysis.sample_order_explanations || []);
+}
+
+function renderManagerFactors(containerId, explanations) {
+  const container = document.getElementById(containerId);
+  if (!container) return;
+
+  const factors = explanations
+    .flatMap(e => e.top_x_factors || [])
+    .slice(0, 4);
+
+  if (!factors.length) {
+    container.innerHTML = '<div style="font-size:12px;color:var(--muted);">尚無可顯示的 X 因子。</div>';
+    return;
+  }
+
+  container.innerHTML = factors.map(f => `
+    <div style="padding:9px 10px;border:1px solid var(--border);border-radius:6px;background:white;">
+      <div style="display:flex;justify-content:space-between;gap:10px;align-items:center;">
+        <span style="font-size:12px;font-weight:700;color:var(--text);">${f.label || f.feature}</span>
+        <span style="font-size:11px;color:var(--muted);font-family:'DM Mono',monospace">${f.impact || 'context'}</span>
+      </div>
+      <div style="font-size:12px;color:var(--muted);line-height:1.5;margin-top:4px;">${f.evidence || '模型指出此因子會影響延遲風險。'}</div>
+    </div>
+  `).join('');
+}
+
+// ══ Role Switcher ══
+async function setRole(role) {
+  if (role === 'manager' && currentRole !== 'manager' && !window._managerAuthenticated) {
+    document.getElementById('loginUsername').value = '';
+    document.getElementById('loginPassword').value = '';
+    document.getElementById('loginError').classList.remove('show');
+    document.getElementById('loginModal').classList.add('show');
+    setTimeout(() => document.getElementById('loginUsername').focus(), 100);
+    return;
+  }
+  window._managerAuthenticated = false;
+  currentRole = role;
+  if (role === 'viewer') {
+    sessionStorage.removeItem('edis_token');
+    sessionStorage.removeItem('edis_session_id');
+  }
+  document.querySelectorAll('.role-btn').forEach(b =>
+    b.classList.toggle('active', b.textContent.toLowerCase() === role));
+
+
+  const isM = role === 'manager';
+  
+  // Header badges
+  document.getElementById('roleBadge').className = isM ? 'role-badge badge-manager' : 'role-badge badge-viewer';
+  document.getElementById('roleBadge').textContent = isM ? '● Manager' : '● Viewer';
+  document.getElementById('optRoleBadge').className = isM ? 'role-badge badge-manager' : 'role-badge badge-viewer';
+  document.getElementById('optRoleBadge').textContent = isM ? 'Manager' : 'Viewer';
+  document.getElementById('optPageRoleBadge').className = isM ? 'role-badge badge-manager' : 'role-badge badge-viewer';
+  document.getElementById('optPageRoleBadge').textContent = isM ? 'Manager' : 'Viewer';
+
+  // Lock/Unlock Uploading for Manager
+  document.getElementById('uploadCsvBtn').style.display = isM ? 'inline-flex' : 'none';
+  document.getElementById('lockedUploadBox').style.display = isM ? 'none' : 'inline-flex';
+  const aiUploadBtn = document.getElementById('aiUploadPredictBtn');
+  const aiBriefBtn = document.getElementById('aiGenerateBriefBtn');
+  const aiLockedBox = document.getElementById('aiLockedBox');
+  const aiRoleBadge = document.getElementById('aiRoleBadge');
+  if (aiUploadBtn) aiUploadBtn.style.display = isM ? 'inline-flex' : 'none';
+  if (aiBriefBtn) aiBriefBtn.disabled = !isM;
+  if (aiLockedBox) aiLockedBox.style.display = isM ? 'none' : 'inline-flex';
+  if (aiRoleBadge) {
+    aiRoleBadge.className = isM ? 'role-badge badge-manager' : 'role-badge badge-viewer';
+    aiRoleBadge.textContent = isM ? 'Manager' : 'Viewer';
+  }
+  updateLLMSettingsAccess();
+  if (isM && !document.getElementById('page-llm-settings').classList.contains('hidden')) {
+    loadLLMSettings();
+  }
+  
+  if (!isM) {
+    document.getElementById('resetCsvBtn').style.display = 'none';
+    const aiResetBtn = document.getElementById('aiResetPredictBtn');
+    if (aiResetBtn) aiResetBtn.style.display = 'none';
+  } else {
+    // Check if active file exists by fetching metrics
+    const m = await fetchMetrics();
+    if (m.is_active) {
+      document.getElementById('resetCsvBtn').style.display = 'inline-flex';
+      const aiResetBtn = document.getElementById('aiResetPredictBtn');
+      if (aiResetBtn) aiResetBtn.style.display = 'inline-flex';
+    }
+  }
+
+  // Dashboard buttons
+  document.getElementById('runBtn').classList.toggle('hidden', !isM);
+  document.getElementById('lockedBox').classList.toggle('hidden', isM);
+  document.getElementById('optResult').classList.add('hidden');
+  renderManagerAnalysis('managerAnalysisBox', 'managerAnalysisText', 'managerAnalysisFactors', null);
+  
+  // Optimization page buttons
+  document.getElementById('optPageRunBtn').classList.toggle('hidden', !isM);
+  document.getElementById('optPageLockedBox').classList.toggle('hidden', isM);
+  document.getElementById('optPageResult').classList.add('hidden');
+  document.getElementById('optPageResultPlaceholder').classList.remove('hidden');
+  renderManagerAnalysis('optPageManagerAnalysisBox', 'optPageManagerAnalysisText', 'optPageManagerAnalysisFactors', null);
+
+  // Refresh calculations
+  updateSopUI();
+  refreshDashboard();
+  
+  if (!document.getElementById('page-risk-list').classList.contains('hidden')) {
+    applyFilters();
+  }
+}
+
+// ══ Optimize (Dashboard Panel) ══
+async function runOptimize() {
+  const btn = document.getElementById('runBtn');
+  const budget = parseFloat(document.getElementById('budgetInput').value) || 5000;
+  btn.innerHTML = '<span class="spinner"></span>計算中...';
+  btn.disabled = true;
+  try {
+    const data = await fetchOptimize(budget, 80, 250);
+    renderOptResult(data);
+  } catch(e) { alert(e.message); }
+  finally {
+    btn.innerHTML = '執行最佳化調度';
+    btn.disabled = false;
+  }
+}
+
+// ══ Optimize (Full Screen Optimization Page) ══
+async function runPageOptimize() {
+  const btn = document.getElementById('optPageRunBtn');
+  const placeholder = document.getElementById('optPageResultPlaceholder');
+  const resultPanel = document.getElementById('optPageResult');
+  
+  const budget = parseFloat(document.getElementById('optPageBudgetInput').value) || 5000;
+  const upgradeCost = parseFloat(document.getElementById('optPageUpgradeCost').value) || 80;
+  const delayPenalty = parseFloat(document.getElementById('optPageDelayPenalty').value) || 250;
+  
+  btn.innerHTML = '<span class="spinner"></span>計算中...';
+  btn.disabled = true;
+  
+  try {
+    const data = await fetchOptimize(budget, upgradeCost, delayPenalty);
+    
+    placeholder.classList.add('hidden');
+    resultPanel.classList.remove('hidden');
+    
+    document.getElementById('optPageSelected').textContent = data.selected_orders.length;
+    document.getElementById('optPageSaving').textContent = '$' + data.expected_total_saving.toLocaleString();
+    document.getElementById('optPageCost').textContent = '$' + data.total_cost.toLocaleString();
+    
+    const pct = ((data.total_cost / budget) * 100).toFixed(0);
+    document.getElementById('optPageUsage').textContent = pct + '%';
+    document.getElementById('optPageUsageFill').style.width = pct + '%';
+    renderManagerAnalysis('optPageManagerAnalysisBox', 'optPageManagerAnalysisText', 'optPageManagerAnalysisFactors', data.manager_analysis);
+
+    document.getElementById('optPageOrdList').innerHTML = data.selected_orders.map((o, i) => `
+      <div class="ord-item" style="animation-delay:${i*0.03}s">
+        <div>
+          <div class="ord-id" title="${o.order_id_hash}">${o.display_order_id || displayOrderId(o.order_id_hash)}</div>
+          <div class="ord-sub">升級成本 $${o.upgrade_cost} · 延遲機率 ${(o.p_late*100).toFixed(0)}% · ${o.reason || 'positive net benefit'}</div>
+        </div>
+        <div class="ord-saving">+$${(o.net_benefit ?? o.expected_saving).toLocaleString()}</div>
+      </div>
+    `).join('');
+    
+  } catch (e) {
+    alert(e.message);
+  } finally {
+    btn.innerHTML = '開始計算最佳化調度方案';
+    btn.disabled = false;
+  }
+}
+
+// ══ Dashboard Pagination ══
+async function changePage(delta) {
+  const totalPages = Math.ceil(totalPredictionsCount / limit) || 1;
+  const newPage = currentPage + delta;
+  if (newPage >= 1 && newPage <= totalPages) {
+    currentPage = newPage;
+    document.getElementById('riskTableBody').innerHTML = `
+      <tr><td colspan="7" style="text-align:center;padding:32px;color:var(--muted);font-size:13px">載入中...</td></tr>
+    `;
+    const p = await fetchPredictions(currentPage);
+    if (p) {
+      totalPredictionsCount = p.count || 0;
+      renderPredictions(p.data || []);
+    }
+  }
+}
+
+// ══ Risk List Page Logic (Search + Filters + Pagination) ══
+async function applyFilters() {
+  currentRiskListPage = 1;
+  loadFilteredRiskList();
+}
+
+async function loadFilteredRiskList() {
+  const search = document.getElementById('riskSearchInput').value.trim();
+  const risk = document.getElementById('filterRisk').value;
+  const shipping = document.getElementById('filterShipping').value;
+  const region = document.getElementById('filterRegion').value;
+  
+  const tbody = document.getElementById('riskListTableBody');
+  tbody.innerHTML = `
+    <tr><td colspan="7" style="text-align:center;padding:32px;color:var(--muted);font-size:13px">載入中...</td></tr>
+  `;
+
+  try {
+    const payload = await fetchPredictions(currentRiskListPage, search, risk, shipping, region);
+    if (!payload) return;
+    
+    totalRiskListCount = payload.count || 0;
+    document.getElementById('riskListCount').textContent = `共 ${totalRiskListCount} 筆`;
+    
+    const totalPages = Math.ceil(totalRiskListCount / limit) || 1;
+    document.getElementById('riskListPageIndicator').textContent = `第 ${currentRiskListPage} / ${totalPages} 頁`;
+    
+    const prevBtn = document.getElementById('riskListPrevBtn');
+    const nextBtn = document.getElementById('riskListNextBtn');
+    
+    prevBtn.disabled = currentRiskListPage <= 1;
+    nextBtn.disabled = currentRiskListPage >= totalPages;
+    prevBtn.style.opacity = currentRiskListPage <= 1 ? 0.5 : 1;
+    nextBtn.style.opacity = currentRiskListPage >= totalPages ? 0.5 : 1;
+
+    const data = payload.data || [];
+    if (data.length === 0) {
+      tbody.innerHTML = `
+        <tr><td colspan="7" style="text-align:center;padding:32px;color:var(--muted);font-size:13px">無符合篩選條件的訂單</td></tr>
+      `;
+      return;
+    }
+
+    tbody.innerHTML = data.map(o => `
+      <tr>
+        <td><span class="order-id" title="${o.order_id_hash}">${o.display_order_id || displayOrderId(o.order_id_hash)}</span></td>
+        <td>${o.shipping_mode || 'Unknown'}</td>
+        <td style="color:var(--muted)">${o.order_region || 'Unknown'}</td>
+        <td>
+          <div class="prob-wrap">
+            <div class="prob-bar"><div class="prob-fill ${fillClass(o.risk_bucket)}" style="width:${o.p_late*100}%"></div></div>
+            <span class="prob-val">${(o.p_late*100).toFixed(0)}%</span>
+          </div>
+        </td>
+        <td><span class="risk-pill ${pillClass(o.risk_bucket)}">${o.risk_bucket}</span></td>
+        <td>${o.actual_late===1||o.actual_late===true?'<span style="padding:2px 8px;background:#fee2e2;color:#b91c1c;border-radius:12px;font-size:10px;font-weight:600;">延遲</span>':o.actual_late===0||o.actual_late===false?'<span style="padding:2px 8px;background:#dcfce7;color:#15803d;border-radius:12px;font-size:10px;font-weight:600;">準時</span>':'<span style="color:var(--muted);font-size:12px;">—</span>'}</td>
+        <td>${o.is_correct===true?'<span style="padding:2px 8px;background:#dcfce7;color:#15803d;border-radius:12px;font-size:10px;font-weight:600;">✓ 正確</span>':o.is_correct===false?'<span style="padding:2px 8px;background:#fee2e2;color:#b91c1c;border-radius:12px;font-size:10px;font-weight:600;">✗ 錯誤</span>':'<span style="color:var(--muted);font-size:12px;">—</span>'}</td>
+      </tr>
+    `).join('');
+
+  } catch (e) {
+    tbody.innerHTML = `
+      <tr><td colspan="7" style="text-align:center;padding:32px;color:red;font-size:13px">資料載入失敗: ${e.message}</td></tr>
+    `;
+  }
+}
+
+async function changeRiskListPage(delta) {
+  const totalPages = Math.ceil(totalRiskListCount / limit) || 1;
+  const newPage = currentRiskListPage + delta;
+  if (newPage >= 1 && newPage <= totalPages) {
+    currentRiskListPage = newPage;
+    loadFilteredRiskList();
+  }
+}
+
+// ══ Model Performance Page (Feature Importance & Confusion Matrix) ══
+async function loadModelPerformance() {
+  const featList = document.getElementById('featureImportanceList');
+  featList.innerHTML = '載入中...';
+  
+  try {
+    const d = await fetchMetrics();
+    
+    // Fill metrics matrix cards
+    document.getElementById('perfAuc').textContent = d.roc_auc.toFixed(4);
+    document.getElementById('perfPrecision').textContent = (d.precision * 100).toFixed(2) + '%';
+    document.getElementById('perfRecall').textContent = (d.recall * 100).toFixed(2) + '%';
+    document.getElementById('perfF1').textContent = d.f1.toFixed(4);
+    
+    // Fill Confusion Matrix
+    if (d.confusion_matrix) {
+      const tn = d.confusion_matrix[0][0];
+      const fp = d.confusion_matrix[0][1];
+      const fn = d.confusion_matrix[1][0];
+      const tp = d.confusion_matrix[1][1];
+      
+      document.getElementById('cm-tn').innerHTML = `${tn.toLocaleString()}<br><span style="font-size:9px;color:var(--muted);font-weight:400;">True Negatives</span>`;
+      document.getElementById('cm-fp').innerHTML = `${fp.toLocaleString()}<br><span style="font-size:9px;color:var(--muted);font-weight:400;">False Positives</span>`;
+      document.getElementById('cm-fn').innerHTML = `${fn.toLocaleString()}<br><span style="font-size:9px;color:var(--muted);font-weight:400;">False Negatives</span>`;
+      document.getElementById('cm-tp').innerHTML = `${tp.toLocaleString()}<br><span style="font-size:9px;color:var(--muted);font-weight:400;">True Positives</span>`;
+    }
+    
+    // Render Feature Importance Horizontal Bar Chart
+    if (d.feature_importance) {
+      const items = Object.entries(d.feature_importance).sort((a,b) => b[1] - a[1]);
+      const maxVal = Math.max(...items.map(i => i[1])) || 1.0;
+      
+      featList.innerHTML = items.map(([feat, val]) => {
+        const pct = (val * 100).toFixed(1);
+        const barWidth = (val / maxVal * 100).toFixed(0);
+        return `
+          <div>
+            <div style="display:flex; justify-content:space-between; font-size:11.5px; margin-bottom:4px; font-family:'DM Mono',monospace;">
+              <span>${feat}</span>
+              <span style="font-weight:600; color:var(--navy);">${pct}%</span>
+            </div>
+            <div style="height:12px; width:100%; background:var(--bg); border-radius:6px; overflow:hidden;">
+              <div style="height:100%; width:${barWidth}%; background:linear-gradient(90deg, var(--steel), var(--navy)); border-radius:6px; transition: width 1s ease;"></div>
+            </div>
+          </div>
+        `;
+      }).join('');
+    } else {
+      featList.innerHTML = '<div style="color:var(--muted); font-size:12px;">無特徵重要性數據</div>';
+    }
+
+    // Load Predict Discrepancies
+    const errorsRes = await fetch(`${API_BASE}/api/predict?limit=250&threshold=${threshold}&error_only=true`).then(r => r.json());
+    const errors = errorsRes.data || [];
+    document.getElementById('errorListCount').textContent = `共 ${errorsRes.count || errors.length} 筆誤差`;
+    const errorBody = document.getElementById('errorListTableBody');
+    if (errors.length === 0) {
+      errorBody.innerHTML = `<tr><td colspan="7" style="text-align:center;padding:32px;color:var(--muted);font-size:13px">目前沒有預測判定錯誤的訂單</td></tr>`;
+    } else {
+      errorBody.innerHTML = errors.map(o => `
+        <tr>
+          <td><span class="order-id" title="${o.order_id_hash}" style="cursor:pointer; text-decoration:underline;" onclick="openExplainModal('${o.order_id_hash}')">${o.display_order_id || displayOrderId(o.order_id_hash)}</span></td>
+          <td>${o.shipping_mode}</td>
+          <td>${o.order_region}</td>
+          <td>${(o.p_late*100).toFixed(0)}%</td>
+          <td>${o.actual_late===1?'<span style="color:#b91c1c; font-weight:600;">延遲 (1)</span>':'<span style="color:#15803d; font-weight:600;">準時 (0)</span>'}</td>
+          <td>${o.p_late>=threshold?'<span style="color:#b91c1c; font-weight:600;">延遲 (1)</span>':'<span style="color:#15803d; font-weight:600;">準時 (0)</span>'}</td>
+          <td><button class="run-btn" onclick="openExplainModal('${o.order_id_hash}')" style="width:auto; padding:4px 10px; font-size:11px; border-radius:4px;">🔎 查看原因</button></td>
+        </tr>
+      `).join('');
+    }
+
+  } catch(e) {
+    featList.innerHTML = `<div style="color:red; font-size:12px;">載入失敗: ${e.message}</div>`;
+  }
+}
+
+// ══ Regional Risk Rank Page ══
+// (loaded from external module)
+</script>
+<script src="/static/region_map.js"></script>
+<script>
+
+// ══ Explain Modal (LIME Local Attribution) ══
+async function openExplainModal(orderId) {
+  const modal = document.getElementById('explainModal');
+  document.getElementById('modalOrderId').textContent = displayOrderId(orderId);
+  document.getElementById('modalOrderId').title = orderId;
+  document.getElementById('modalProb').textContent = '讀取中...';
+  document.getElementById('modalPenalty').textContent = '讀取中...';
+  document.getElementById('modalSummaryText').textContent = '讀取中...';
+  document.getElementById('modalFactorsList').innerHTML = '讀取中...';
+  
+  modal.style.display = 'flex';
+  
+  try {
+    const res = await fetch(`${API_BASE}/api/explain/${orderId}`, {
+      headers: { 'X-Role': currentRole === 'manager' ? 'Logistics_Manager' : 'Viewer' }
+    });
+    if (!res.ok) throw new Error('分析資料讀取失敗');
+    const data = await res.json();
+    
+    document.getElementById('modalProb').textContent = (data.p_late * 100).toFixed(0) + '%';
+    document.getElementById('modalPenalty').textContent = '$' + Math.round(data.expected_penalty).toLocaleString();
+    document.getElementById('modalSummaryText').textContent = data.manager_summary || '無摘要。';
+    
+    const factors = data.top_x_factors || [];
+    document.getElementById('modalFactorsList').innerHTML = factors.map(f => `
+      <div style="padding:10px 14px; border:1px solid var(--border); border-radius:8px; background:#fcfcfc; display:flex; justify-content:space-between; align-items:center; gap:12px;">
+        <div>
+          <div style="font-size:12px; font-weight:600; color:var(--text);">${f.label || f.feature}</div>
+          <div style="font-size:11.5px; color:var(--muted); margin-top:2px;">${f.evidence}</div>
+        </div>
+        <span class="risk-pill ${f.impact === 'raises risk' ? 'r-high' : 'r-low'}" style="font-size:10px; font-weight:600; white-space:nowrap;">
+          ${f.impact === 'raises risk' ? '▲ 增加延遲風險' : '▼ 正常或次要因子'}
+        </span>
+      </div>
+    `).join('');
+    
+  } catch (e) {
+    document.getElementById('modalSummaryText').textContent = '載入分析失敗: ' + e.message;
+  }
+}
+
+function closeExplainModal() {
+  document.getElementById('explainModal').style.display = 'none';
+}
+
+// ══ Dashboard Refresh Helper ══
+async function refreshDashboard() {
+  try {
+    const [p, executive, scenarios, tuning] = await Promise.all([
+      fetchPredictions(currentPage),
+      fetchExecutiveSummary(),
+      fetchScenarioAnalysis(),
+      fetchThresholdTuning().catch(() => null)
+    ]);
+    if (p) {
+      totalPredictionsCount = p.count || 0;
+      renderBossTable(p.data || []);
+      
+      const m = await fetchMetrics();
+      if (m) renderMetrics(m);
+    }
+    if (executive) renderExecutiveSummary(executive);
+    if (scenarios) renderBudgetScenarios(scenarios);
+    if (tuning) renderThresholdTuning(tuning);
+  } catch (e) {
+    console.error('Failed to refresh dashboard', e);
+  }
+}
+
+// ══ Init ══
+async function init() {
+  try {
+    // Check role to set CSV button visibility initially
+    const isM = currentRole === 'manager';
+    document.getElementById('uploadCsvBtn').style.display = isM ? 'inline-flex' : 'none';
+    document.getElementById('lockedUploadBox').style.display = isM ? 'none' : 'inline-flex';
+    const aiUploadBtn = document.getElementById('aiUploadPredictBtn');
+    const aiBriefBtn = document.getElementById('aiGenerateBriefBtn');
+    const aiLockedBox = document.getElementById('aiLockedBox');
+    if (aiUploadBtn) aiUploadBtn.style.display = isM ? 'inline-flex' : 'none';
+    if (aiBriefBtn) aiBriefBtn.disabled = !isM;
+    if (aiLockedBox) aiLockedBox.style.display = isM ? 'none' : 'inline-flex';
+
+    await refreshDashboard();
+    await loadMonthlyChart();
+    
+    document.getElementById('statusText').textContent = 'Live API Connection';
+
+    // 檢查是否有正在執行的背景重訓任務，若有則就地恢復輪詢與 UI 狀態
+    const activeTaskId = sessionStorage.getItem('edis_active_task_id');
+    const activeMonth = sessionStorage.getItem('edis_active_task_month');
+    if (activeTaskId && activeMonth) {
+      openDiagnoseModal(activeMonth);
+      document.getElementById('diagStep1').style.display = 'none';
+      document.getElementById('diagStep2').style.display = 'block';
+      document.getElementById('diagStartRetrainBtn').style.display = 'none';
+      document.getElementById('diagRetrainStatus').style.display = 'block';
+      pollRetrainTask(activeTaskId);
+    }
+  } catch (e) {
+    console.error('Initialization failed', e);
+    document.getElementById('statusText').textContent = 'API Connection Error';
+  }
+}
+init();
+
+// ══ Feature 3：月份 Flipper（6 格 × 最佳化調度頁） ══
+let monthlyAllData  = [];
+let flipperPageStart = 0;
+const FLIPPER_PAGE_SIZE = 6;
+let FLIP_THRESHOLD = 0.05;
+
+function updateFlipThreshold(val) {
+  const v = parseFloat(val);
+  if (isNaN(v) || v < 1 || v > 50) return;
+  FLIP_THRESHOLD = v / 100;
+  const lbl = document.getElementById('flipThresholdLabel');
+  if (lbl) lbl.textContent = v + '%';
+  renderFlipperPage(flipperPageStart);
+}
+
+async function loadMonthlyChart() {
+  const grid = document.getElementById('flipperGrid');
+  const rangeEl = document.getElementById('flipPageRangeLabel');
+  if (grid) grid.innerHTML = '<div style="grid-column:1/-1;text-align:center;padding:24px;color:var(--muted);font-size:12px;">載入分析資料...</div>';
+  try {
+    const res = await fetch(`${API_BASE}/api/chart/monthly`);
+    if (!res.ok) {
+      const error = await res.json().catch(() => ({}));
+      throw new Error(error.detail || `HTTP ${res.status}`);
+    }
+    const json = await res.json();
+    monthlyAllData = Array.isArray(json) ? json : (json.data || []);
+    const note = document.getElementById('monthlyPeriodNote');
+    if (note) note.textContent = json.period_note || '';
+    if (!monthlyAllData.length) throw new Error('沒有可供分析的預測資料');
+
+    const sel = document.getElementById('monthFlipSelect');
+    if (sel) {
+      const opts = [];
+      for (let i = 0; i < monthlyAllData.length; i += FLIPPER_PAGE_SIZE) {
+        opts.push(`<option value="${i}">${monthlyAllData[i].month}</option>`);
+      }
+      sel.innerHTML = opts.join('');
+    }
+    flipperPageStart = 0;
+    renderFlipperPage(0);
+  } catch(e) {
+    console.warn('Monthly Flipper load failed:', e);
+    monthlyAllData = [];
+    if (rangeEl) rangeEl.textContent = '資料載入失敗';
+    if (grid) grid.innerHTML = `<div style="grid-column:1/-1;text-align:center;padding:24px;color:#b91c1c;font-size:12px;">${e.message}</div>`;
+  }
+}
+
+function renderFlipperPage(startIdx) {
+  if (!monthlyAllData.length) return;
+  startIdx = Math.max(0, Math.min(startIdx, monthlyAllData.length - 1));
+  flipperPageStart = startIdx;
+
+  const slice = monthlyAllData.slice(startIdx, startIdx + FLIPPER_PAGE_SIZE);
+  const threshPct = (FLIP_THRESHOLD * 100).toFixed(0);
+
+  const rangeEl = document.getElementById('flipPageRangeLabel');
+  if (rangeEl) rangeEl.textContent = `${slice[0]?.month || '—'} ～ ${slice[slice.length-1]?.month || '—'}`;
+
+  const sel = document.getElementById('monthFlipSelect');
+  if (sel) {
+    for (let i = 0; i < sel.options.length; i++) {
+      if (parseInt(sel.options[i].value) <= startIdx) sel.selectedIndex = i;
+    }
+  }
+
+  const prevBtn = document.getElementById('flipPrevBtn');
+  const nextBtn = document.getElementById('flipNextBtn');
+  if (prevBtn) prevBtn.style.opacity = startIdx === 0 ? '0.35' : '1';
+  if (nextBtn) nextBtn.style.opacity = (startIdx + FLIPPER_PAGE_SIZE >= monthlyAllData.length) ? '0.35' : '1';
+
+  const grid = document.getElementById('flipperGrid');
+  if (!grid) return;
+
+  grid.innerHTML = slice.map(d => {
+    const yPct    = d.actual_late_rate != null ? +(d.actual_late_rate * 100).toFixed(1) : null;
+    const yhatPct = d.avg_p_late       != null ? +(d.avg_p_late * 100).toFixed(1)       : null;
+    const errPct  = (yPct != null && yhatPct != null) ? +(Math.abs(yhatPct - yPct)).toFixed(1) : null;
+    const over    = errPct != null && errPct > (FLIP_THRESHOLD * 100);
+    const errColor   = over ? '#e07b54' : '#16a34a';
+    const cardBorder = over ? '2px solid #fed7aa' : '1px solid var(--border)';
+    const cardBg     = over ? '#fffbf7' : 'white';
+    const errLabel   = errPct != null
+      ? (over ? `${errPct}% &gt; ${threshPct}%` : `${errPct}% ✓`)
+      : '—';
+
+    const diagBtn = over
+      ? `<button onclick="openDiagnoseModal('${d.month}')"
+           style="width:100%;margin-top:10px;padding:7px 0;background:var(--navy);color:#fff;border:none;border-radius:5px;font-size:11px;font-weight:600;cursor:pointer;"
+           onmouseover="this.style.opacity='0.8'" onmouseout="this.style.opacity='1'">🔍 診斷</button>`
+      : `<div style="margin-top:10px;text-align:center;font-size:10px;color:#16a34a;font-weight:500;">✓ 正常範圍</div>`;
+
+    return `
+      <div style="border:${cardBorder};background:${cardBg};border-radius:8px;padding:12px;display:flex;flex-direction:column;">
+        <div style="font-size:13px;font-weight:700;color:var(--text);margin-bottom:2px;">${d.month}</div>
+        <div style="font-size:10px;color:var(--muted);margin-bottom:8px;font-family:'DM Mono',monospace;">${d.total_orders != null ? d.total_orders.toLocaleString() + ' 筆' : '—'}</div>
+        <div style="font-size:10px;color:var(--muted);margin-bottom:3px;">Y 實際</div>
+        <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px;">
+          <div style="flex:1;height:8px;background:#f3f4f6;border-radius:4px;overflow:hidden;">
+            <div style="height:100%;width:${yPct!=null?Math.min(yPct,100):0}%;background:#e07b54;border-radius:4px;transition:width 0.5s;"></div>
+          </div>
+          <span style="font-size:10px;font-weight:700;color:#e07b54;min-width:34px;text-align:right;">${yPct!=null?yPct+'%':'—'}</span>
+        </div>
+        <div style="font-size:10px;color:var(--muted);margin-bottom:3px;">Ŷ 預測</div>
+        <div style="display:flex;align-items:center;gap:6px;margin-bottom:8px;">
+          <div style="flex:1;height:8px;background:#f3f4f6;border-radius:4px;overflow:hidden;">
+            <div style="height:100%;width:${yhatPct!=null?Math.min(yhatPct,100):0}%;background:#437096;border-radius:4px;transition:width 0.5s;"></div>
+          </div>
+          <span style="font-size:10px;font-weight:700;color:#437096;min-width:34px;text-align:right;">${yhatPct!=null?yhatPct+'%':'—'}</span>
+        </div>
+        <div style="font-size:10px;font-weight:600;color:${errColor};padding:4px 6px;background:${over?'#fff7ed':'#f0fdf4'};border-radius:4px;text-align:center;">△ ${errLabel}</div>
+        ${diagBtn}
+      </div>`;
+  }).join('');
+}
+
+function flipPage(delta) {
+  renderFlipperPage(flipperPageStart + delta * FLIPPER_PAGE_SIZE);
+}
+
+function jumpToFlipPage(startIdx) {
+  renderFlipperPage(startIdx);
+}
+
+// ── 診斷 Modal ─────────────────────────────────────────────────────────────────
+let diagCurrentMonth = null;
+let diagCurrentFactors = [];
+let pendingRetrainSession = null;
+
+function openDiagnoseModal(month) {
+  if (!month) return;
+  diagCurrentMonth = month;
+  diagCurrentFactors = [];
+
+  document.getElementById('diagMonthTitle').textContent = month;
+  document.getElementById('diagMonthSummary').textContent = '載入中…';
+  document.getElementById('diagFactors').innerHTML = '<div style="color:var(--muted);font-size:12px;">LIME 分析中…</div>';
+  document.querySelectorAll('input[name="diagEventType"]').forEach(r => r.checked = false);
+  document.getElementById('diagEventNote').value = '';
+  document.getElementById('diagStep1').style.display = 'block';
+  document.getElementById('diagStep2').style.display = 'none';
+
+  // 重置重訓按鈕與狀態（避免第二次開啟時按鈕被隱藏）
+  const _retrainBtn = document.getElementById('diagStartRetrainBtn');
+  const _retrainStatus = document.getElementById('diagRetrainStatus');
+  if (_retrainBtn) { _retrainBtn.style.display = 'block'; _retrainBtn.disabled = false; }
+  if (_retrainStatus) { _retrainStatus.style.display = 'none'; _retrainStatus.style.color = ''; }
+
+  const isManager = currentRole === 'manager';
+  document.getElementById('diagManagerActions').style.display = isManager ? 'flex' : 'none';
+  document.getElementById('diagViewerNote').style.display    = isManager ? 'none' : 'block';
+
+  const modal = document.getElementById('monthDiagnoseModal');
+  if (modal) modal.style.display = 'flex';
+
+  fetchDiagnoseData(month);
+}
+
+function closeDiagnoseModal() {
+  const modal = document.getElementById('monthDiagnoseModal');
+  if (modal) modal.style.display = 'none';
+}
+
+async function fetchDiagnoseData(month) {
+  try {
+    const res = await fetch(`${API_BASE}/api/diagnose/monthly?month=${encodeURIComponent(month)}`);
+    if (!res.ok) throw new Error(res.status);
+    const data = await res.json();
+
+    const yPct   = data.actual_late_rate != null ? (data.actual_late_rate * 100).toFixed(1) : '—';
+    const yPhat  = data.avg_p_late       != null ? (data.avg_p_late * 100).toFixed(1)       : '—';
+    const errPct = data.error            != null ? (data.error * 100).toFixed(1)             : '—';
+    document.getElementById('diagMonthSummary').textContent =
+      `Y=${yPct}%  Ŷ=${yPhat}%  誤差=${errPct}%  錯誤訂單=${(data.error_orders_count||0).toLocaleString()} / ${(data.total_orders||0).toLocaleString()} 筆`;
+
+    diagCurrentFactors = data.top_factors || [];
+    const facEl = document.getElementById('diagFactors');
+    if (!diagCurrentFactors.length) {
+      facEl.innerHTML = '<div style="font-size:12px;color:var(--muted);">無足夠誤差訂單可分析</div>';
+    } else {
+      const maxCnt = Math.max(...diagCurrentFactors.map(f => f.count || 1));
+      facEl.innerHTML = diagCurrentFactors.map((f, i) => {
+        const pct      = maxCnt > 0 ? Math.round((f.count / maxCnt) * 100) : 0;
+        const dirColor = f.direction === 'raises risk' ? '#e07b54' : '#437096';
+        return `<div>
+          <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:4px;">
+            <span style="color:var(--text);font-weight:500;">${i+1}. ${f.feature}</span>
+            <span style="color:${dirColor};font-size:11px;">${f.direction==='raises risk'?'↑ 增加風險':'↓ 降低風險'}</span>
+          </div>
+          <div style="height:8px;background:var(--bg);border-radius:4px;overflow:hidden;">
+            <div style="height:100%;width:${pct}%;background:${dirColor};border-radius:4px;transition:width 0.4s;"></div>
+          </div>
+        </div>`;
+      }).join('');
+    }
+
+    if (data.event_flag) {
+      const match = document.querySelector(`input[name="diagEventType"][value="${data.event_flag.type}"]`);
+      if (match) match.checked = true;
+      if (data.event_flag.note) document.getElementById('diagEventNote').value = data.event_flag.note;
+    }
+  } catch(e) {
+    document.getElementById('diagMonthSummary').textContent = '載入失敗：' + e.message;
+  }
+}
+
+async function flagMonthEvent() {
+  const selected = document.querySelector('input[name="diagEventType"]:checked');
+  if (!selected) { alert('請先選擇事件類型'); return; }
+  const note  = document.getElementById('diagEventNote').value.trim();
+  const xRole = currentRole === 'manager' ? 'Logistics_Manager' : 'Viewer';
+  const btn   = document.getElementById('diagFlagBtn');
+  if (btn) { btn.disabled = true; btn.textContent = '標記中…'; }
+  try {
+    const res = await fetch(`${API_BASE}/api/diagnose/monthly/flag`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Role': xRole },
+      body: JSON.stringify({ month: diagCurrentMonth, event_type: selected.value, note })
+    });
+    if (!res.ok) { const e = await res.json().catch(()=>({})); throw new Error(e.detail || res.status); }
+    closeDiagnoseModal();
+    showToast(`已標記 ${diagCurrentMonth} 為「${selected.value}」`, 'success');
+    await loadMonthlyChart();
+  } catch(e) {
+    showToast('標記失敗：' + e.message, 'error');
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = '標記為外部事件，排除重訓考量'; }
+  }
+}
+
+function showRetrainStep() {
+  document.getElementById('diagStep1').style.display = 'none';
+  document.getElementById('diagStep2').style.display = 'block';
+
+  const cbEl = document.getElementById('diagFeatureCheckboxes');
+  if (!diagCurrentFactors.length) {
+    cbEl.innerHTML = '<div style="font-size:12px;color:var(--muted);">無可選擇的問題特徵</div>';
+    return;
+  }
+  cbEl.innerHTML = diagCurrentFactors.map((f, i) => `
+    <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;padding:6px 8px;border:1px solid var(--border);border-radius:6px;background:var(--bg);">
+      <input type="checkbox" name="retrainFeature" value="${f.feature}" ${i < 2 ? 'checked' : ''} style="accent-color:var(--navy);">
+      <span style="flex:1;">${f.feature}</span>
+      <span style="font-size:11px;color:${f.direction==='raises risk'?'#e07b54':'#437096'};">${f.direction==='raises risk'?'↑ 高風險貢獻':'↓ 低風險貢獻'}</span>
+    </label>`).join('');
+}
+
+function backToStep1() {
+  document.getElementById('diagStep1').style.display = 'block';
+  document.getElementById('diagStep2').style.display = 'none';
+}
+
+async function startRetrain() {
+  const checked = [...document.querySelectorAll('input[name="retrainFeature"]:checked')];
+  if (!checked.length) { alert('請至少選擇一個要排除的特徵'); return; }
+  const excluded = checked.map(c => c.value);
+  const xRole = currentRole === 'manager' ? 'Logistics_Manager' : 'Viewer';
+
+  const btn    = document.getElementById('diagStartRetrainBtn');
+  const status = document.getElementById('diagRetrainStatus');
+  if (btn)    { btn.style.display    = 'none'; }
+  if (status) { status.style.display = 'block'; status.innerHTML = '<span class="spinner"></span> 正在啟動重訓任務...'; }
+
+  try {
+    const res = await fetch(`${API_BASE}/api/retrain`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Role': xRole },
+      body: JSON.stringify({ excluded_features: excluded })
+    });
+    if (!res.ok) { const e = await res.json().catch(()=>({})); throw new Error(e.detail || res.status); }
+    const data = await res.json();
+    
+    // 儲存任務 ID 到 sessionStorage 防止重整網頁遺失
+    sessionStorage.setItem('edis_active_task_id', data.task_id);
+    sessionStorage.setItem('edis_active_task_month', diagCurrentMonth);
+    
+    pollRetrainTask(data.task_id);
+  } catch(e) {
+    if (status) { status.textContent = '重訓失敗：' + e.message; status.style.color = '#e07b54'; }
+    if (btn) btn.style.display = 'block';
+    showToast('重訓失敗：' + e.message, 'error');
+  }
+}
+
+function pollRetrainTask(taskId) {
+  const status = document.getElementById('diagRetrainStatus');
+  const interval = setInterval(async () => {
+    try {
+      const res = await fetch(`${API_BASE}/api/tasks/${taskId}/status`);
+      if (!res.ok) throw new Error('無法取得任務進度');
+      const data = await res.json();
+      
+      if (status) {
+        status.innerHTML = `<span class="spinner"></span> <strong>[${data.progress}%]</strong> ${data.log}`;
+      }
+      
+      if (data.status === 'success') {
+        clearInterval(interval);
+        sessionStorage.removeItem('edis_active_task_id');
+        sessionStorage.removeItem('edis_active_task_month');
+        if (status) status.style.display = 'none';
+        
+        pendingRetrainSession = data.result.session_id;
+        renderDiagRetrainResult(data.result);
+        showToast('重訓完成，新舊模型指標比對就緒。', 'success');
+      } else if (data.status === 'failed') {
+        clearInterval(interval);
+        sessionStorage.removeItem('edis_active_task_id');
+        sessionStorage.removeItem('edis_active_task_month');
+        if (status) {
+          status.textContent = '重訓失敗：' + (data.error || '未知錯誤');
+          status.style.color = '#e07b54';
+        }
+        const btn = document.getElementById('diagStartRetrainBtn');
+        if (btn) btn.style.display = 'block';
+        showToast('重訓失敗：' + (data.error || '未知錯誤'), 'error');
+      }
+    } catch (e) {
+      clearInterval(interval);
+      if (status) {
+        status.textContent = '輪詢進度失敗：' + e.message;
+        status.style.color = '#e07b54';
+      }
+      const btn = document.getElementById('diagStartRetrainBtn');
+      if (btn) btn.style.display = 'block';
+    }
+  }, 2000);
+}
+
+function renderDiagRetrainResult(data) {
+  document.getElementById('diagStep2').style.display = 'none';
+  const step3 = document.getElementById('diagStep3');
+  if (step3) step3.style.display = 'block';
+  
+  document.getElementById('diagDroppedColsNote').textContent =
+    `排除特徵（${(data.dropped_columns||[]).length} 個）：${(data.dropped_columns||[]).join(' · ') || '無'}`;
+
+  const metricKeys = ['roc_auc', 'f1', 'precision', 'recall'];
+  const metricLabels = { roc_auc: 'ROC-AUC', f1: 'F1', precision: '精準率', recall: '召回率' };
+
+  function renderMetricGrid(elId, metrics, compareMetrics) {
+    const el = document.getElementById(elId);
+    if (!el || !metrics) return;
+    el.innerHTML = metricKeys.map(k => {
+      const v    = metrics[k]     != null ? (+metrics[k]).toFixed(4)     : '—';
+      const vCmp = compareMetrics && compareMetrics[k] != null ? +compareMetrics[k] : null;
+      const vNum = metrics[k] != null ? +metrics[k] : null;
+      let delta = '';
+      if (vNum != null && vCmp != null) {
+        const diff = ((vNum - vCmp) * 100).toFixed(2);
+        const isUp = vNum >= vCmp;
+        delta = `<span style="font-size:10px; margin-left:2px; color:${isUp?'#16a34a':'#e07b54'};">${isUp?'▲':'▼'} ${Math.abs(diff)}%</span>`;
+      }
+      return `<div class="stat-box" style="padding:6px 8px;"><div class="stat-label" style="font-size:9px;">${metricLabels[k]}</div><div class="stat-value" style="font-size:13px; font-weight:700;">${v}${delta}</div></div>`;
+    }).join('');
+  }
+
+  renderMetricGrid('diagOldMetricsGrid', data.old_metrics, data.new_metrics);
+  renderMetricGrid('diagNewMetricsGrid', data.new_metrics, data.old_metrics);
+}
+
+async function diagAdoptNewModel() {
+  if (!pendingRetrainSession) return;
+  const xRole = currentRole === 'manager' ? 'Logistics_Manager' : 'Viewer';
+  const btn = document.getElementById('diagAdoptBtn');
+  if (btn) { btn.disabled = true; btn.textContent = '採用中...'; }
+  try {
+    const res = await fetch(`${API_BASE}/api/retrain/adopt`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Role': xRole },
+      body: JSON.stringify({ session_id: pendingRetrainSession })
+    });
+    
+    if (!res.ok) {
+      const e = await res.json().catch(()=>({}));
+      throw new Error(e.detail || res.status);
+    }
+    
+    pendingRetrainSession = null;
+    document.getElementById('diagStep3').style.display = 'none';
+    closeDiagnoseModal();
+    showToast('新模型已採用並就地更新。', 'success');
+    
+    await loadMonthlyChart();
+    await refreshDashboard();
+  } catch(e) {
+    showToast('採用失敗：' + e.message, 'error');
+    if (btn) { btn.disabled = false; btn.textContent = '✓ 採用新模型'; }
+  }
+}
+
+async function diagDiscardNewModel() {
+  if (!pendingRetrainSession) return;
+  const xRole = currentRole === 'manager' ? 'Logistics_Manager' : 'Viewer';
+  const btn = document.getElementById('diagDiscardBtn');
+  if (btn) { btn.disabled = true; btn.textContent = '捨棄中...'; }
+  try {
+    await fetch(`${API_BASE}/api/retrain/discard`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Role': xRole },
+      body: JSON.stringify({ session_id: pendingRetrainSession })
+    });
+  } catch(e) {}
+  
+  pendingRetrainSession = null;
+  document.getElementById('diagStep3').style.display = 'none';
+  closeDiagnoseModal();
+  showToast('已捨棄新模型，保留現有模型。', 'info');
+  
+  if (btn) { btn.disabled = false; btn.textContent = '✗ 捨棄，保留舊模型'; }
+}
+
+
+// ── 重訓比對結果 ────────────────────────────────────────────────────────────────
+function renderRetrainResult(data) {
+  const panel = document.getElementById('retrainResultPanel');
+  if (!panel) return;
+  panel.style.display = 'block';
+  panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+
+  document.getElementById('retrainResultSubtitle').textContent =
+    `排除特徵：${(data.dropped_columns || []).join('、') || '無'} · Session: ${data.session_id}`;
+
+  const metricKeys = ['roc_auc', 'f1', 'precision', 'recall'];
+  const metricLabels = { roc_auc: 'ROC-AUC', f1: 'F1', precision: '精準率', recall: '召回率' };
+
+  function renderMetricGrid(elId, metrics, compareMetrics) {
+    const el = document.getElementById(elId);
+    if (!el || !metrics) return;
+    el.innerHTML = metricKeys.map(k => {
+      const v    = metrics[k]     != null ? (+metrics[k]).toFixed(4)     : '—';
+      const vCmp = compareMetrics && compareMetrics[k] != null ? +compareMetrics[k] : null;
+      const vNum = metrics[k] != null ? +metrics[k] : null;
+      let delta = '';
+      if (vNum != null && vCmp != null) {
+        const diff = ((vNum - vCmp) * 100).toFixed(2);
+        const isUp = vNum >= vCmp;
+        delta = `<span style="font-size:10px;margin-left:4px;color:${isUp?'#16a34a':'#e07b54'};">${isUp?'▲':'▼'} ${Math.abs(diff)}%</span>`;
+      }
+      return `<div class="stat-box"><div class="stat-label">${metricLabels[k]}</div><div class="stat-value" style="font-size:18px;">${v}${delta}</div></div>`;
+    }).join('');
+  }
+
+  renderMetricGrid('oldMetricsGrid', data.old_metrics, data.new_metrics);
+  renderMetricGrid('newMetricsGrid', data.new_metrics, data.old_metrics);
+
+  const noteEl = document.getElementById('droppedColsNote');
+  if (noteEl) noteEl.textContent = `已排除欄位（${(data.dropped_columns||[]).length} 個）：${(data.dropped_columns||[]).join(' · ') || '無'}`;
+}
+
+async function adoptNewModel() {
+  if (!pendingRetrainSession) return;
+  const xRole = currentRole === 'manager' ? 'Logistics_Manager' : 'Viewer';
+  const btn = document.getElementById('adoptBtn');
+  if (btn) { btn.disabled = true; btn.textContent = '採用中…'; }
+  try {
+    const res = await fetch(`${API_BASE}/api/retrain/adopt`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Role': xRole },
+      body: JSON.stringify({ session_id: pendingRetrainSession })
+    });
+    if (!res.ok) { const e = await res.json().catch(()=>({})); throw new Error(e.detail || res.status); }
+    document.getElementById('retrainResultPanel').style.display = 'none';
+    pendingRetrainSession = null;
+    showToast('新模型已採用並替換現有模型', 'success');
+    loadModelPerformance();
+  } catch(e) {
+    showToast('採用失敗：' + e.message, 'error');
+    if (btn) { btn.disabled = false; btn.textContent = '✓ 採用新模型'; }
+  }
+}
+
+async function discardNewModel() {
+  if (!pendingRetrainSession) return;
+  const xRole = currentRole === 'manager' ? 'Logistics_Manager' : 'Viewer';
+  try {
+    await fetch(`${API_BASE}/api/retrain/discard`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Role': xRole },
+      body: JSON.stringify({ session_id: pendingRetrainSession })
+    });
+  } catch(e) {}
+  document.getElementById('retrainResultPanel').style.display = 'none';
+  pendingRetrainSession = null;
+  showToast('已捨棄新模型，現有模型不變', 'info');
+}
+
+function showToast(msg, type = 'info') {
+  const colors = { success: '#22c55e', error: '#e07b54', info: 'var(--navy)' };
+  const toast = document.createElement('div');
+  toast.textContent = msg;
+  toast.style.cssText = `position:fixed;bottom:24px;right:24px;z-index:2000;padding:10px 16px;border-radius:8px;font-size:13px;font-weight:500;color:#fff;background:${colors[type]||colors.info};box-shadow:0 4px 12px rgba(0,0,0,0.15);opacity:0;transition:opacity 0.2s;`;
+  document.body.appendChild(toast);
+  requestAnimationFrame(() => { toast.style.opacity = '1'; });
+  setTimeout(() => { toast.style.opacity = '0'; setTimeout(() => toast.remove(), 300); }, 3500);
+}
+
+
+
+function closeLoginModal() {
+  document.getElementById('loginModal').classList.remove('show');
+  document.querySelectorAll('.role-btn').forEach(b =>
+    b.classList.toggle('active', b.textContent.toLowerCase() === 'viewer'));
+}
+async function submitLogin() {
+  const username = document.getElementById('loginUsername').value.trim();
+  const password = document.getElementById('loginPassword').value;
+  const errEl = document.getElementById('loginError');
+  errEl.classList.remove('show');
+  try {
+    const res = await fetch(API_BASE + '/api/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username, password })
+    });
+    if (res.ok) {
+      const data = await res.json();
+      sessionStorage.setItem('edis_token', data.token);
+      sessionStorage.setItem('edis_session_id', data.session_id);
+      document.getElementById('loginModal').classList.remove('show');
+      window._managerAuthenticated = true;
+      await setRole('manager');
+    } else {
+      errEl.classList.add('show');
+    }
+
+  } catch(e) {
+    errEl.classList.add('show');
+  }
+}
+document.addEventListener('keydown', function(e) {
+  if (e.key === 'Enter' && document.getElementById('loginModal').classList.contains('show')) {
+    submitLogin();
+  }
+});
+document.addEventListener('keydown', function(e) {
+  const input = document.getElementById('aiQuestionInput');
+  if (e.key === 'Enter' && !e.shiftKey && document.activeElement === input) {
+    e.preventDefault();
+    generateAIBrief();
+  }
+});
+</script>
+
+<!-- Modal for Local Attribution Explanation -->
+<div id="explainModal" style="position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:999; display:none; align-items:center; justify-content:center; padding:20px;">
+  <div style="background:white; border-radius:10px; width:100%; max-width:600px; padding:24px; box-shadow:0 10px 25px rgba(0,0,0,0.1); display:flex; flex-direction:column; gap:16px; position:relative;">
+    <button onclick="closeExplainModal()" style="position:absolute; top:16px; right:20px; border:none; background:transparent; font-size:24px; cursor:pointer; color:var(--muted); line-height:1;">&times;</button>
+    <div style="font-size:16px; font-weight:700; color:var(--text); display:flex; align-items:center; gap:8px; margin-bottom:4px;">🔎 訂單延遲原因詳細分析 (LIME-style)</div>
+    <div style="font-size:12px; color:var(--muted); font-family:'DM Mono',monospace; margin-top:-8px;" id="modalOrderId">—</div>
+    <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
+      <div class="stat-box">
+        <div class="stat-label">預測延遲機率</div>
+        <div class="stat-value" id="modalProb" style="color:var(--navy);">—</div>
+      </div>
+      <div class="stat-box">
+        <div class="stat-label">預估延遲罰款</div>
+        <div class="stat-value warm" id="modalPenalty">—</div>
+      </div>
+    </div>
+    <div>
+      <div style="font-size:11px; color:var(--muted); font-weight:600; text-transform:uppercase; margin-bottom:8px; font-family:'DM Mono',monospace;">主管分析摘要</div>
+      <div id="modalSummaryText" style="font-size:13px; line-height:1.6; color:var(--text); background:#f6f9fb; border:1px solid var(--border); border-radius:6px; padding:12px;">—</div>
+    </div>
+    <div>
+      <div style="font-size:11px; color:var(--muted); font-weight:600; text-transform:uppercase; margin-bottom:8px; font-family:'DM Mono',monospace;">影響預測之關鍵特徵權重 (Top X Factors)</div>
+      <div id="modalFactorsList" style="display:flex; flex-direction:column; gap:8px;">
+        <!-- Factors list -->
+      </div>
+    </div>
+  </div>
+</div>
+
+
+<div class="modal-overlay" id="loginModal">
+  <div class="modal-box">
+    <div class="modal-title">🔐 Manager 登入</div>
+    <div class="modal-sub">請輸入 Manager 帳號密碼以切換權限</div>
+    <div class="modal-field">
+      <label>帳號 Username</label>
+      <input type="text" class="modal-input" id="loginUsername" placeholder="admin">
+    </div>
+    <div class="modal-field">
+      <label>密碼 Password</label>
+      <input type="password" class="modal-input" id="loginPassword" placeholder="••••••••">
+    </div>
+    <div class="modal-error" id="loginError">帳號或密碼錯誤，請重試。</div>
+    <div class="modal-btns">
+      <button class="modal-confirm" onclick="submitLogin()">登入</button>
+      <button class="modal-cancel" onclick="closeLoginModal()">取消</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Onboarding Tour ── -->
+<style>
+#tourOverlay{position:fixed;top:0;left:0;width:100%;height:100%;z-index:9000;pointer-events:none;display:none;}
+#tourOverlay.active{display:block;pointer-events:all;}
+#tourBackdrop{position:absolute;inset:0;background:rgba(0,0,0,0.62);}
+#tourSpotlight{
+  position:absolute;border-radius:10px;
+  box-shadow:0 0 0 9999px rgba(0,0,0,0.62);
+  border:2.5px solid rgba(255,255,255,0.6);
+  transition:all 0.35s cubic-bezier(.4,0,.2,1);
+  pointer-events:none;z-index:9001;display:none;
+}
+#tourCard{
+  position:absolute;background:white;border-radius:14px;
+  padding:22px 24px 18px;width:292px;
+  box-shadow:0 16px 48px rgba(0,0,0,0.22);
+  z-index:9002;transition:all 0.3s ease;display:none;
+}
+#tourCardCenter{
+  position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);
+  background:white;border-radius:18px;padding:38px 34px 30px;width:380px;
+  box-shadow:0 20px 60px rgba(0,0,0,0.28);z-index:9002;text-align:center;display:none;
+}
+.t-icon{font-size:38px;margin-bottom:10px;line-height:1;}
+.t-title{font-size:16px;font-weight:700;color:#2d3340;margin-bottom:8px;}
+.t-desc{font-size:13px;line-height:1.68;color:#555d6a;white-space:pre-line;}
+.t-step{font-size:10.5px;color:#8a939e;font-family:'DM Mono',monospace;margin-bottom:12px;}
+.t-dots{display:flex;gap:6px;justify-content:center;margin:14px 0 16px;}
+.t-dot{width:7px;height:7px;border-radius:50%;background:#dde0de;transition:background 0.2s;}
+.t-dot.on{background:#437096;}
+.t-btns{display:flex;align-items:center;justify-content:space-between;margin-top:16px;}
+.t-skip{font-size:12px;color:#9aa2ac;background:none;border:none;cursor:pointer;padding:4px 2px;}
+.t-skip:hover{color:#5a6370;}
+.t-nav{display:flex;gap:8px;}
+.t-prev{padding:8px 15px;font-size:13px;border-radius:7px;background:#f0f2f0;border:none;cursor:pointer;color:#5a6370;}
+.t-prev:hover{background:#e4e7e4;}
+.t-next{padding:8px 18px;font-size:13px;font-weight:600;border-radius:7px;background:#437096;border:none;cursor:pointer;color:white;}
+.t-next:hover{background:#335a7a;}
+#tourHelpBtn{
+  position:fixed;bottom:28px;right:28px;width:42px;height:42px;
+  background:#437096;color:white;border:none;border-radius:50%;
+  font-size:19px;font-weight:700;cursor:pointer;
+  box-shadow:0 4px 14px rgba(67,112,150,0.45);z-index:8000;
+  display:flex;align-items:center;justify-content:center;
+  transition:background 0.15s;
+}
+#tourHelpBtn:hover{background:#335a7a;}
+</style>
+
+<div id="tourOverlay">
+  <div id="tourBackdrop" onclick="tourSkip()"></div>
+  <div id="tourSpotlight"></div>
+
+  <!-- 步驟卡（靠右顯示） -->
+  <div id="tourCard">
+    <div class="t-step" id="tStepLabel"></div>
+    <div class="t-icon" id="tIcon"></div>
+    <div class="t-title" id="tTitle"></div>
+    <div class="t-desc" id="tDesc"></div>
+    <div class="t-dots" id="tDots"></div>
+    <div class="t-btns">
+      <button class="t-skip" onclick="tourSkip()">跳過導覽</button>
+      <div class="t-nav">
+        <button class="t-prev" id="tPrev" onclick="tourPrev()">← 上一步</button>
+        <button class="t-next" id="tNext" onclick="tourNext()">下一步 →</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 歡迎卡（置中） -->
+  <div id="tourCardCenter">
+    <div class="t-icon" id="tIconC" style="font-size:52px;margin-bottom:16px;"></div>
+    <div class="t-title" id="tTitleC" style="font-size:20px;margin-bottom:12px;"></div>
+    <div class="t-desc" id="tDescC"></div>
+    <div class="t-dots" id="tDotsC" style="margin:20px 0 24px;"></div>
+    <div style="display:flex;justify-content:center;gap:12px;">
+      <button class="t-skip" onclick="tourSkip()">跳過</button>
+      <button class="t-next" onclick="tourNext()" style="padding:11px 30px;font-size:14px;">開始導覽 →</button>
+    </div>
+  </div>
+</div>
+
+<button id="tourHelpBtn" onclick="startTour()" title="操作說明">?</button>
+
+<script>
+const _TOUR = [
+  { center:true,  icon:'🚀', title:'歡迎使用 EDIS',     desc:'這是一套物流延遲預測與最佳化調度系統。\n只需 1 分鐘，帶你快速認識各功能。' },
+  { target:'nav-dashboard',    icon:'📊', title:'Dashboard 總覽',  desc:'查看模型 KPI、延遲風險指標與趨勢，\n快速掌握整體物流狀況。' },
+  { target:'nav-risk-list',    icon:'⚠️', title:'風險訂單列表',    desc:'瀏覽高風險訂單，支援搜尋與篩選，\n點擊訂單可查看延遲原因分析。' },
+  { target:'nav-optimization', icon:'⚡', title:'最佳化調度',      desc:'設定預算，系統自動找出 ROI 最佳的升級方案，\n降低延遲罰款。（需 Manager 權限）' },
+  { target:'nav-ai-assistant', icon:'✦',  title:'AI 助理',         desc:'用中文詢問物流決策建議，\nAI 根據去識別化資料回答。（需 Manager 權限）' },
+  { target:'nav-model-perf',   icon:'📈', title:'模型效能',        desc:'監控 AUC、F1、Precision、Recall，\n並可調整決策門檻值。' },
+  { target:'nav-region-map',   icon:'🗺️', title:'區域風險地圖',    desc:'全球熱力圖顯示各地區延遲風險，\n快速識別高風險配送區域。' },
+  { target:'nav-rbac',         icon:'🔐', title:'角色與權限',      desc:'Viewer 可查看報告，Manager 可執行調度。\n點右上角可切換角色或登入。' },
+];
+
+let _tourStep = 0;
+
+function startTour() {
+  _tourStep = 0;
+  document.getElementById('tourOverlay').classList.add('active');
+  _renderTour();
+}
+
+function _dots(current) {
+  return _TOUR.map((_,i) => `<div class="t-dot${i===current?' on':''}"></div>`).join('');
+}
+
+function _renderTour() {
+  const s = _TOUR[_tourStep];
+  const card   = document.getElementById('tourCard');
+  const cardC  = document.getElementById('tourCardCenter');
+  const spot   = document.getElementById('tourSpotlight');
+
+  if (s.center) {
+    card.style.display = 'none'; spot.style.display = 'none';
+    cardC.style.display = 'block';
+    document.getElementById('tIconC').textContent  = s.icon;
+    document.getElementById('tTitleC').textContent = s.title;
+    document.getElementById('tDescC').textContent  = s.desc;
+    document.getElementById('tDotsC').innerHTML    = _dots(_tourStep);
+  } else {
+    cardC.style.display = 'none';
+    card.style.display = 'block'; spot.style.display = 'block';
+
+    const total = _TOUR.length - 1;
+    document.getElementById('tStepLabel').textContent = `步驟 ${_tourStep} / ${total}`;
+    document.getElementById('tIcon').textContent  = s.icon;
+    document.getElementById('tTitle').textContent = s.title;
+    document.getElementById('tDesc').textContent  = s.desc;
+    document.getElementById('tDots').innerHTML    = _dots(_tourStep);
+    document.getElementById('tPrev').style.visibility = _tourStep <= 1 ? 'hidden' : 'visible';
+    document.getElementById('tNext').textContent  = _tourStep === _TOUR.length-1 ? '完成 ✓' : '下一步 →';
+
+    const el = document.getElementById(s.target);
+    if (el) {
+      const r = el.getBoundingClientRect(), p = 7;
+      spot.style.cssText += `left:${r.left-p}px;top:${r.top-p}px;width:${r.width+p*2}px;height:${r.height+p*2}px;`;
+      const cardTop = Math.min(Math.max(r.top - 10, 80), window.innerHeight - 260);
+      card.style.left = '248px';
+      card.style.top  = cardTop + 'px';
+    }
+  }
+}
+
+function tourNext() {
+  _tourStep >= _TOUR.length - 1 ? _tourEnd() : (++_tourStep, _renderTour());
+}
+function tourPrev() {
+  _tourStep > 1 && (--_tourStep, _renderTour());
+}
+function tourSkip() { _tourEnd(); }
+function _tourEnd() {
+  document.getElementById('tourOverlay').classList.remove('active');
+  localStorage.setItem('edis_tour','1');
+}
+
+window.addEventListener('load', function() {
+  if (!localStorage.getItem('edis_tour')) setTimeout(startTour, 900);
+});
+</script>
+</body>
+</html>

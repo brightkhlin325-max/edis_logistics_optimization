@@ -247,10 +247,25 @@ async function initRegionMap(regionLookup) {
         }
 
         layer.on('mouseover', function() {
-          this.setStyle({ weight: 2.5, color: '#2c3e50', fillOpacity: 0.85 });
-          this.bringToFront();
+          const targetRegion = layerRegionCache.get(this);
+          if (targetRegion && regionGeoLayer) {
+            regionGeoLayer.eachLayer(l => {
+              const r = layerRegionCache.get(l);
+              if (r === targetRegion) {
+                l.setStyle({ weight: 2.5, color: '#1e3a8a', fillOpacity: 0.85 });
+              }
+            });
+          } else {
+            this.setStyle({ weight: 2.5, color: '#2c3e50', fillOpacity: 0.85 });
+          }
         });
-        layer.on('mouseout', function() { regionGeoLayer.resetStyle(this); });
+        layer.on('mouseout', function() {
+          if (regionGeoLayer) {
+            regionGeoLayer.eachLayer(l => {
+              regionGeoLayer.resetStyle(l);
+            });
+          }
+        });
         layer.on('click', function() {
           regionMap.fitBounds(this.getBounds(), { padding: [40, 40], maxZoom: 5 });
         });
@@ -273,8 +288,7 @@ function highlightMapRegion(regionName) {
     if (!rn) return;
     const isUSSubRegion = ['East of USA', 'West of USA', 'US Center', 'South of  USA', 'South of USA'].some(u => trimmed.includes(u.trim()));
     if (rn.trim() === trimmed || (isUSSubRegion && rn === 'US_COMBINED')) {
-      layer.setStyle({ weight: 3, color: '#2c3e50', fillOpacity: 0.9 });
-      layer.bringToFront();
+      layer.setStyle({ weight: 3, color: '#1e3a8a', fillOpacity: 0.9 });
     }
   });
 }

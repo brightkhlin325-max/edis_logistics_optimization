@@ -37,7 +37,7 @@ def main():
     with open(output_path, "w", encoding="utf-8") as f:
         json.dump(mappings, f, ensure_ascii=False, indent=2)
         
-    print(f"✓ Feature mappings built successfully at {output_path}")
+    print(f"[SUCCESS] Feature mappings built successfully at {output_path}")
 
 if __name__ == "__main__":
     main()

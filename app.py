@@ -96,7 +96,8 @@ def load_cached_predictions(path: Path) -> pd.DataFrame:
 # RBAC 角色定義
 ROLE_VIEWER = "Viewer"
 ROLE_MANAGER = "Logistics_Manager"
-VALID_ROLES = {ROLE_VIEWER, ROLE_MANAGER}
+ROLE_ENGINEER = "Engineer"
+VALID_ROLES = {ROLE_VIEWER, ROLE_MANAGER, ROLE_ENGINEER}
 
 
 # ── FastAPI 應用 ──────────────────────────────────────────────────────────────
@@ -366,15 +367,15 @@ def get_predictions_path(x_session_id: Optional[str] = None) -> Path:
 
 def require_manager(role: str) -> None:
     """
-    要求呼叫者必須是 Logistics_Manager。
+    要求呼叫者必須是 Logistics_Manager 或 Engineer。
     否則拋出 403 Forbidden。
     """
-    if role != ROLE_MANAGER:
+    if role not in (ROLE_MANAGER, ROLE_ENGINEER):
         raise HTTPException(
             status_code=403,
             detail={
                 "error": "403 Forbidden",
-                "message": "此端點僅限 Logistics_Manager 存取。Viewer 無執行最佳化的權限。",
+                "message": "此端點僅限 Logistics_Manager 或 Engineer 存取。Viewer 無執行最佳化的權限。",
                 "your_role": role,
             },
         )
@@ -1051,6 +1052,197 @@ init_db()
 class LoginRequest(BaseModel):
     username: str
     password: str
+
+
+class SingleOrderPredictRequest(BaseModel):
+    """即時單筆訂單延遲預測請求模型。"""
+    shipping_mode: str = "Standard Class"      # First Class / Same Day / Second Class / Standard Class
+    order_region: str = "Western Europe"       # 23 個區域之一
+    order_country: str = "Francia"             # 國家（選填，預設法國）
+    days_for_shipment: float = 4.0             # 預計配送天數
+    product_price: float = 59.99              # 商品單價（USD）
+    order_item_quantity: int = 1               # 訂購數量
+    customer_segment: str = "Consumer"        # Consumer / Corporate / Home Office
+    department_name: str = "Fan Shop"         # 部門名稱（選填）
+    market: str = "Europe"                    # Africa / Europe / LATAM / Pacific Asia / USCA
+    order_date: Optional[str] = None          # 訂單日期（YYYY-MM-DD，選填）
+    order_item_discount_rate: Optional[float] = None   # 折扣率（0~1，選填）
+    order_item_profit_ratio: Optional[float] = None    # 利潤率（選填）
+    order_profit_per_order: Optional[float] = None     # 每單利潤（選填）
+
+
+@app.post("/api/predict-single")
+def predict_single_order(
+    body: SingleOrderPredictRequest,
+    x_role: Optional[str] = Header(default=None),
+    authorization: Optional[str] = Header(default=None),
+):
+    """
+    [Viewer/Manager] 即時單筆訂單延遲機率預測。
+    接收關鍵訂單欄位，其餘特徵以 serving_artifacts.json 訓練中位數填補，
+    使用 XGBoost 模型推論，回傳延遲機率、風險等級與預估罰金。
+    """
+    try:
+        import xgboost as xgb
+    except ImportError:
+        raise HTTPException(status_code=500, detail="XGBoost 未安裝，無法執行預測。")
+
+    # 讀取特徵對應表
+    mapping_path = BASE_DIR / "models" / "feature_mapping.json"
+    artifact_path = BASE_DIR / "models" / "serving_artifacts.json"
+    model_path    = BASE_DIR / "models" / "xgboost_model.json"
+
+    if not mapping_path.exists() or not model_path.exists():
+        raise HTTPException(status_code=500, detail="模型檔案不存在，請先執行 model_pipeline.py。")
+
+    with open(mapping_path, "r", encoding="utf-8") as f:
+        mappings = json.load(f)
+
+    serving_medians: dict = {}
+    serving_label_classes: dict = {}
+    if artifact_path.exists():
+        try:
+            with open(artifact_path, "r", encoding="utf-8") as f:
+                _art = json.load(f)
+            serving_medians = _art.get("feature_medians", {}) or {}
+            serving_label_classes = _art.get("label_classes", {}) or {}
+        except Exception:
+            pass
+
+    feature_cols: list = mappings.get("feature_columns", [])
+
+    # ── 建立特徵向量（與 preprocessor.py 邏輯一致）──────────────────
+    import numpy as np
+    X: dict = {}
+
+    # 1. 數值特徵（缺值用訓練中位數填補）
+    num_defaults = {
+        "Days for shipment (scheduled)": body.days_for_shipment,
+        "Product Price":                  body.product_price,
+        "Order Item Quantity":            float(body.order_item_quantity),
+        "Order Item Discount Rate":       body.order_item_discount_rate
+                                          if body.order_item_discount_rate is not None
+                                          else serving_medians.get("Order Item Discount Rate", 0.1),
+        "Order Item Profit Ratio":        body.order_item_profit_ratio
+                                          if body.order_item_profit_ratio is not None
+                                          else serving_medians.get("Order Item Profit Ratio", 0.27),
+        "Order Profit Per Order":         body.order_profit_per_order
+                                          if body.order_profit_per_order is not None
+                                          else serving_medians.get("Order Profit Per Order", 31.52),
+    }
+    for col, val in num_defaults.items():
+        X[col] = float(val if val is not None else serving_medians.get(col, 0.0))
+
+    # 2. 時間特徵
+    if body.order_date:
+        try:
+            dt = pd.to_datetime(body.order_date, errors="coerce")
+            X["order_dayofweek"]  = int(dt.dayofweek)  if not pd.isnull(dt) else int(serving_medians.get("order_dayofweek", 3))
+            X["order_month"]      = int(dt.month)      if not pd.isnull(dt) else int(serving_medians.get("order_month", 6))
+            X["order_hour"]       = int(dt.hour)       if not pd.isnull(dt) else int(serving_medians.get("order_hour", 11))
+            X["order_is_weekend"] = int(dt.dayofweek >= 5) if not pd.isnull(dt) else 0
+        except Exception:
+            X["order_dayofweek"]  = int(serving_medians.get("order_dayofweek", 3))
+            X["order_month"]      = int(serving_medians.get("order_month", 6))
+            X["order_hour"]       = int(serving_medians.get("order_hour", 11))
+            X["order_is_weekend"] = 0
+    else:
+        X["order_dayofweek"]  = int(serving_medians.get("order_dayofweek", 3))
+        X["order_month"]      = int(serving_medians.get("order_month", 6))
+        X["order_hour"]       = int(serving_medians.get("order_hour", 11))
+        X["order_is_weekend"] = 0
+
+    # 3. Label Encoded 特徵
+    label_cols_map = {
+        "Order Region":   body.order_region,
+        "Category Name":  "Accessories",  # 以預設值填補（未在表單收集）
+        "Order Country":  body.order_country,
+    }
+    for col, val in label_cols_map.items():
+        classes = serving_label_classes.get(col, mappings.get(col, []))
+        val_to_idx = {v: i for i, v in enumerate(classes)}
+        fallback = int(serving_medians.get(f"{col}_encoded", 0))
+        X[f"{col}_encoded"] = int(val_to_idx.get(str(val), fallback))
+
+    # 4. One-Hot 特徵（先全部初始為 0）
+    for col in feature_cols:
+        if col not in X:
+            X[col] = 0
+
+    # Shipping Mode
+    sm_key = f"Shipping Mode_{body.shipping_mode}"
+    if sm_key in X:
+        X[sm_key] = 1
+
+    # Customer Segment
+    cs_key = f"Customer Segment_{body.customer_segment}"
+    if cs_key in X:
+        X[cs_key] = 1
+
+    # Department Name
+    dept_key = f"Department Name_{body.department_name}"
+    if dept_key in X:
+        X[dept_key] = 1
+
+    # Market
+    mkt_key = f"Market_{body.market}"
+    if mkt_key in X:
+        X[mkt_key] = 1
+
+    # Type — 用訓練中位數（預設 Type_PAYMENT=0 等全部為 0，一致）
+    # （表單未收集，保持全 0 or median）
+
+    # ── 組成 DataFrame 並對齊特徵順序 ─────────────────────────────────
+    import pandas as _pd
+    row_df = _pd.DataFrame([X])[feature_cols].fillna(0)
+
+    # ── 模型推論 ─────────────────────────────────────────────────────
+    model = xgb.XGBClassifier()
+    model.load_model(str(model_path))
+    p_late = float(model.predict_proba(row_df)[:, 1][0])
+
+    # ── 後處理 ───────────────────────────────────────────────────────
+    if p_late >= 0.7:
+        risk_bucket = "High"
+    elif p_late >= 0.4:
+        risk_bucket = "Medium"
+    else:
+        risk_bucket = "Low"
+
+    delay_penalty   = 250.0
+    expected_penalty = round(p_late * delay_penalty, 2)
+
+    # 動態升級成本（與 preprocessor.py 一致的費率表）
+    shipping_base_costs = {
+        "Standard Class": 50.0,
+        "Second Class":   80.0,
+        "First Class":   120.0,
+        "Same Day":      180.0,
+    }
+    region_multipliers = {
+        "Western Europe":    1.1,
+        "Central America":   0.9,
+        "South America":     0.95,
+        "Northern Europe":   1.25,
+        "Eastern Europe":    1.05,
+        "East of USA":       1.15,
+        "Eastern Asia":      1.2,
+        "Oceania":           1.3,
+    }
+    base_cost = shipping_base_costs.get(body.shipping_mode, 80.0)
+    mult      = region_multipliers.get(body.order_region, 1.0)
+    upgrade_cost    = round(base_cost * mult, 2)
+    net_benefit     = round(expected_penalty - upgrade_cost, 2)
+
+    return {
+        "p_late":           round(p_late, 4),
+        "risk_bucket":      risk_bucket,
+        "expected_penalty": expected_penalty,
+        "upgrade_cost":     upgrade_cost,
+        "net_benefit_if_upgrade": net_benefit,
+        "recommend_upgrade": net_benefit > 0,
+    }
+
 
 @app.post("/api/login")
 async def login(request: LoginRequest):

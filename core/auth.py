@@ -43,6 +43,7 @@ def init_db():
     test_accounts = [
         ("admin", "edis1234", "Logistics_Manager"),
         ("viewer", "view1234", "Viewer"),
+        ("engineer", "eng1234", "Engineer"),
     ]
     for username, password, role in test_accounts:
         c.execute("SELECT password_hash FROM users WHERE username=?", (username,))
