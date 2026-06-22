@@ -55,20 +55,53 @@ def test_predict_single_order_validation():
         "market": "Europe"
     }
     response = client.post("/api/predict-single", json=payload)
-    if response.status_code == 500:
-        data = response.json()
-        assert "xgboost" in data["detail"].lower() or "模型檔案不存在" in data["detail"]
-    else:
-        assert response.status_code == 200
-        data = response.json()
-        assert "p_late" in data
-        assert "risk_bucket" in data
-        assert "expected_penalty" in data
+    assert response.status_code == 200, response.text
+    data = response.json()
+    # 結構齊全
+    for key in ("p_late", "risk_bucket", "expected_penalty",
+                "net_benefit_if_upgrade", "recommend_upgrade"):
+        assert key in data, f"缺少欄位 {key}"
+    # 值域合理：機率落在 [0, 1]
+    assert 0.0 <= data["p_late"] <= 1.0
+    # 風險分級為已知值
+    assert data["risk_bucket"] in {"Low", "Medium", "High"}
+    # 罰金非負、升級建議為布林
+    assert data["expected_penalty"] >= 0
+    assert isinstance(data["recommend_upgrade"], bool)
 
 def test_threshold_tuning_endpoints():
-    """驗證門檻值調適接口。"""
+    """驗證門檻值調適接口回傳完整且合理的指標。"""
     response = client.get("/api/threshold-tuning?current_threshold=0.5")
-    assert response.status_code in (200, 400, 404)
+    assert response.status_code == 200, response.text
+    data = response.json()
+    assert data["row_count"] > 0
+    cur = data["current"]
+    assert cur["threshold"] == 0.5
+    # precision / recall / f1 必須落在 [0, 1]
+    for metric in ("precision", "recall", "f1"):
+        assert 0.0 <= cur[metric] <= 1.0, f"{metric}={cur[metric]} 超出範圍"
+    # 混淆矩陣四格非負
+    for cell in ("tp", "tn", "fp", "fn"):
+        assert cur[cell] >= 0
+
+
+def test_executive_summary_net_savings_invariant():
+    """驗證 banner 修正：net_savings 為精算淨節省，且不超過舊式樂觀概算。
+
+    net_savings = Σ(正 ROI 訂單的 net_benefit)
+    舊式概算   = 全部曝險 - 建議預算（會把未升級訂單罰金誤算成節省，故偏高）
+    因此恆有： 0 <= net_savings <= exposure - recommended_budget
+    """
+    response = client.get("/api/executive-summary")
+    assert response.status_code == 200, response.text
+    data = response.json()
+    assert "net_savings" in data, "缺少 net_savings 欄位（banner 修正未生效）"
+    exposure = data["expected_penalty_exposure"]
+    budget = data["recommended_budget"]
+    net = data["net_savings"]
+    assert net >= 0
+    # 精算淨節省不應超過舊式樂觀上界（容許微小浮點誤差）
+    assert net <= (exposure - budget) + 1e-6
 
 def test_rbac_optimize_engineer():
     """驗證 Engineer 角色存取 /api/optimize 成功。"""

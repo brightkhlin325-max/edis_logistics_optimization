@@ -30,6 +30,7 @@ import hmac
 import json
 import os
 import re
+from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Optional
 
@@ -102,10 +103,57 @@ VALID_ROLES = {ROLE_VIEWER, ROLE_MANAGER, ROLE_ENGINEER}
 
 # ── FastAPI 應用 ──────────────────────────────────────────────────────────────
 
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """應用生命週期：啟動時初始化 DB 並啟動背景磁碟清理任務。
+
+    取代已棄用的 @app.on_event("startup")，行為維持不變。
+    """
+    import asyncio
+
+    init_db()
+
+    async def cleanup_loop():
+        while True:
+            try:
+                import time
+                now = time.time()
+                # 清理 predictions_session_*.csv
+                if DATA_DIR.exists():
+                    for f in DATA_DIR.glob("predictions_session_*.csv"):
+                        if f.is_file() and (now - f.stat().st_mtime) > 86400:
+                            try:
+                                os.remove(f)
+                                print(f"[Cleanup] 已刪除過期 session 檔案: {f.name}")
+                            except Exception:
+                                pass
+                # 清理 retrain_temp/*
+                temp_dir = DATA_DIR / "retrain_temp"
+                if temp_dir.exists():
+                    import shutil
+                    for d in temp_dir.iterdir():
+                        if d.is_dir() and (now - d.stat().st_mtime) > 86400:
+                            try:
+                                shutil.rmtree(d)
+                                print(f"[Cleanup] 已刪除過期重訓 session 目錄: {d.name}")
+                            except Exception:
+                                pass
+            except Exception as e:
+                print(f"[Cleanup] 清理發生錯誤: {str(e)}")
+            await asyncio.sleep(3600)
+
+    task = asyncio.create_task(cleanup_loop())
+    try:
+        yield
+    finally:
+        task.cancel()
+
+
 app = FastAPI(
     title="EDIS — 物流延遲預測與最佳化調度系統",
     description="DataCo 供應鏈 AI 預測與最佳化 API（含 RBAC）",
     version="1.0.0",
+    lifespan=lifespan,
 )
 
 # 允許前端（index.html）呼叫 API
@@ -143,43 +191,6 @@ def init_db():
         print("[DB] 審計日誌資料表已初始化。")
     except Exception as e:
         print(f"[DB] 審計日誌資料表初始化失敗: {str(e)}")
-
-
-@app.on_event("startup")
-async def startup_event():
-    """啟動背景磁碟清理任務，每小時清理過期 24 小時的暫存檔"""
-    init_db()
-    import asyncio
-    async def cleanup_loop():
-        while True:
-            try:
-                import time
-                now = time.time()
-                # 清理 predictions_session_*.csv
-                if DATA_DIR.exists():
-                    for f in DATA_DIR.glob("predictions_session_*.csv"):
-                        if f.is_file() and (now - f.stat().st_mtime) > 86400:
-                            try:
-                                os.remove(f)
-                                print(f"[Cleanup] 已刪除過期 session 檔案: {f.name}")
-                            except Exception:
-                                pass
-                # 清理 retrain_temp/*
-                temp_dir = DATA_DIR / "retrain_temp"
-                if temp_dir.exists():
-                    import shutil
-                    for d in temp_dir.iterdir():
-                        if d.is_dir() and (now - d.stat().st_mtime) > 86400:
-                            try:
-                                shutil.rmtree(d)
-                                print(f"[Cleanup] 已刪除過期重訓 session 目錄: {d.name}")
-                            except Exception:
-                                pass
-            except Exception as e:
-                print(f"[Cleanup] 清理發生錯誤: {str(e)}")
-            await asyncio.sleep(3600)
-
-    asyncio.create_task(cleanup_loop())
 
 
 # ── Pydantic 模型 ─────────────────────────────────────────────────────────────
@@ -1779,6 +1790,7 @@ def get_executive_summary(
             "expected_penalty_exposure": expected_penalty_exposure,
             "positive_roi_orders": positive_roi_orders,
             "recommended_budget": 80.0,
+            "net_savings": 125.0,
             "recommended_action": "先升級高風險且 ROI 為正的訂單，避免延遲罰金擴大。",
             "top_regions": [{"label": "Western Europe", "count": 1, "avg_p_late": 0.82}],
             "top_shipping_modes": [{"label": "Standard Class", "count": 1, "avg_p_late": 0.82}],
@@ -1811,6 +1823,9 @@ def get_executive_summary(
     positive_roi = at_risk[at_risk["net_benefit"] > 0]
     positive_roi_orders = int(len(positive_roi))
     recommended_budget = float(positive_roi["upgrade_cost"].sum()) if not positive_roi.empty else 0.0
+    # 真正的淨節省：只計入「值得升級」訂單的淨效益總和（expected_penalty - upgrade_cost），
+    # 不可用「全部曝險 - 建議預算」概算，否則會把未升級訂單的罰金也誤算成節省。
+    net_savings = float(positive_roi["net_benefit"].sum()) if not positive_roi.empty else 0.0
 
     def top_breakdown(column: str) -> list[dict]:
         if column not in at_risk.columns or at_risk.empty:
@@ -1841,6 +1856,7 @@ def get_executive_summary(
         "expected_penalty_exposure": round(exposure, 2),
         "positive_roi_orders": positive_roi_orders,
         "recommended_budget": round(recommended_budget, 2),
+        "net_savings": round(net_savings, 2),
         "recommended_action": action,
         "top_regions": top_breakdown("order_region"),
         "top_shipping_modes": top_breakdown("shipping_mode"),

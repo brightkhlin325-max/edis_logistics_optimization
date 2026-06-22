@@ -932,7 +932,11 @@ function renderExecutiveSummary(d) {
   // Actionable Insights 決策 Banner 顯示邏輯
   const banner = document.getElementById('actionableInsightsBanner');
   const bannerText = document.getElementById('actionableInsightsText');
-  const savings = Math.max(0, (d.expected_penalty_exposure || 0) - (d.recommended_budget || 0));
+  // 淨節省：優先使用後端精算的 net_savings（值得升級訂單的淨效益總和）。
+  // 舊式「曝險 - 預算」會把未升級訂單的罰金誤算成節省，僅作為舊後端的後備。
+  const savings = (typeof d.net_savings === 'number')
+    ? Math.max(0, d.net_savings)
+    : Math.max(0, (d.expected_penalty_exposure || 0) - (d.recommended_budget || 0));
   if (banner && bannerText) {
     if ((d.recommended_budget || 0) > 0 && savings > 0) {
       banner.style.display = 'flex';

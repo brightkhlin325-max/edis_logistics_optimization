@@ -11,3 +11,7 @@ build/
 data/processed/
 data/raw/
 .DS_Store
+
+# 本機備份檔（如 edis_users.db.local.bak），永不納入版控
+*.bak
+*.local.bak
