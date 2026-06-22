@@ -1,0 +1,28 @@
+<div class="page-header">
+  <h1 class="page-title">AI 物流策略決策助理</h1>
+  <div class="page-sub">由大語言模型驅動的白話決策分析中心</div>
+</div>
+<div class="ai-chat-shell">
+  <div class="ai-chat-log" id="aiChatLog">
+    <div class="ai-message assistant">
+      您好，我是您的 EDIS 專屬 AI 物流顧問。您可以隨時詢問我關於「目前高風險訂單的分布原因」、「如何合理配置物流預算」、或上傳待預測訂單 CSV 進行大數據分析。
+    </div>
+    <div class="ai-message system" id="aiUploadStatus">目前使用系統預設驗證資料。</div>
+  </div>
+
+  <div class="ai-composer-wrap">
+    <div class="ai-composer">
+      <textarea id="aiQuestionInput" rows="2" placeholder="向 AI 詢問決策建議...（例如：請幫我分析目前最容易延遲的地區與特徵）"></textarea>
+      <div class="ai-composer-actions">
+        <div style="display:flex; align-items:center; gap:8px;">
+          <input type="file" id="aiPredictCsvInput" accept=".csv" style="display:none;" onchange="uploadPredictionCSV(this)">
+          <button class="ai-icon-btn" id="aiUploadPredictBtn" onclick="document.getElementById('aiPredictCsvInput').click()" title="匯入待預測訂單 CSV">➕</button>
+          <span class="ai-file-chip" id="aiLlmMode">系統內建模型</span>
+          <span id="aiLockedBox" class="ai-file-chip" style="display:none;">🔒 需 Manager 權限</span>
+          <button class="ai-file-chip" id="aiResetPredictBtn" onclick="resetCSV()" style="display:none; border:none; background:transparent; cursor:pointer; color:var(--danger);">🔄 還原</button>
+        </div>
+        <button class="run-btn" id="aiGenerateBriefBtn" onclick="generateAIBrief()" style="width:auto; padding:6px 16px; border-radius:20px; font-size:12px;">送出提問</button>
+      </div>
+    </div>
+  </div>
+</div>

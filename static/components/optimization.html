@@ -1,0 +1,103 @@
+<div class="page-header">
+  <h1 class="page-title">最佳化調度決策與比較</h1>
+  <div class="page-sub">使用 PuLP 整數規劃求解器，在預算限制下進行物流效益最大化決策</div>
+</div>
+
+<!-- Scenario comparisons -->
+<div class="panel">
+  <div class="panel-head">
+    <div>
+      <div class="panel-title">預算情境比較分析 (Budget Scenarios)</div>
+      <div class="panel-subtitle">比較不同物流預算配置下，可挽回的罰金與最高 ROI 方案</div>
+    </div>
+    <span class="tag" style="background:var(--slate-lt);" id="scenarioCount">0 個情境</span>
+  </div>
+  <table class="risk-table">
+    <thead>
+      <tr>
+        <th>情境預算</th>
+        <th>可升級訂單數</th>
+        <th>預估升級花費</th>
+        <th>避免延遲罰金</th>
+        <th>預估淨效益 (ROI)</th>
+        <th>預算使用比例</th>
+      </tr>
+    </thead>
+    <tbody id="scenarioTableBody">
+      <tr><td colspan="6" style="text-align:center;padding:24px;color:var(--muted)">尚無情境數據</td></tr>
+    </tbody>
+  </table>
+  <div style="padding: 16px 24px; border-top: 1px solid var(--border); font-size:13px; color:var(--primary); font-weight:600;" id="scenarioRecommendation">—</div>
+</div>
+
+<!-- Detailed Optimization controls (Manager only) -->
+<div class="grid-2">
+  <div class="panel" style="height: fit-content;">
+    <div class="panel-head">
+      <div class="panel-title">調度預算試算參數</div>
+    </div>
+    <div class="opt-body" style="padding:20px; display:flex; flex-direction:column; gap:16px;">
+      <div>
+        <label class="field-label">物流預算上限 Budget (USD)</label>
+        <input type="number" class="budget-input" id="optPageBudgetInput" value="5000" min="0">
+      </div>
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+        <div>
+          <label class="field-label">單筆升級成本 ($)</label>
+          <input type="number" class="budget-input" id="optPageUpgradeCost" value="80" min="0">
+        </div>
+        <div>
+          <label class="field-label">單筆延遲罰金 ($)</label>
+          <input type="number" class="budget-input" id="optPageDelayPenalty" value="250" min="0">
+        </div>
+      </div>
+      
+      <button class="run-btn hidden" id="optPageRunBtn" onclick="runPageOptimize()">
+        開始計算最佳化調度方案
+      </button>
+      <div class="locked-box" id="optPageLockedBox">
+        🔒 需要 Manager 權限才能進行調度參數優化
+      </div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="panel-head">
+      <div class="panel-title">調度效益明細</div>
+      <span class="role-badge badge-viewer" id="optPageRoleBadge">Viewer</span>
+    </div>
+    <div class="opt-body" style="padding:20px;">
+      <div id="optPageResultPlaceholder" style="text-align:center; padding:48px 0; color:var(--muted); font-size:13px;">
+        Manager 執行最佳化運算後，此處將顯示升級調度清單。
+      </div>
+      <div id="optPageResult" class="hidden" style="display:flex; flex-direction:column; gap:16px;">
+        <div class="stat-grid" style="display:grid; grid-template-columns:repeat(4, 1fr); gap:10px; margin-bottom:10px;">
+          <div class="stat-box" style="background:var(--slate-lt); padding:10px; border-radius:8px;">
+            <div class="stat-label" style="font-size:10px;">建議升級訂單</div>
+            <div class="stat-value" style="font-size:16px; font-weight:700;" id="optPageSelected">—</div>
+          </div>
+          <div class="stat-box" style="background:var(--slate-lt); padding:10px; border-radius:8px;">
+            <div class="stat-label" style="font-size:10px;">預估淨效益</div>
+            <div class="stat-value green" style="font-size:16px; font-weight:700;" id="optPageSaving">—</div>
+          </div>
+          <div class="stat-box" style="background:var(--slate-lt); padding:10px; border-radius:8px;">
+            <div class="stat-label" style="font-size:10px;">預估升級花費</div>
+            <div class="stat-value" style="font-size:16px; font-weight:700;" id="optPageCost">—</div>
+          </div>
+          <div class="stat-box" style="background:var(--slate-lt); padding:10px; border-radius:8px;">
+            <div class="stat-label" style="font-size:10px;">預算使用比例</div>
+            <div class="stat-value" style="font-size:16px; font-weight:700;" id="optPageUsage">—</div>
+          </div>
+        </div>
+        <div style="height: 6px; background: var(--slate-lt); border-radius: 3px; overflow: hidden; margin-top: -8px; margin-bottom: 4px;">
+          <div id="optPageUsageFill" style="height: 100%; width: 0%; background: var(--primary); transition: width 0.3s;"></div>
+        </div>
+        <div id="optPageManagerAnalysisBox" style="padding:12px; background:#f0f7ff; border-radius:8px; font-size:13px;">
+          <div style="font-weight:700; color:var(--primary); margin-bottom:4px;">主管調度建議</div>
+          <div id="optPageManagerAnalysisText"></div>
+        </div>
+        <div class="ord-list" id="optPageOrdList" style="max-height: 180px; overflow-y:auto; display:flex; flex-direction:column; gap:6px;"></div>
+      </div>
+    </div>
+  </div>
+</div>

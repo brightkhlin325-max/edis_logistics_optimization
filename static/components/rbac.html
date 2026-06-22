@@ -1,0 +1,25 @@
+<div class="page-header">
+  <h1 class="page-title">RBAC 角色存取權限矩陣</h1>
+  <div class="page-sub">展示系統基於角色的 API 安全防禦架構</div>
+</div>
+<div class="panel">
+  <table class="risk-table">
+    <thead>
+      <tr>
+        <th>API 路由</th>
+        <th>Method</th>
+        <th>功能說明</th>
+        <th>Viewer 權限</th>
+        <th>Logistics_Manager 權限</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr><td>/api/metrics</td><td><span style="color:var(--success)">GET</span></td><td>獲取模型效能 KPI 與特徵排行</td><td>允許存取 (200)</td><td>允許存取 (200)</td></tr>
+      <tr><td>/api/predict</td><td><span style="color:var(--success)">GET</span></td><td>取得去識別化風險訂單列表</td><td>允許存取 (200)</td><td>允許存取 (200)</td></tr>
+      <tr><td>/api/predict-single</td><td><span style="color:var(--success)">POST</span></td><td>即時單筆物流延遲預測</td><td>允許存取 (200)</td><td>允許存取 (200)</td></tr>
+      <tr><td>/api/explain/*</td><td><span style="color:var(--success)">GET</span></td><td>LIME 局部特徵影響力分析</td><td>允許存取 (200)</td><td>允許存取 (200)</td></tr>
+      <tr><td>/api/optimize</td><td><span style="color:var(--danger)">POST</span></td><td>執行 PuLP 整數規劃最佳化調度</td><td><span style="color:var(--danger)">拒絕 (403)</span></td><td>允許存取 (200)</td></tr>
+      <tr><td>/api/retrain</td><td><span style="color:var(--danger)">POST</span></td><td>排除特徵進行非同步模型重訓</td><td><span style="color:var(--danger)">拒絕 (403)</span></td><td>允許存取 (200)</td></tr>
+    </tbody>
+  </table>
+</div>

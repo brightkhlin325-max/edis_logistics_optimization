@@ -1,0 +1,45 @@
+<div class="page-header">
+  <h1 class="page-title">AI 助理與大語言模型連線設定</h1>
+  <div class="page-sub">加密儲存底層 LLM 模組之連線參數與金鑰</div>
+</div>
+<div class="panel" style="max-width:600px; padding:24px;">
+  <div style="display:flex; justify-content:space-between; margin-bottom:16px;">
+    <div class="panel-title">LLM 連線設定</div>
+    <span class="role-badge badge-viewer" id="llmSettingsRoleBadge">Viewer</span>
+  </div>
+  <div id="llmSettingsLocked" class="locked-box" style="margin-bottom:16px;">🔒 需要 Manager 權限才能查看與調整 LLM 連線參數</div>
+  <div id="llmSettingsForm" style="display:none; flex-direction:column; gap:12px;">
+    <div>
+      <label class="field-label">Provider</label>
+      <select id="llmProviderInput" class="budget-input" onchange="handleLLMProviderChange()">
+        <option value="local">local (系統內建)</option>
+        <option value="openai">openai</option>
+        <option value="openai_compatible">openai_compatible (相容接口)</option>
+        <option value="gemini">gemini</option>
+        <option value="claude">claude</option>
+        <option value="ollama">ollama (本機推論)</option>
+      </select>
+    </div>
+    <div>
+      <label class="field-label">Model ID</label>
+      <select id="llmModelInput" class="budget-input" onchange="updateLLMCustomModelState()"></select>
+      <input id="llmCustomModelInput" class="budget-input" style="display:none; margin-top:8px;" placeholder="輸入自訂模型名稱">
+    </div>
+    <div>
+      <label class="field-label">API URL 端點（選填）</label>
+      <input id="llmApiUrlInput" class="budget-input" placeholder="留空使用預設端點">
+    </div>
+    <div>
+      <label class="field-label">API Key 金鑰</label>
+      <input id="llmApiKeyInput" type="password" class="budget-input" placeholder="請貼上您的金鑰">
+      <label id="llmKeepKeyRow" style="display:flex; align-items:center; gap:6px; font-size:12px; color:var(--muted); margin-top:6px;">
+        <input type="checkbox" id="llmKeepKeyInput" onchange="updateLLMKeyInputState()"> 保留目前儲存的 API Key
+      </label>
+      <div id="llmKeyHint" style="font-size:11px; color:var(--muted); margin-top:4px;"></div>
+    </div>
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-top:10px;">
+      <span id="llmSettingsStatus" style="font-size:12px; color:var(--muted);">設定載入中...</span>
+      <button class="run-btn" id="llmSaveBtn" onclick="saveLLMSettings()" style="width:auto; padding:8px 20px;">儲存設定</button>
+    </div>
+  </div>
+</div>

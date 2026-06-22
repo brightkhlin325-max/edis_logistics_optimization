@@ -1,0 +1,231 @@
+<div class="page-header">
+  <h1 class="page-title">風險訂單管理與 What-if 模擬</h1>
+  <div class="page-sub">匯入 CSV 推論資料、動態微調參數模擬、以及互動式地圖視覺化</div>
+</div>
+
+<!-- Threshold Slider (Manager Option) -->
+<div class="panel" style="padding:20px; display:flex; flex-wrap:wrap; gap:20px; align-items:center; justify-content:space-between;">
+  <div style="flex:1; min-width:300px; display:flex; flex-direction:column; gap:8px;">
+    <div style="display:flex; align-items:center; gap:16px; width:100%;">
+      <div style="flex-shrink:0; min-width:140px;">
+        <label class="field-label" style="font-weight:700;">預警判定門檻 (Threshold)</label>
+        <span style="font-size:20px; font-weight:700; color:var(--primary); font-family:monospace;" class="thresholdValDisplay">0.50</span>
+      </div>
+      <input type="range" class="thresholdSlider sim-slider" min="0.10" max="0.90" step="0.05" value="0.50" oninput="updateThreshold(this.value)">
+    </div>
+    <div style="display:flex; gap:10px; align-items:center; font-size:11px;">
+      <span style="color:var(--muted)">快速校準：</span>
+      <button onclick="applyThresholdRecommendation('f1')" style="padding:2px 6px; background:#ecfdf5; color:#047857; border:1px solid #a7f3d0; border-radius:4px; cursor:pointer;">⚖ 平衡模式 (F1)</button>
+      <button onclick="applyThresholdRecommendation('cost')" style="padding:2px 6px; background:#fffbeb; color:#b45309; border:1px solid #fde68a; border-radius:4px; cursor:pointer;">💰 成本最低模式</button>
+      <span class="sopStatusLockWrap" style="margin-left:auto;"></span>
+    </div>
+  </div>
+  
+  <!-- CSV Import/Export -->
+  <div style="display:flex; gap:10px; align-items:center;">
+    <input type="file" id="csvFileInput" accept=".csv" style="display:none;" onchange="uploadTrainingCSV(this)">
+    <a href="/static/template.csv" download="template.csv" class="run-btn" style="width:auto; padding:8px 16px; background:var(--muted); border-radius:6px; font-size:12px; text-decoration:none; color:white;">
+      📥 範本下載
+    </a>
+    <button class="run-btn uploadCsvBtn" id="uploadCsvBtn" onclick="document.getElementById('csvFileInput').click()" style="width:auto; padding:8px 16px; border-radius:6px; font-size:12px;">
+      📤 回填已知結果 CSV
+    </button>
+    <button class="run-btn resetCsvBtn" id="resetCsvBtn" onclick="resetCSV()" style="width:auto; padding:8px 16px; background:var(--danger); border-radius:6px; font-size:12px; display:none;">
+      🔄 還原驗證集
+    </button>
+    <span id="lockedUploadBox" class="locked-box" style="font-size:11px; padding:6px 12px; border-radius:6px;">🔒 需 Manager 權限回填訓練資料</span>
+  </div>
+</div>
+
+<!-- Threshold Calibration Card -->
+<div class="panel thresholdTuningPanel" id="thresholdTuningPanel" style="padding: 20px; display:none;">
+  <div style="display:flex; justify-content:space-between; margin-bottom:12px; align-items:center;">
+    <div class="panel-title">門檻即時校正建議</div>
+    <span class="thresholdTuningNote" style="font-size:11px; color:var(--muted);"></span>
+  </div>
+  <div style="display:grid; grid-template-columns: repeat(3, 1fr); gap:12px;">
+    <div style="background:var(--slate-lt); padding:12px; border-radius:8px;">
+      <div style="font-size:10px; color:var(--muted);">目前門檻</div>
+      <div style="font-size:16px; font-weight:700;" class="tuneCurrentThreshold">—</div>
+      <div style="font-size:10px; color:var(--muted); margin-top:4px;" class="tuneCurrentMetrics"></div>
+    </div>
+    <div style="background:var(--slate-lt); padding:12px; border-radius:8px;">
+      <div style="font-size:10px; color:var(--muted);">最佳 F1-Score (平衡)</div>
+      <div style="font-size:16px; font-weight:700; color:var(--success);" class="tuneBestF1Threshold">—</div>
+      <div style="font-size:10px; color:var(--muted); margin-top:4px;" class="tuneBestF1Metrics"></div>
+    </div>
+    <div style="background:var(--slate-lt); padding:12px; border-radius:8px;">
+      <div style="font-size:10px; color:var(--muted);">最低預期損失成本</div>
+      <div style="font-size:16px; font-weight:700; color:var(--warning);" class="tuneBestCostThreshold">—</div>
+      <div style="font-size:10px; color:var(--muted); margin-top:4px;" class="tuneBestCostMetrics"></div>
+    </div>
+  </div>
+</div>
+
+<!-- Interactive Map & What-if Simulation Simulator Area -->
+<div class="grid-2">
+  <div style="display:flex; flex-direction:column; gap:20px;">
+    <!-- Region Risk Heatmap -->
+    <div class="panel">
+      <div class="panel-head">
+        <div class="panel-title">🌍 區域物流延遲熱力圖與地圖</div>
+      </div>
+      <div id="regionMapContainer" style="height: 380px; background: #cbd5e1;"></div>
+    </div>
+
+    <!-- Risk Order Table -->
+    <div class="panel">
+      <div class="panel-head">
+        <div class="panel-title">風險訂單名單明細</div>
+        <span class="tag" id="riskListCount">共 0 筆</span>
+      </div>
+      
+      <!-- Filters -->
+      <div style="padding:12px; display:flex; gap:8px; border-bottom:1px solid var(--border); background:#f8fafc;">
+        <input type="text" id="riskSearchInput" oninput="applyFilters()" placeholder="搜尋訂單 ID..." style="flex:1; padding:6px 12px; border:1px solid var(--border); border-radius:6px; font-size:12px; outline:none;">
+        <select id="filterRisk" onchange="applyFilters()" style="padding:6px; border:1px solid var(--border); border-radius:6px; font-size:12px;">
+          <option value="">全部風險</option>
+          <option value="High">High</option>
+          <option value="Medium">Medium</option>
+          <option value="Low">Low</option>
+        </select>
+        <select id="filterShipping" onchange="applyFilters()" style="padding:6px; border:1px solid var(--border); border-radius:6px; font-size:12px;">
+          <option value="">全部配送</option>
+          <option value="Standard Class">Standard Class</option>
+          <option value="Second Class">Second Class</option>
+          <option value="First Class">First Class</option>
+          <option value="Same Day">Same Day</option>
+        </select>
+        <select id="filterRegion" onchange="applyFilters()" style="padding:6px; border:1px solid var(--border); border-radius:6px; font-size:12px; max-width:120px;">
+          <option value="">全部區域</option>
+        </select>
+      </div>
+
+      <div class="table-scroll" style="max-height: 280px;">
+        <table class="risk-table">
+          <thead>
+            <tr>
+              <th>訂單編號</th>
+              <th>運送模式</th>
+              <th>目的地區域</th>
+              <th>延遲率</th>
+              <th>風險等級</th>
+              <th>實際到貨</th>
+              <th>動作</th>
+            </tr>
+          </thead>
+          <tbody id="riskListTableBody">
+            <tr><td colspan="7" style="text-align:center;padding:24px;color:var(--muted)">資料讀取中...</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div style="padding: 10px 16px; border-top: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; background: #f8fafc;">
+        <button id="riskListPrevBtn" onclick="changeRiskListPage(-1)" style="padding: 4px 10px; font-size: 11px; border: 1px solid var(--border); border-radius: 4px; background:white; cursor:pointer;">上一頁</button>
+        <span id="riskListPageIndicator" style="font-size: 11px; font-family: monospace;">第 1 頁</span>
+        <button id="riskListNextBtn" onclick="changeRiskListPage(1)" style="padding: 4px 10px; font-size: 11px; border: 1px solid var(--border); border-radius: 4px; background:white; cursor:pointer;">下一頁</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Right Side: What-if Simulation Center -->
+  <div style="display:flex; flex-direction:column; gap:20px;">
+    <!-- What-if Single Order Simulator -->
+    <div class="panel" id="instantPredictPanel">
+      <div class="panel-head">
+        <div class="panel-title">🧪 What-if 單筆訂單模擬器</div>
+        <span class="tag" style="background:var(--slate-lt);">即時試算</span>
+      </div>
+      <div class="opt-body" style="padding:20px; display:flex; flex-direction:column; gap:12px;">
+        <div style="display:grid; grid-template-columns:1fr; gap:10px;">
+          <div>
+            <label class="field-label">運送方式 Shipping Mode</label>
+            <select id="pf-shipping-mode" class="budget-input">
+              <option value="Standard Class">Standard Class（標準）</option>
+              <option value="Second Class">Second Class（二等）</option>
+              <option value="First Class">First Class（頭等）</option>
+              <option value="Same Day">Same Day（當日）</option>
+            </select>
+          </div>
+          <div>
+            <label class="field-label">目的地區域 Region</label>
+            <select id="pf-order-region" class="budget-input" style="padding-right:20px;">
+              <option value="Western Europe">Western Europe</option>
+              <option value="Central America">Central America</option>
+              <option value="South America">South America</option>
+              <option value="Northern Europe">Northern Europe</option>
+              <option value="Eastern Europe">Eastern Europe</option>
+              <option value="East of USA">East of USA</option>
+              <option value="Eastern Asia">Eastern Asia</option>
+              <option value="Oceania">Oceania</option>
+            </select>
+          </div>
+          <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px;">
+            <div>
+              <label class="field-label">計劃天數</label>
+              <input type="number" id="pf-days" value="4" class="budget-input">
+            </div>
+            <div>
+              <label class="field-label">產品價格 ($)</label>
+              <input type="number" id="pf-price" value="59.99" class="budget-input">
+            </div>
+          </div>
+          <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px;">
+            <div>
+              <label class="field-label">訂購數量</label>
+              <input type="number" id="pf-qty" value="1" class="budget-input">
+            </div>
+            <div>
+              <label class="field-label">客戶類型</label>
+              <select id="pf-segment" class="budget-input">
+                <option value="Consumer">Consumer</option>
+                <option value="Corporate">Corporate</option>
+                <option value="Home Office">Home Office</option>
+              </select>
+            </div>
+          </div>
+          <input type="hidden" id="pf-market" value="Europe">
+          <input type="hidden" id="pf-date" value="">
+        </div>
+        <button class="run-btn" id="predictRunBtn" onclick="runInstantPredict()">
+          <span id="predictBtnIcon">🔮</span> <span id="predictBtnText">立即預測延遲機率</span>
+        </button>
+
+        <!-- Prediction Result Display inside simulator card -->
+        <div id="predictResultCard" style="border:1px dashed var(--border); border-radius:8px; padding:12px; margin-top:8px;">
+          <div id="predictPlaceholder" style="text-align:center; font-size:12px; color:var(--muted); padding:10px 0;">輸入參數或在左側訂單列表點擊「🧪 模擬」以帶入數值進行預測。</div>
+          <div id="predictResultContent" style="display:none; flex-direction:column; align-items:center; gap:8px;">
+            <div style="display:flex; justify-content:space-between; width:100%; align-items:center;">
+              <span style="font-size:13px; font-weight:700;">延遲風險率</span>
+              <span id="gaugePct" style="font-family:monospace; font-weight:700; font-size:16px;">—</span>
+            </div>
+            <div class="prob-bar" style="width:100%; height:8px;"><div class="prob-fill fill-low" id="gaugeFill" style="width:0%"></div></div>
+            <div id="predictRiskBadge" class="predict-risk-badge prb-low" style="font-size:10px; padding:2px 8px;">Low Risk</div>
+            <div style="width:100%; font-size:12px; display:flex; flex-direction:column; gap:4px; border-top:1px solid var(--border); padding-top:6px; margin-top:4px;">
+              <div style="display:flex; justify-content:space-between;"><span>預估罰金:</span><span id="pdPenalty">—</span></div>
+              <div style="display:flex; justify-content:space-between;"><span>升級成本:</span><span id="pdUpgradeCost">—</span></div>
+              <div style="display:flex; justify-content:space-between; font-weight:700;"><span>升級淨效益:</span><span id="pdNetBenefit">—</span></div>
+            </div>
+            <div id="predictUpgradeHint" class="predict-upgrade-hint" style="font-size:10px; margin-top:4px; padding:4px;">—</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- What-if Global Simulator -->
+    <div class="panel">
+      <div class="panel-head">
+        <div class="panel-title">⚙ What-if 全域決策模擬器</div>
+      </div>
+      <div class="opt-body" style="padding:20px;">
+        <div class="sim-slider-container">
+          <div class="sim-slider-header">
+            <span>單筆平均升級成本 ($)</span>
+            <span id="globalSimValue" style="color:var(--primary)">80</span>
+          </div>
+          <input type="range" min="30" max="200" step="5" value="80" oninput="runGlobalSimulation(this.value)" class="sim-slider">
+        </div>
+        <div id="globalSimResultNote" style="margin-top:12px; font-size:12px; color:var(--muted); line-height:1.5; padding:8px 10px; background:#fffbeb; border-radius:6px; border-left:3px solid var(--warning);">調整成本拉桿，系統將即時分析全域物流 SLA 的變動情境。</div>
+      </div>
+    </div>
+  </div>
+</div>

@@ -1,0 +1,158 @@
+<div class="page-header">
+  <h1 class="page-title">模型診斷與重訓對比看板</h1>
+  <div class="page-sub">系統工程師專用 — 技術門檻校準、混淆矩陣檢驗、以及非同步排除特徵重訓後台</div>
+</div>
+
+<!-- Combined Performance Display & Retrain Panel -->
+<div class="grid-2">
+  <div style="display:flex; flex-direction:column; gap:20px;">
+    <!-- Model Diagnostics & Technical Slider -->
+    <div class="panel">
+      <div class="panel-head">
+        <div class="panel-title">技術決策邊界調校 (Technical Threshold Tuning)</div>
+      </div>
+      <div style="padding:20px;">
+        <div style="display:flex; align-items:center; gap:16px; margin-bottom:20px;">
+          <div style="min-width:130px;">
+            <span class="field-label">分類器機率閾值</span>
+            <span style="font-size:20px; font-weight:700; color:var(--primary); font-family:monospace;" id="perfThresholdDisplay">0.50</span>
+          </div>
+          <input type="range" id="perfThresholdSlider" min="0.10" max="0.90" step="0.05" value="0.50" oninput="updateThreshold(this.value)" class="sim-slider">
+        </div>
+        
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">
+          <div class="stat-box" style="background:var(--slate-lt); padding:10px; border-radius:8px;">
+            <div class="stat-label" style="font-size:10px;">ROC-AUC</div>
+            <div class="stat-value" style="font-size:16px; font-weight:700;" id="perfAuc">—</div>
+          </div>
+          <div class="stat-box" style="background:var(--slate-lt); padding:10px; border-radius:8px;">
+            <div class="stat-label" style="font-size:10px;">F1-Score</div>
+            <div class="stat-value" style="font-size:16px; font-weight:700;" id="perfF1">—</div>
+          </div>
+          <div class="stat-box" style="background:var(--slate-lt); padding:10px; border-radius:8px;">
+            <div class="stat-label" style="font-size:10px;">Precision</div>
+            <div class="stat-value green" style="font-size:16px; font-weight:700;" id="perfPrecision">—</div>
+          </div>
+          <div class="stat-box" style="background:var(--slate-lt); padding:10px; border-radius:8px;">
+            <div class="stat-label" style="font-size:10px;">Recall</div>
+            <div class="stat-value warm" style="font-size:16px; font-weight:700;" id="perfRecall">—</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Confusion Matrix -->
+    <div class="panel">
+      <div class="panel-head"><div class="panel-title">混淆矩陣 (Confusion Matrix)</div></div>
+      <div style="padding:20px; display:flex; justify-content:center; align-items:center; background: var(--slate-lt); min-height: 160px;">
+        <table style="border-collapse: collapse; font-size:12px; text-align:center; font-family:monospace; color:var(--text);">
+          <tr>
+            <td></td>
+            <td colspan="2" style="font-weight:700; padding-bottom:8px;">預測值 (Predicted)</td>
+          </tr>
+          <tr>
+            <td></td>
+            <td style="padding:6px 12px; background:white; border:1px solid var(--border);">準時 (0)</td>
+            <td style="padding:6px 12px; background:white; border:1px solid var(--border);">延遲 (1)</td>
+          </tr>
+          <tr>
+            <td rowspan="2" style="font-weight:700; padding-right:8px; writing-mode: vertical-lr; transform: rotate(180deg);">真實 (Actual)</td>
+            <td style="padding:16px; background:#eaf4ea; border:1px solid var(--border); color:#27ae60; font-weight:700;" id="cm-tn">0</td>
+            <td style="padding:16px; background:#fdecea; border:1px solid var(--border); color:#c0392b;" id="cm-fp">0</td>
+          </tr>
+          <tr>
+            <td style="padding:16px; background:#fef6e4; border:1px solid var(--border); color:#d68910;" id="cm-fn">0</td>
+            <td style="padding:16px; background:#eaf4ea; border:1px solid var(--border); color:#27ae60; font-weight:700;" id="cm-tp">0</td>
+          </tr>
+        </table>
+      </div>
+    </div>
+
+    <!-- Manual Model Retraining Panel -->
+    <div class="panel" style="padding: 20px;">
+      <div class="panel-head">
+        <div class="panel-title">🛠️ 排除特徵手動重訓 (Manual Retraining)</div>
+      </div>
+      <div style="font-size: 11.5px; color: var(--muted); margin-top: 4px; margin-bottom: 12px; line-height: 1.5;">
+        選擇欲從模型特徵中排除的特徵，並啟動非同步重新訓練。
+      </div>
+      <div id="manualRetrainFeatureList" style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 16px; max-height: 150px; overflow-y: auto;">
+        正在載入特徵供排除選擇...
+      </div>
+      <button onclick="startManualRetrain()" id="manualRetrainBtn" class="run-btn" style="background: var(--success); font-weight: 600;">
+        ▶ 啟動排除特徵重訓
+      </button>
+      <div id="manualRetrainStatus" style="display:none; text-align:center; padding:10px; font-size:12px; color:var(--muted); margin-top:8px;">
+        <span class="spinner"></span> 正在重訓，請稍候...
+      </div>
+    </div>
+  </div>
+
+  <!-- Global Features & Retraining History comparison -->
+  <div style="display:flex; flex-direction:column; gap:20px;">
+    <!-- Feature Importance Chart -->
+    <div class="panel">
+      <div class="panel-head">
+        <div class="panel-title">模型特徵重要性分析 (Global Feature Importance)</div>
+      </div>
+      <div style="padding:20px; display:flex; flex-direction:column; gap:12px;" id="featureImportanceList">
+        正在載入特徵數據...
+      </div>
+    </div>
+
+    <!-- Dynamic Retrain comparison inside model performance page -->
+    <div class="panel" id="retrainResultPanel" style="display:none;">
+      <div class="panel-head">
+        <div class="panel-title">🛠 重訓模型比對診斷</div>
+        <span class="tag" style="background:var(--success); color:white;">對比完成</span>
+      </div>
+      <div style="padding:16px; display:flex; flex-direction:column; gap:12px;">
+        <div id="retrainResultSubtitle" style="font-size:11px; color:var(--muted); font-family:monospace;"></div>
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">
+          <div>
+            <div style="font-size:10px; color:var(--muted); font-weight:600; margin-bottom:4px;">舊模型指標</div>
+            <div id="oldMetricsGrid" style="display:grid; grid-template-columns:1fr 1fr; gap:4px;"></div>
+          </div>
+          <div>
+            <div style="font-size:10px; color:var(--muted); font-weight:600; margin-bottom:4px;">新模型指標</div>
+            <div id="newMetricsGrid" style="display:grid; grid-template-columns:1fr 1fr; gap:4px;"></div>
+          </div>
+        </div>
+        <div id="droppedColsNote" style="font-size:10px; color:var(--muted); font-family:monospace; background:var(--slate-lt); padding:6px; border-radius:4px;"></div>
+        <div style="display:flex; gap:8px; margin-top:6px;">
+          <button onclick="adoptNewModel()" id="adoptBtn" class="run-btn" style="padding:8px;">✓ 採用新模型</button>
+          <button onclick="discardNewModel()" id="discardBtn" class="run-btn" style="padding:8px; background:var(--muted);">✗ 捨棄新模型</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Historical Predict Error List (diagnose target) -->
+<div class="panel">
+  <div class="panel-head">
+    <div>
+      <div class="panel-title">⚠️ 預測誤差明細清單 (Y ≠ Ŷ)</div>
+      <div class="panel-subtitle">此處列出模型預測錯誤的歷史訂單，可點選查看詳細 LIME 歸因原因。</div>
+    </div>
+    <span class="tag" id="errorListCount">共 0 筆誤差</span>
+  </div>
+  <div class="table-scroll">
+    <table class="risk-table">
+      <thead>
+        <tr>
+          <th>訂單編號</th>
+          <th>運送模式</th>
+          <th>目的地區域</th>
+          <th>預期機率</th>
+          <th>實際結果 (Y)</th>
+          <th>預測判定 (Ŷ)</th>
+          <th>操作</th>
+        </tr>
+      </thead>
+      <tbody id="errorListTableBody">
+        <tr><td colspan="7" style="text-align:center;padding:24px;color:var(--muted)">無預測判定誤差數據</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>

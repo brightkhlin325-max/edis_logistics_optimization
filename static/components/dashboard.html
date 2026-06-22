@@ -1,0 +1,89 @@
+<div class="page-header">
+  <h1 class="page-title">物流延遲預警看板</h1>
+  <div class="page-sub">XGBoost 機器學習預測引擎 · 當前系統門檻：<strong style="color:var(--primary)" id="thresholdValDisplay">0.50</strong></div>
+  <div id="sopRoleBadge" style="margin-top: 8px;"></div>
+</div>
+
+<!-- Actionable Insights Banner (CTA to Optimization) -->
+<div id="actionableInsightsBanner" class="panel" style="padding: 20px; background: linear-gradient(90deg, var(--primary-dk) 0%, var(--primary) 100%); color: white; display: none; align-items: center; justify-content: space-between;">
+  <div style="display:flex; align-items:center; gap:14px;">
+    <span style="font-size:26px;">💡</span>
+    <div>
+      <div style="font-size:14px; font-weight:700;">高階經理人決策建議 (Actionable Insight)</div>
+      <div id="actionableInsightsText" style="font-size:13px; opacity:0.9; margin-top:2px;">正在分析目前的訂單調度效益...</div>
+    </div>
+  </div>
+  <button class="run-btn" onclick="showPage('optimization')" style="background:white; color:var(--primary); font-weight:700; width:auto; padding:8px 16px; border-radius:6px; flex-shrink:0;">為什麼？前往最佳化調度 →</button>
+</div>
+
+<!-- Combined KPI Metrics Section -->
+<div class="kpi-row-main">
+  <div class="kpi-card-large">
+    <div class="kpi-icon-wrap icon-blue">📦</div>
+    <div class="kpi-info">
+      <div class="kpi-label">待處理訂單總數</div>
+      <div class="kpi-value" id="kpiTotalOrders">—</div>
+      <div class="kpi-label" id="kpiTotalDesc" style="margin-top:4px; font-size:10px;">—</div>
+    </div>
+  </div>
+  <div class="kpi-card-large">
+    <div class="kpi-icon-wrap icon-orange">⚠️</div>
+    <div class="kpi-info">
+      <div class="kpi-label">預估延遲訂單數</div>
+      <div class="kpi-value" id="kpiPredictedLateOrders">—</div>
+      <div class="kpi-label" id="kpiPredictedDesc" style="margin-top:4px; font-size:10px;">—</div>
+    </div>
+  </div>
+  <div class="kpi-card-large">
+    <div class="kpi-icon-wrap icon-red">💸</div>
+    <div class="kpi-info">
+      <div class="kpi-label">預期延遲罰金損失</div>
+      <div class="kpi-value" id="kpiExpectedPenaltyLoss">—</div>
+      <div class="kpi-label" id="kpiExpectedDesc" style="margin-top:4px; font-size:10px;">—</div>
+    </div>
+  </div>
+</div>
+
+<!-- Secondary Risk and Actions Section -->
+<div style="display: grid; grid-template-columns: 320px 1fr; gap: 20px; margin-bottom: 28px;">
+  <div class="kpi-card" style="padding: 20px;">
+    <div class="kpi-icon-wrap icon-green" style="width: 48px; height: 48px; font-size: 20px;">📊</div>
+    <div class="kpi-info">
+      <div class="kpi-label" style="font-size:12px;">主要風險特徵</div>
+      <div class="kpi-value" style="font-size:18px; font-weight:700; margin-top:2px;" id="execDriver">—</div>
+      <div class="kpi-label" id="execDriverNote" style="margin-top:4px; font-size:10px;">—</div>
+    </div>
+  </div>
+  <div class="panel" style="padding: 20px; border-left: 5px solid var(--primary); background: #f8fafc; margin-bottom: 0; display: flex; flex-direction: column; justify-content: center;">
+    <div style="font-size: 13px; font-weight: 700; color: var(--primary); margin-bottom: 4px; display: flex; align-items: center; gap: 6px;">📋 營運主管建議行動</div>
+    <div id="execActionText" style="font-size:13.5px; color:var(--text); line-height:1.6; font-weight:500;">正在載入最佳化建議策略...</div>
+  </div>
+</div>
+
+<!-- Boss Table View (哪些會延遲/原因/決策) -->
+<div class="panel">
+  <div class="panel-head">
+    <div>
+      <div class="panel-title">👑 老闆直觀問答看板</div>
+      <div class="panel-subtitle">回答「哪些會延遲？」、「原因為何？」及「如何進行防範動作？」</div>
+    </div>
+    <span class="tag" style="background:var(--slate-lt); font-family:monospace;" id="bossDelayCount">0 筆預估延遲</span>
+  </div>
+  <div class="table-scroll">
+    <table class="risk-table">
+      <thead>
+        <tr>
+          <th>訂單編號</th>
+          <th>運送模式</th>
+          <th>目的地區域</th>
+          <th>延遲機率</th>
+          <th>主要延遲原因 (X 因子)</th>
+          <th>決策動作與模擬</th>
+        </tr>
+      </thead>
+      <tbody id="bossTableBody">
+        <tr><td colspan="6" style="text-align:center;padding:32px;color:var(--muted);">資料讀取中...</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
