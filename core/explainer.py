@@ -31,6 +31,9 @@ class FactorImpact:
     impact: str
     evidence: str
     weight: float
+    # True：此因子帶有「本訂單實際值」（如運送模式、目的地區域）
+    # False：此因子為「模型整體性因子」，資料中無本訂單的逐筆數值（如承諾天數、交易型態）
+    order_specific: bool = False
 
     def to_dict(self) -> dict:
         return {
@@ -39,6 +42,7 @@ class FactorImpact:
             "impact": self.impact,
             "evidence": self.evidence,
             "weight": round(float(self.weight), 4),
+            "order_specific": bool(self.order_specific),
         }
 
 
@@ -189,8 +193,9 @@ class ManagerExplainer:
                 feature=feature,
                 label="運送模式",
                 impact="raises risk" if shipping_mode == "Standard Class" else "context",
-                evidence=f"此訂單使用 {shipping_mode}，需搭配延遲機率與淨效益判斷是否升級",
+                evidence=f"此訂單實際使用 {shipping_mode}，需搭配延遲機率與淨效益判斷是否升級",
                 weight=float(importances.get(feature, 0.0)),
+                order_specific=True,
             ))
         if not any("region" in f.feature.lower() or "Order Region" in f.feature for f in factors):
             factors.append(FactorImpact(
@@ -199,6 +204,7 @@ class ManagerExplainer:
                 impact="raises risk" if region_avg >= 0.55 else "neutral",
                 evidence=f"{order_region or 'Unknown'} 平均延遲機率約 {region_avg:.0%}",
                 weight=0.0,
+                order_specific=True,
             ))
         return factors[:4]
 
@@ -215,21 +221,25 @@ class ManagerExplainer:
             if mode != shipping_mode:
                 return None
             impact = "raises risk" if mode == "Standard Class" else "context"
-            evidence = f"此訂單使用 {shipping_mode}，模型將運送模式列為主要 X 因子"
-            return {"label": "運送模式", "impact": impact, "evidence": evidence}
+            evidence = f"此訂單實際使用 {shipping_mode}，為可能導致延遲的主要因子之一"
+            return {"label": "運送模式", "impact": impact, "evidence": evidence,
+                    "order_specific": True}
 
         if feature == "Days for shipment (scheduled)":
             return {
                 "label": "承諾運送天數",
                 "impact": "raises risk" if p_late >= 0.7 else "context",
-                "evidence": "模型顯示承諾時效越緊，越需要提早調度或升級運送",
+                # 預測資料未提供每筆訂單的實際承諾天數，故此處為模型整體性因子，不偽裝成本訂單數值
+                "evidence": "承諾時效越緊越容易延遲（模型整體性因子，預測資料未含本訂單實際天數）",
+                "order_specific": False,
             }
 
         if feature.startswith("Type_"):
             return {
                 "label": "訂單交易型態",
                 "impact": "context",
-                "evidence": f"{feature.replace('_', ' ')} 對延遲風險有次要影響",
+                "evidence": f"{feature.replace('_', ' ')} 對延遲風險有次要影響（模型整體性因子）",
+                "order_specific": False,
             }
 
         if "Region" in feature or "Country" in feature:
@@ -237,12 +247,14 @@ class ManagerExplainer:
                 "label": "目的地區域",
                 "impact": "raises risk" if region_avg >= 0.55 else "neutral",
                 "evidence": f"{order_region} 平均延遲機率約 {region_avg:.0%}",
+                "order_specific": True,
             }
 
         return {
             "label": feature.replace("_", " "),
             "impact": "context",
-            "evidence": "此特徵在模型整體重要性中排名靠前",
+            "evidence": "此特徵在模型整體重要性中排名靠前（模型整體性因子）",
+            "order_specific": False,
         }
 
     def _region_average(self, order_region: str) -> float:
@@ -275,7 +287,7 @@ class ManagerExplainer:
             f"目前運送模式為 {shipping_mode}，目的地為 {order_region or 'Unknown'}。"
             f"若升級運送，預期可避免罰款 USD ${expected_penalty:,.0f}，"
             f"扣除升級成本 USD ${upgrade_cost:,.0f} 後，淨效益約 USD ${net_benefit:,.0f}。"
-            f"主要 X 因子為：{factor_text}。建議：{action}。"
+            f"可能導致延遲的主要因子為：{factor_text}。建議：{action}。"
         )
 
     def _top_action_from_orders(self, explanations: list[dict]) -> str:

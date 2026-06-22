@@ -67,7 +67,15 @@
       <div class="panel-title">👑 老闆直觀問答看板</div>
       <div class="panel-subtitle">回答「哪些會延遲？」、「原因為何？」及「如何進行防範動作？」</div>
     </div>
-    <span class="tag" style="background:var(--slate-lt); font-family:monospace;" id="bossDelayCount">0 筆預估延遲</span>
+    <div style="display:flex; align-items:center; gap:10px;">
+      <!-- 月份 flipper：依緊急程度（延遲率高→低）排序，逐月切換瀏覽 -->
+      <div id="monthFlipper" title="月份切換" style="display:flex; align-items:center; gap:2px; border:1px solid var(--border); border-radius:6px; background:white;">
+        <button onclick="flipMonth(-1)" title="上一個月份" style="border:none; background:none; cursor:pointer; font-size:13px; padding:4px 8px; color:var(--steel);">◀</button>
+        <span id="monthFlipperLabel" style="font-size:12px; min-width:74px; text-align:center; color:var(--text);">全部月份</span>
+        <button onclick="flipMonth(1)" title="下一個月份" style="border:none; background:none; cursor:pointer; font-size:13px; padding:4px 8px; color:var(--steel);">▶</button>
+      </div>
+      <span class="tag" style="background:var(--slate-lt); font-family:monospace;" id="bossDelayCount">0 筆預估延遲</span>
+    </div>
   </div>
   <div class="table-scroll">
     <table class="risk-table">
@@ -77,7 +85,7 @@
           <th>運送模式</th>
           <th>目的地區域</th>
           <th>延遲機率</th>
-          <th>主要延遲原因 (X 因子)</th>
+          <th>可能導致延遲的主要因子</th>
           <th>決策動作與模擬</th>
         </tr>
       </thead>

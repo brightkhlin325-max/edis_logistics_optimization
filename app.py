@@ -1590,9 +1590,14 @@ def get_predictions(
     region: Optional[str] = None,
     threshold: Optional[float] = None,
     error_only: Optional[bool] = None,
+    month: Optional[str] = None,
 ):
     """
     [Viewer / Manager] 回傳去識別化的訂單延遲風險列表。
+
+    排序：依 p_late 由高到低（緊急程度），讓最該關注的訂單排在最前，
+    避免高低風險交錯。可用 month=YYYY-MM 篩選單一月份（搭配前端月份 flipper）。
+    回應含 available_months 供前端建立月份切換器。
     """
     role = get_role(x_role, authorization)
     threshold_val = threshold if threshold is not None else 0.5
@@ -1633,6 +1638,8 @@ def get_predictions(
             "page": page,
             "limit": limit,
             "data": sample,
+            "available_months": [],
+            "active_month": month,
             "note": "示範資料（請先執行 model_pipeline.py）",
         }
 
@@ -1649,7 +1656,18 @@ def get_predictions(
             df["actual_late"] = None
             df["is_correct"] = None
 
+    # 由 order_date 推導月份（YYYY-MM）。order_date 為美式 M/D/YYYY 格式，
+    # 須以 to_datetime 正確解析，不可直接截字串。available_months 取自全量資料，
+    # 讓前端月份 flipper 穩定（不隨其他篩選變動）。
+    available_months: list[str] = []
+    if "order_date" in df.columns:
+        parsed = pd.to_datetime(df["order_date"], errors="coerce")
+        df["__month"] = parsed.dt.strftime("%Y-%m")
+        available_months = sorted(m for m in df["__month"].dropna().unique())
+
     # 應用過濾器
+    if month and "__month" in df.columns:
+        df = df[df["__month"] == month]
     if search:
         # 正規化搜尋字串：去掉 ORD- 前綴與非英數字、轉小寫，再比對小寫雜湊。
         # 讓「畫面上的 ID（ORD-XXXXXXXX）」與「純雜湊片段」都搜得到（顯示=搜尋一致）。
@@ -1672,6 +1690,10 @@ def get_predictions(
             df = df[df["is_correct"] == False]
         else:
             df = df.iloc[0:0]
+
+    # 依緊急程度排序：p_late 由高到低，最該關注的訂單排最前（避免高低風險交錯）
+    if "p_late" in df.columns:
+        df = df.sort_values("p_late", ascending=False, kind="stable")
 
     total_count = len(df)
 
@@ -1731,6 +1753,8 @@ def get_predictions(
         "page": page,
         "limit": limit,
         "data": result,
+        "available_months": available_months,
+        "active_month": month,
     }
 
 

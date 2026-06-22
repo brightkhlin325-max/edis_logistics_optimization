@@ -139,12 +139,13 @@ async function fetchScenarioAnalysis() {
   return window.edisState.cachedScenarios;
 }
 
-async function fetchPredictions(page = 1, search = '', risk = '', shipping = '', region = '') {
+async function fetchPredictions(page = 1, search = '', risk = '', shipping = '', region = '', month = '') {
   let url = `${API_BASE}/api/predict?page=${page}&limit=${window.edisState.limit}&threshold=${window.edisState.threshold}`;
   if (search) url += `&search=${encodeURIComponent(search)}`;
   if (risk) url += `&risk=${encodeURIComponent(risk)}`;
   if (shipping) url += `&shipping=${encodeURIComponent(shipping)}`;
   if (region) url += `&region=${encodeURIComponent(region)}`;
+  if (month) url += `&month=${encodeURIComponent(month)}`;
   return fetch(url).then(r => r.json());
 }
 

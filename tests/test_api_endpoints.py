@@ -85,6 +85,43 @@ def test_threshold_tuning_endpoints():
         assert cur[cell] >= 0
 
 
+def test_predict_sorted_by_urgency_desc():
+    """問答看板資料須依 p_late 由高到低（緊急程度）排序。"""
+    response = client.get("/api/predict?limit=20")
+    assert response.status_code == 200, response.text
+    data = response.json()["data"]
+    if len(data) >= 2:  # 示範資料可能不足，僅在有足量資料時驗證
+        ps = [d["p_late"] for d in data]
+        assert ps == sorted(ps, reverse=True), f"未依緊急程度降冪排序: {ps}"
+
+
+def test_predict_exposes_available_months():
+    """回應須帶 available_months（給前端月份 flipper）與 active_month。"""
+    response = client.get("/api/predict?limit=5")
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert "available_months" in body
+    assert isinstance(body["available_months"], list)
+    assert "active_month" in body
+
+
+def test_predict_month_filter():
+    """指定 month 後，回應的 active_month 應一致，且資料量不超過全量。"""
+    full = client.get("/api/predict?limit=5").json()
+    months = full.get("available_months") or []
+    if not months:
+        pytest.skip("無月份資料（可能為示範資料）")
+    target = months[0]
+    resp = client.get(f"/api/predict?limit=5&month={target}")
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    assert body["active_month"] == target
+    assert body["count"] <= full["count"]
+    # 仍維持緊急度降冪
+    ps = [d["p_late"] for d in body["data"]]
+    assert ps == sorted(ps, reverse=True)
+
+
 def test_executive_summary_net_savings_invariant():
     """驗證 banner 修正：net_savings 為精算淨節省，且不超過舊式樂觀概算。
 
