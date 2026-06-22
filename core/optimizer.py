@@ -34,7 +34,7 @@ DEFAULT_BUDGET = 5_000.0
 DEFAULT_UPGRADE_COST = 80.0
 DEFAULT_DELAY_PENALTY = 250.0
 DEFAULT_RISK_THRESHOLD = 0.3   # 只考慮延遲機率 ≥ 此值的訂單
-DEFAULT_MAX_CANDIDATES = 500   # PuLP demo 保持互動速度的候選上限
+DEFAULT_MAX_CANDIDATES = 500  # Keep interactive API calls responsive.
 
 
 # ── 結果資料結構 ───────────────────────────────────────────────────────────────
@@ -57,6 +57,7 @@ class OptimizationResult:
             "total_orders_considered": self.total_orders_considered,
             "selected_count": self.selected_count,
             "expected_total_saving": round(self.expected_total_saving, 2),
+            "expected_total_loss_reduction": round(self.expected_total_saving, 2),
             "expected_total_penalty_avoided": round(self.expected_total_penalty_avoided, 2),
             "solver": self.solver,
             "selected_orders": self.selected_orders,
@@ -84,7 +85,7 @@ class ShippingOptimizer:
         upgrade_cost: float = DEFAULT_UPGRADE_COST,
         delay_penalty: float = DEFAULT_DELAY_PENALTY,
         risk_threshold: float = DEFAULT_RISK_THRESHOLD,
-        max_candidates: int = DEFAULT_MAX_CANDIDATES,
+        max_candidates: Optional[int] = DEFAULT_MAX_CANDIDATES,
     ):
         """
         Parameters
@@ -156,7 +157,7 @@ class ShippingOptimizer:
 
         print(f"\n[Done] 最佳化完成：選出 {result.selected_count} 筆訂單升級")
         print(f"  總升級成本：USD ${result.total_cost:,.0f}（預算：USD ${self.budget:,.0f}）")
-        print(f"  預期淨效益：USD ${result.expected_total_saving:,.0f}")
+        print(f"  預估少付損失：USD ${result.expected_total_saving:,.0f}")
         print("=" * 60)
 
         return result
@@ -263,6 +264,7 @@ class ShippingOptimizer:
         print(f"\n[Step 2] 篩選候選訂單（p_late >= {self.risk_threshold}）：{len(candidates):,} 筆")
 
         candidates["net_benefit"] = candidates["expected_penalty"] - candidates["upgrade_cost"]
+        candidates["avoided_loss_after_upgrade_cost"] = candidates["net_benefit"]
         candidates["roi"] = candidates["net_benefit"] / candidates["upgrade_cost"]
 
         # 只保留 ROI > 0 的訂單（升級才划算）
@@ -276,7 +278,7 @@ class ShippingOptimizer:
                 .head(self.max_candidates)
                 .reset_index(drop=True)
             )
-            print(f"  進入求解器候選上限：{self.max_candidates:,} 筆（依 net_benefit 排序）")
+            print(f"  進入求解器候選上限：{self.max_candidates:,} 筆（依 loss reduction 排序）")
         return candidates
 
     def _solve_with_pulp(self, candidates: pd.DataFrame) -> list:
@@ -287,7 +289,7 @@ class ShippingOptimizer:
         # 決策變數
         x = [pulp.LpVariable(f"x_{i}", cat="Binary") for i in range(n)]
 
-        # 目標函數：最大化預期淨效益
+        # 目標函數：最大化扣除升級成本後的預估損失減少
         obj = pulp.lpSum(
             (candidates.iloc[i]["expected_penalty"] - candidates.iloc[i]["upgrade_cost"]) * x[i]
             for i in range(n)
@@ -328,6 +330,8 @@ class ShippingOptimizer:
                 "expected_penalty": round(float(row["expected_penalty"]), 2),
                 "net_benefit": round(float(row["net_benefit"]), 2),
                 "expected_saving": round(float(row["net_benefit"]), 2),
+                "avoided_loss_after_upgrade_cost": round(float(row["net_benefit"]), 2),
+                "expected_loss_reduction": round(float(row["net_benefit"]), 2),
                 "decision": "Upgrade",
                 "reason": self._build_reason(row, risk_bucket),
             }
@@ -353,7 +357,7 @@ class ShippingOptimizer:
         return (
             f"{risk_bucket} risk, "
             f"p_late={float(row['p_late']):.2f}, "
-            f"net benefit USD ${float(row['net_benefit']):.0f}, "
+            f"loss reduction USD ${float(row['net_benefit']):.0f}, "
             "within budget"
         )
 

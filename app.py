@@ -96,7 +96,8 @@ def load_cached_predictions(path: Path) -> pd.DataFrame:
 # RBAC 角色定義
 ROLE_VIEWER = "Viewer"
 ROLE_MANAGER = "Logistics_Manager"
-VALID_ROLES = {ROLE_VIEWER, ROLE_MANAGER}
+ROLE_ENGINEER = "Engineer"
+VALID_ROLES = {ROLE_VIEWER, ROLE_MANAGER, ROLE_ENGINEER}
 
 
 # ── FastAPI 應用 ──────────────────────────────────────────────────────────────
@@ -189,6 +190,7 @@ class OptimizeRequest(BaseModel):
     upgrade_cost: float = 80.0
     delay_penalty: float = 250.0
     risk_threshold: float = 0.3
+    max_candidates: Optional[int] = 500
 
 
 class LLMBriefRequest(OptimizeRequest):
@@ -364,17 +366,37 @@ def get_predictions_path(x_session_id: Optional[str] = None) -> Path:
     return PREDICTIONS_PATH
 
 
+def raise_role_forbidden(role: str, required: str) -> None:
+    raise HTTPException(
+        status_code=403,
+        detail={
+            "error": "403 Forbidden",
+            "message": f"This endpoint requires {required} access.",
+            "your_role": role,
+        },
+    )
+
+
 def require_manager(role: str) -> None:
-    """
-    要求呼叫者必須是 Logistics_Manager。
-    否則拋出 403 Forbidden。
-    """
+    """Require the operations Manager role."""
     if role != ROLE_MANAGER:
+        raise_role_forbidden(role, "Manager")
+
+
+def require_engineer(role: str) -> None:
+    """Require the system Engineer role."""
+    if role != ROLE_ENGINEER:
+        raise_role_forbidden(role, "Engineer")
+
+
+def require_manager_or_engineer(role: str) -> None:
+    """Require either elevated operational or engineering access."""
+    if role not in (ROLE_MANAGER, ROLE_ENGINEER):
         raise HTTPException(
             status_code=403,
             detail={
                 "error": "403 Forbidden",
-                "message": "此端點僅限 Logistics_Manager 存取。Viewer 無執行最佳化的權限。",
+                "message": "This endpoint requires Logistics_Manager or Engineer access.",
                 "your_role": role,
             },
         )
@@ -401,7 +423,7 @@ def attach_manager_analysis(result_dict: dict, pred_path: Path) -> dict:
     except Exception as e:
         result_dict["manager_analysis"] = {
             "headline": f"最佳化建議（無法載入分析器：{str(e)}）",
-            "recommended_policy": "優先處理高風險與正淨效益訂單",
+            "recommended_policy": "Prioritize high-risk orders that reduce expected loss after upgrade cost.",
             "sample_order_explanations": [],
             "llm_ready_prompt": "",
         }
@@ -415,19 +437,22 @@ def build_optimization_result(request: OptimizeRequest, pred_path: Path, save_re
             "selected_count": 12,
             "total_cost": 960.0,
             "expected_total_saving": 2850.0,
+            "expected_total_loss_reduction": 2850.0,
             "selected_orders": [
                 {
                     "order_id_hash": "a8f3c2d1" * 8,
                     "p_late": 0.88,
                     "upgrade_cost": 80.0,
                     "expected_saving": 220.0,
+                    "expected_loss_reduction": 220.0,
+                    "avoided_loss_after_upgrade_cost": 220.0,
                     "risk_bucket": "High",
                     "decision": "Upgrade",
                 }
             ],
             "manager_analysis": {
-                "headline": "示範資料：建議主管核准高風險且淨效益為正的訂單升級。",
-                "recommended_policy": "優先升級高風險與正淨效益訂單。",
+                "headline": "Demo data: prioritize upgrades for high-risk orders that reduce expected loss.",
+                "recommended_policy": "Prioritize high-risk orders that reduce expected loss after upgrade cost.",
                 "sample_order_explanations": [],
                 "llm_ready_prompt": "請根據示範最佳化結果產生主管摘要。",
             },
@@ -445,6 +470,7 @@ def build_optimization_result(request: OptimizeRequest, pred_path: Path, save_re
         upgrade_cost=request.upgrade_cost,
         delay_penalty=request.delay_penalty,
         risk_threshold=request.risk_threshold,
+        max_candidates=request.max_candidates,
     )
     result = optimizer.run(
         predictions_path_or_df=str(pred_path),
@@ -598,7 +624,7 @@ def local_llm_fallback(safe_payload: dict, question: str = "") -> str:
     q = (question or "").strip().lower()
     budget = float(opt.get("budget") or 0)
     selected_count = int(opt.get("selected_count") or 0)
-    saving = float(opt.get("expected_total_saving") or 0)
+    saving = float(opt.get("expected_total_loss_reduction") or opt.get("expected_total_saving") or 0)
     total_cost = float(opt.get("total_cost") or 0)
 
     if q in {"你好", "嗨", "hi", "hello", "哈囉"}:
@@ -621,17 +647,17 @@ def local_llm_fallback(safe_payload: dict, question: str = "") -> str:
 
     if any(term in q for term in ["預算", "budget", "有限", "調度", "怎麼排", "怎麼調"]):
         return (
-            f"如果預算有限，我會先把錢放在「高延遲風險，而且升級後淨效益為正」的訂單上。"
+            f"如果預算有限，我會先把錢放在「高延遲風險，而且扣除升級成本後仍能減少損失」的訂單上。"
             f"以目前設定來看，預算大約 USD ${budget:,.0f}，系統挑出 {selected_count} 筆可升級訂單，"
-            f"會把預算用到約 USD ${total_cost:,.0f}，預估淨效益約 USD ${saving:,.0f}。\n\n"
+            f"會把預算用到約 USD ${total_cost:,.0f}，預估可少付損失約 USD ${saving:,.0f}。\n\n"
             f"實務上我會建議你先不要平均分配，而是照延遲機率、預估罰金、升級成本三個條件排序；"
-            f"如果預算再縮小，就從淨效益最低的訂單往後砍，保留最能保護 SLA 的那一批。"
+            f"如果預算再縮小，就從損失減少幅度最低的訂單往後砍，保留最能保護 SLA 的那一批。"
         )
 
     return (
-        f"目前這批訂單的方向是：{analysis.get('headline') or '先處理高風險且淨效益為正的訂單'}。"
+        f"目前這批訂單的方向是：{analysis.get('headline') or '先處理高風險且能減少預期損失的訂單'}。"
         f"以 USD ${budget:,.0f} 的預算來看，系統會挑出 {selected_count} 筆訂單，"
-        f"預估淨效益約 USD ${saving:,.0f}。"
+        f"預估可少付損失約 USD ${saving:,.0f}。"
         f"{analysis.get('recommended_policy') or '你可以接著到最佳化調度頁調整預算，看看少一點或多一點預算時名單怎麼變。'}"
     )
 
@@ -1046,6 +1072,177 @@ init_db()
 class LoginRequest(BaseModel):
     username: str
     password: str
+
+
+class SingleOrderPredictRequest(BaseModel):
+    """Request model for one-off order delay prediction."""
+    shipping_mode: str = "Standard Class"
+    order_region: str = "Western Europe"
+    order_country: str = "Francia"
+    days_for_shipment: float = 4.0
+    product_price: float = 59.99
+    order_item_quantity: int = 1
+    customer_segment: str = "Consumer"
+    department_name: str = "Fan Shop"
+    market: str = "Europe"
+    order_date: Optional[str] = None
+    order_item_discount_rate: Optional[float] = None
+    order_item_profit_ratio: Optional[float] = None
+    order_profit_per_order: Optional[float] = None
+
+
+@app.post("/api/predict-single")
+def predict_single_order(
+    body: SingleOrderPredictRequest,
+    x_role: Optional[str] = Header(default=None),
+    authorization: Optional[str] = Header(default=None),
+):
+    """
+    Predict delay risk for a single order using the trained XGBoost model.
+
+    The endpoint is readable by all roles. Missing model-side features are
+    filled from serving_artifacts.json medians when available.
+    """
+    get_role(x_role, authorization)
+    try:
+        import xgboost as xgb
+    except ImportError:
+        raise HTTPException(status_code=500, detail="XGBoost 未安裝，無法執行單筆預測。")
+
+    mapping_path = BASE_DIR / "models" / "feature_mapping.json"
+    artifact_path = BASE_DIR / "models" / "serving_artifacts.json"
+    model_path = BASE_DIR / "models" / "xgboost_model.json"
+
+    if not mapping_path.exists() or not model_path.exists():
+        raise HTTPException(status_code=500, detail="模型檔案不存在，請先執行 model_pipeline.py。")
+
+    with open(mapping_path, "r", encoding="utf-8") as f:
+        mappings = json.load(f)
+
+    serving_medians: dict = {}
+    serving_label_classes: dict = {}
+    if artifact_path.exists():
+        try:
+            with open(artifact_path, "r", encoding="utf-8") as f:
+                artifact = json.load(f)
+            serving_medians = artifact.get("feature_medians", {}) or {}
+            serving_label_classes = artifact.get("label_classes", {}) or {}
+        except Exception:
+            serving_medians = {}
+            serving_label_classes = {}
+
+    feature_cols: list = mappings.get("feature_columns", [])
+    if not feature_cols:
+        raise HTTPException(status_code=500, detail="feature_mapping.json 缺少 feature_columns。")
+
+    features: dict = {}
+    numeric_defaults = {
+        "Days for shipment (scheduled)": body.days_for_shipment,
+        "Product Price": body.product_price,
+        "Order Item Quantity": float(body.order_item_quantity),
+        "Order Item Discount Rate": (
+            body.order_item_discount_rate
+            if body.order_item_discount_rate is not None
+            else serving_medians.get("Order Item Discount Rate", 0.1)
+        ),
+        "Order Item Profit Ratio": (
+            body.order_item_profit_ratio
+            if body.order_item_profit_ratio is not None
+            else serving_medians.get("Order Item Profit Ratio", 0.27)
+        ),
+        "Order Profit Per Order": (
+            body.order_profit_per_order
+            if body.order_profit_per_order is not None
+            else serving_medians.get("Order Profit Per Order", 31.52)
+        ),
+    }
+    for col, value in numeric_defaults.items():
+        features[col] = float(value if value is not None else serving_medians.get(col, 0.0))
+
+    if body.order_date:
+        dt = pd.to_datetime(body.order_date, errors="coerce")
+        if pd.isna(dt):
+            dt = None
+    else:
+        dt = None
+
+    features["order_dayofweek"] = int(dt.dayofweek) if dt is not None else int(serving_medians.get("order_dayofweek", 3))
+    features["order_month"] = int(dt.month) if dt is not None else int(serving_medians.get("order_month", 6))
+    features["order_hour"] = int(dt.hour) if dt is not None else int(serving_medians.get("order_hour", 11))
+    features["order_is_weekend"] = int(dt.dayofweek >= 5) if dt is not None else 0
+
+    label_values = {
+        "Order Region": body.order_region,
+        "Category Name": "Accessories",
+        "Order Country": body.order_country,
+    }
+    for col, value in label_values.items():
+        classes = serving_label_classes.get(col, mappings.get(col, []))
+        value_to_idx = {str(v): i for i, v in enumerate(classes)}
+        fallback = int(serving_medians.get(f"{col}_encoded", 0))
+        features[f"{col}_encoded"] = int(value_to_idx.get(str(value), fallback))
+
+    for col in feature_cols:
+        features.setdefault(col, 0)
+
+    one_hot_values = {
+        f"Shipping Mode_{body.shipping_mode}": 1,
+        f"Customer Segment_{body.customer_segment}": 1,
+        f"Department Name_{body.department_name}": 1,
+        f"Market_{body.market}": 1,
+    }
+    for col, value in one_hot_values.items():
+        if col in features:
+            features[col] = value
+
+    row_df = pd.DataFrame([features])[feature_cols].fillna(0)
+
+    model = xgb.XGBClassifier()
+    model.load_model(str(model_path))
+    p_late = float(model.predict_proba(row_df)[:, 1][0])
+
+    if p_late >= 0.7:
+        risk_bucket = "High"
+    elif p_late >= 0.4:
+        risk_bucket = "Medium"
+    else:
+        risk_bucket = "Low"
+
+    delay_penalty = 250.0
+    expected_penalty = round(p_late * delay_penalty, 2)
+    shipping_base_costs = {
+        "Standard Class": 50.0,
+        "Second Class": 80.0,
+        "First Class": 120.0,
+        "Same Day": 180.0,
+    }
+    region_multipliers = {
+        "Western Europe": 1.1,
+        "Central America": 0.9,
+        "South America": 0.95,
+        "Northern Europe": 1.25,
+        "Eastern Europe": 1.05,
+        "East of USA": 1.15,
+        "Eastern Asia": 1.2,
+        "Oceania": 1.3,
+    }
+    upgrade_cost = round(
+        shipping_base_costs.get(body.shipping_mode, 80.0)
+        * region_multipliers.get(body.order_region, 1.0),
+        2,
+    )
+    net_benefit = round(expected_penalty - upgrade_cost, 2)
+
+    return {
+        "p_late": round(p_late, 4),
+        "risk_bucket": risk_bucket,
+        "expected_penalty": expected_penalty,
+        "upgrade_cost": upgrade_cost,
+        "net_benefit_if_upgrade": net_benefit,
+        "loss_reduction_if_upgrade": net_benefit,
+        "recommend_upgrade": net_benefit > 0,
+    }
+
 
 @app.post("/api/login")
 async def login(request: LoginRequest):
@@ -1563,7 +1760,7 @@ def get_executive_summary(
     """
     [公開] 高階經理人決策摘要。
 
-    將模型預測轉成營運語言：服務水準風險、財務曝險、建議預算、
+    將模型預測轉成營運語言：服務水準風險、財務曝險、可改善訂單、
     以及優先處理的區域與運送模式。
     """
     pred_path = get_predictions_path(x_session_id)
@@ -1582,6 +1779,8 @@ def get_executive_summary(
             "expected_penalty_exposure": expected_penalty_exposure,
             "positive_roi_orders": positive_roi_orders,
             "recommended_budget": 80.0,
+            "recommended_loss_reduction": 125.0,
+            "recommended_penalty_avoided": 205.0,
             "recommended_action": "先升級高風險且 ROI 為正的訂單，避免延遲罰金擴大。",
             "top_regions": [{"label": "Western Europe", "count": 1, "avg_p_late": 0.82}],
             "top_shipping_modes": [{"label": "Standard Class", "count": 1, "avg_p_late": 0.82}],
@@ -1614,6 +1813,8 @@ def get_executive_summary(
     positive_roi = at_risk[at_risk["net_benefit"] > 0]
     positive_roi_orders = int(len(positive_roi))
     recommended_budget = float(positive_roi["upgrade_cost"].sum()) if not positive_roi.empty else 0.0
+    recommended_loss_reduction = float(positive_roi["net_benefit"].sum()) if not positive_roi.empty else 0.0
+    recommended_penalty_avoided = float(positive_roi["expected_penalty"].sum()) if not positive_roi.empty else 0.0
 
     def top_breakdown(column: str) -> list[dict]:
         if column not in at_risk.columns or at_risk.empty:
@@ -1644,6 +1845,8 @@ def get_executive_summary(
         "expected_penalty_exposure": round(exposure, 2),
         "positive_roi_orders": positive_roi_orders,
         "recommended_budget": round(recommended_budget, 2),
+        "recommended_loss_reduction": round(recommended_loss_reduction, 2),
+        "recommended_penalty_avoided": round(recommended_penalty_avoided, 2),
         "recommended_action": action,
         "top_regions": top_breakdown("order_region"),
         "top_shipping_modes": top_breakdown("shipping_mode"),
@@ -1656,13 +1859,14 @@ def get_scenario_analysis(
     budgets: str = "1000,3000,5000,10000",
     upgrade_cost: float = 80.0,
     delay_penalty: float = 250.0,
+    risk_threshold: float = 0.3,
     x_session_id: Optional[str] = Header(default=None)
 ):
     """
     [公開] 預算情境比較。
 
     使用與正式最佳化相同的 PuLP MILP solver，讓主管比較不同預算下
-    可升級訂單數、預估淨效益、避免罰金與預算使用率。
+    可升級訂單數、預估少付損失、避免罰金與預算使用率。
     """
     pred_path = get_predictions_path(x_session_id)
     if not pred_path.exists():
@@ -1674,6 +1878,7 @@ def get_scenario_analysis(
                     "selected_count": 12,
                     "total_cost": 960.0,
                     "expected_total_saving": 1890.0,
+                    "expected_total_loss_reduction": 1890.0,
                     "expected_total_penalty_avoided": 2850.0,
                     "budget_usage_pct": 96.0,
                     "solver": "demo response",
@@ -1705,7 +1910,7 @@ def get_scenario_analysis(
             budget=budget,
             upgrade_cost=upgrade_cost,
             delay_penalty=delay_penalty,
-            max_candidates=500,
+            risk_threshold=risk_threshold,
         )
         result = optimizer.run(
             predictions_path_or_df=df,
@@ -1718,17 +1923,18 @@ def get_scenario_analysis(
             "selected_count": result.get("selected_count", len(result.get("selected_orders", []))),
             "total_cost": round(float(result.get("total_cost", 0.0)), 2),
             "expected_total_saving": round(float(result.get("expected_total_saving", 0.0)), 2),
+            "expected_total_loss_reduction": round(float(result.get("expected_total_loss_reduction", result.get("expected_total_saving", 0.0))), 2),
             "expected_total_penalty_avoided": round(float(result.get("expected_total_penalty_avoided", 0.0)), 2),
             "budget_usage_pct": round((float(result.get("total_cost", 0.0)) / budget * 100.0) if budget else 0.0, 2),
             "solver": result.get("solver", "PuLP MILP"),
         })
 
-    positive = [s for s in scenarios if s["expected_total_saving"] > 0]
-    best = max(positive or scenarios, key=lambda s: (s["expected_total_saving"], s["selected_count"]))
+    positive = [s for s in scenarios if s["expected_total_loss_reduction"] > 0]
+    best = max(positive or scenarios, key=lambda s: (s["expected_total_loss_reduction"], s["selected_count"]))
     recommendation = (
         f"建議至少保留 USD ${best['budget']:,.0f} 的升級預算；"
         f"此情境可處理 {best['selected_count']} 筆訂單，"
-        f"預估淨效益 USD ${best['expected_total_saving']:,.0f}。"
+        f"預估可少付損失 USD ${best['expected_total_loss_reduction']:,.0f}。"
     )
 
     return {

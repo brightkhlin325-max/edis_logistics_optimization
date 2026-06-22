@@ -335,6 +335,7 @@ body {
 
 .badge-viewer  { background: #f0f2f4; color: var(--muted); }
 .badge-manager { background: rgba(67,112,150,0.12); color: var(--navy); }
+.badge-engineer { background: rgba(14, 165, 233, 0.13); color: #0284c7; }
 
 .exec-grid {
   display: grid;
@@ -1479,7 +1480,7 @@ body[data-role="viewer"] .manager-only-nav {
         <span id="statusText">示範資料</span>
       </div>
 
-      <span class="role-badge badge-viewer" id="roleBadge">● 檢視者</span>
+      <span class="role-badge badge-viewer" id="roleBadge">Viewer</span>
 
       <div class="theme-switch" aria-label="Theme switch">
         <button class="theme-btn" id="themeLightBtn" onclick="setTheme('light')">日間</button>
@@ -1487,8 +1488,9 @@ body[data-role="viewer"] .manager-only-nav {
       </div>
 
       <div class="role-switch">
-        <button class="role-btn active" onclick="setRole('viewer')">檢視者</button>
-        <button class="role-btn" onclick="setRole('manager')">管理者</button>
+        <button class="role-btn active" data-role="viewer" onclick="setRole('viewer')">Viewer</button>
+        <button class="role-btn" data-role="manager" onclick="setRole('manager')">Manager</button>
+        <button class="role-btn" data-role="engineer" onclick="setRole('engineer')">Engineer</button>
       </div>
     </div>
   </div>
@@ -1633,7 +1635,7 @@ body[data-role="viewer"] .manager-only-nav {
           <div class="exec-note" id="execExposureNote">高風險訂單預估罰金</div>
         </div>
         <div class="exec-card">
-          <div class="exec-label">建議預算</div>
+          <div class="exec-label">可改善訂單</div>
           <div class="exec-value" id="execBudget">—</div>
           <div class="exec-note" id="execBudgetNote">ROI 為正訂單的建議升級預算</div>
         </div>
@@ -1702,7 +1704,7 @@ body[data-role="viewer"] .manager-only-nav {
               <div class="panel-title">經理調度模擬區</div>
               <div class="panel-subtitle">在預算限制下進行物流升級與決策模擬</div>
             </div>
-            <span class="role-badge badge-viewer" id="optRoleBadge">檢視者</span>
+            <span class="role-badge badge-viewer" id="optRoleBadge">Viewer</span>
           </div>
           <div class="opt-body">
             <div>
@@ -1717,7 +1719,7 @@ body[data-role="viewer"] .manager-only-nav {
               執行最佳化調度
             </button>
             <div class="locked-box" id="lockedBox">
-              🔒 需要管理者權限才能執行最佳化
+              需要 Manager 或 Engineer 權限才能執行最佳化。
             </div>
             <!-- Results -->
             <div id="optResult" class="hidden" style="display:flex;flex-direction:column;gap:14px">
@@ -1781,7 +1783,7 @@ body[data-role="viewer"] .manager-only-nav {
                 <input type="file" id="aiPredictCsvInput" accept=".csv" style="display:none;" onchange="uploadPredictionCSV(this)">
                 <button class="ai-icon-btn" id="aiUploadPredictBtn" type="button" onclick="document.getElementById('aiPredictCsvInput').click()" title="上傳待預測 CSV">+</button>
                 <span class="ai-file-chip" id="aiLlmMode">AI ready</span>
-                <span id="aiLockedBox" class="ai-file-chip" style="display:none;">需要管理者權限</span>
+                <span id="aiLockedBox" class="ai-file-chip" style="display:none;">需要 Manager 或 Engineer 權限</span>
                 <button class="ai-file-chip" id="aiResetPredictBtn" onclick="resetCSV()" style="display:none;border:0;background:transparent;cursor:pointer;color:#e07b54;">還原預設驗證集</button>
               </div>
               <button class="ai-send-btn" id="aiGenerateBriefBtn" type="button" onclick="generateAIBrief()" title="送出問題">↑</button>
@@ -1952,7 +1954,7 @@ body[data-role="viewer"] .manager-only-nav {
               </button>
             </div>
             <div id="diagViewerNote" style="display:none;text-align:center;font-size:12px;color:var(--muted);padding:8px;background:var(--bg);border-radius:6px;">
-              🔒 需要管理者權限才能執行標記或重訓操作
+              需要 Manager 或 Engineer 權限才能標記事件或重訓。
             </div>
           </div>
 
@@ -2035,7 +2037,7 @@ body[data-role="viewer"] .manager-only-nav {
               開始計算最佳化調度方案
             </button>
             <div class="locked-box" id="optPageLockedBox">
-              🔒 需要管理者權限才能執行最佳化調度
+              需要 Manager 或 Engineer 權限才能執行最佳化。
             </div>
           </div>
         </div>
@@ -2044,7 +2046,7 @@ body[data-role="viewer"] .manager-only-nav {
         <div class="panel">
           <div class="panel-head">
             <div class="panel-title">調度預估成效分析</div>
-            <span class="role-badge badge-viewer" id="optPageRoleBadge">檢視者</span>
+            <span class="role-badge badge-viewer" id="optPageRoleBadge">Viewer</span>
           </div>
           <div class="opt-body">
             <div id="optPageResultPlaceholder" style="text-align:center; padding:64px 20px; color:var(--muted); font-size:13px;">
@@ -2304,8 +2306,8 @@ body[data-role="viewer"] .manager-only-nav {
               <th>API 端點 (Endpoint)</th>
               <th>請求類型</th>
               <th>功能說明</th>
-              <th>檢視者權限</th>
-              <th>物流管理者權限</th>
+              <th>Viewer</th>
+              <th>Manager / Engineer</th>
             </tr>
           </thead>
           <tbody>
@@ -2388,7 +2390,7 @@ body[data-role="viewer"] .manager-only-nav {
               🔄 還原驗證集
             </button>
             <span id="lockedUploadBox" class="locked-box" style="font-size:11px; padding:6px 12px; border-radius:6px; margin:0;">
-              🔒 需管理者權限以回填訓練資料
+              需要 Manager 或 Engineer 權限才能上傳訓練資料。
             </span>
           </div>
         </div>
@@ -2429,7 +2431,7 @@ body[data-role="viewer"] .manager-only-nav {
     <div class="page-section hidden" id="page-llm-settings">
       <div class="page-header fade-in">
         <div class="page-title">LLM 設定</div>
-        <div class="page-sub">管理者可設定 AI 助理使用的服務供應商、模型與 API Key</div>
+        <div class="page-sub">Manager 與 Engineer 可設定 AI 助理的服務商、模型與 API Key。</div>
       </div>
 
       <div class="panel fade-in" style="max-width:760px;">
@@ -2438,11 +2440,11 @@ body[data-role="viewer"] .manager-only-nav {
             <div class="panel-title">AI 助理連線設定</div>
             <div class="panel-subtitle">設定會加密儲存在本機專案資料夾，重啟服務後仍會套用。</div>
           </div>
-          <span class="role-badge badge-viewer" id="llmSettingsRoleBadge">檢視者</span>
+          <span class="role-badge badge-viewer" id="llmSettingsRoleBadge">Viewer</span>
         </div>
 
         <div id="llmSettingsLocked" class="locked-box" style="margin-bottom:16px;">
-          🔒 需要管理者權限才能查看與修改 LLM 設定
+          需要 Manager 或 Engineer 權限才能查看與修改 LLM 設定。
         </div>
 
         <div id="llmSettingsForm" style="display:none;grid-template-columns:1fr 1fr;gap:16px;">
@@ -2525,6 +2527,40 @@ let totalRiskListCount = 0;
 let cachedRegions = null;
 let cachedScenarios = null;
 
+function roleToApiRole(role = currentRole) {
+  if (role === 'manager') return 'Logistics_Manager';
+  if (role === 'engineer') return 'Engineer';
+  return 'Viewer';
+}
+
+function isPrivilegedRole(role = currentRole) {
+  return role === 'manager' || role === 'engineer';
+}
+
+function roleLabel(role = currentRole) {
+  if (role === 'manager') return 'Manager';
+  if (role === 'engineer') return 'Engineer';
+  return 'Viewer';
+}
+
+function roleBadgeClass(role = currentRole) {
+  if (role === 'manager') return 'role-badge badge-manager';
+  if (role === 'engineer') return 'role-badge badge-engineer';
+  return 'role-badge badge-viewer';
+}
+
+function updateLoginModalForRole(role) {
+  const title = document.getElementById('loginModalTitle');
+  const sub = document.getElementById('loginModalSub');
+  const username = document.getElementById('loginUsername');
+  if (title) title.textContent = `${roleLabel(role)} Login`;
+  if (sub) sub.textContent = `Sign in as ${roleLabel(role)} to access protected workflow tools.`;
+  if (username) {
+    username.placeholder = role === 'engineer' ? 'engineer' : 'admin';
+    username.value = role === 'engineer' ? 'engineer' : '';
+  }
+}
+
 // ══ Navigation (SPA) ══
 function showPage(pageId) {
   // Update nav item active states
@@ -2583,7 +2619,7 @@ async function fetchExecutiveSummary() {
 
 async function fetchScenarioAnalysis() {
   if (cachedScenarios) return cachedScenarios;
-  cachedScenarios = await fetch(`${API_BASE}/api/scenario-analysis?budgets=1000,3000,5000,10000`)
+  cachedScenarios = await fetch(`${API_BASE}/api/scenario-analysis?budgets=1000,3000,5000,10000&risk_threshold=${threshold}`)
     .then(r => r.json());
   return cachedScenarios;
 }
@@ -2596,7 +2632,7 @@ async function fetchPredictions(page = 1, search = '', risk = '', shipping = '',
   if (region) url += `&region=${encodeURIComponent(region)}`;
 
   const payload = await fetch(url, {
-    headers: { 'X-Role': currentRole === 'manager' ? 'Logistics_Manager' : 'Viewer' }
+    headers: { 'X-Role': roleToApiRole() }
   }).then(r => r.json());
   
   return payload;
@@ -2612,14 +2648,13 @@ async function fetchOptimize(budget, upgradeCost, delayPenalty, riskThreshold = 
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      'X-Role': 'Logistics_Manager'
+      'X-Role': roleToApiRole()
     },
     body: JSON.stringify({
       budget,
       upgrade_cost: upgradeCost,
       delay_penalty: delayPenalty,
-      risk_threshold: riskThreshold,
-      max_candidates: 500
+      risk_threshold: riskThreshold
     })
   });
   if (!response.ok) {
@@ -2652,6 +2687,7 @@ async function populateRegionDropdown() {
 // ══ Dynamic Threshold Handler ══
 function updateThreshold(val) {
   threshold = parseFloat(val);
+  cachedScenarios = null;
   document.getElementById('thresholdValDisplay').textContent = threshold.toFixed(2);
   syncOptimizationControls();
   refreshDashboard();
@@ -2729,7 +2765,7 @@ async function resetCSV() {
   try {
     const res = await fetch(`${API_BASE}/api/reset-orders`, {
       method: 'POST',
-      headers: { 'X-Role': 'Logistics_Manager' }
+      headers: { 'X-Role': roleToApiRole() }
     });
     if (res.ok) {
       resetBtn.style.display = 'none';
@@ -3074,27 +3110,27 @@ function formatLLMSettingsStatus(prefix, settings, model) {
 }
 
 function updateLLMSettingsAccess() {
-  const isM = currentRole === 'manager';
+  const canEdit = isPrivilegedRole();
   const badge = document.getElementById('llmSettingsRoleBadge');
   const locked = document.getElementById('llmSettingsLocked');
   const form = document.getElementById('llmSettingsForm');
   if (badge) {
-    badge.className = isM ? 'role-badge badge-manager' : 'role-badge badge-viewer';
-    badge.textContent = isM ? 'Manager' : 'Viewer';
+    badge.className = roleBadgeClass();
+    badge.textContent = roleLabel();
   }
-  if (locked) locked.style.display = isM ? 'none' : 'block';
-  if (form) form.style.display = isM ? 'grid' : 'none';
+  if (locked) locked.style.display = canEdit ? 'none' : 'block';
+  if (form) form.style.display = canEdit ? 'grid' : 'none';
 }
 
 async function loadLLMSettings() {
   updateLLMSettingsAccess();
-  if (currentRole !== 'manager') return;
+  if (!isPrivilegedRole()) return;
 
   const status = document.getElementById('llmSettingsStatus');
   status.textContent = '讀取設定中...';
   try {
     const res = await fetch(`${API_BASE}/api/llm/settings`, {
-      headers: { 'X-Role': 'Logistics_Manager' }
+      headers: { 'X-Role': roleToApiRole() }
     });
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
@@ -3117,7 +3153,7 @@ async function loadLLMSettings() {
 }
 
 async function saveLLMSettings() {
-  if (currentRole !== 'manager') return;
+  if (!isPrivilegedRole()) return;
 
   const btn = document.getElementById('llmSaveBtn');
   const status = document.getElementById('llmSettingsStatus');
@@ -3140,7 +3176,7 @@ async function saveLLMSettings() {
       method: 'PUT',
       headers: {
         'Content-Type': 'application/json',
-        'X-Role': 'Logistics_Manager'
+        'X-Role': roleToApiRole()
       },
       body: JSON.stringify({
         provider: selectedProvider,
@@ -3211,10 +3247,10 @@ function updateSopUI() {
   const badgeSpan = (bg, color, border, text) =>
     `<span style="background:${bg}; color:${color}; border:1px solid ${border}; border-radius:20px; padding:3px 12px; font-size:11px; font-weight:700; display:inline-block;">${text}</span>`;
 
-  if (currentRole === 'manager') {
+  if (isPrivilegedRole()) {
     isSandboxMode = false;
     slider.disabled = false;
-    if (badge) badge.innerHTML = badgeSpan('rgba(5,150,105,0.1)', '#059669', 'rgba(5,150,105,0.3)', '● 管理者模式');
+    if (badge) badge.innerHTML = badgeSpan('rgba(5,150,105,0.1)', '#059669', 'rgba(5,150,105,0.3)', `${roleLabel()} mode`);
     lockWrap.innerHTML = `
       <button onclick="publishSopThreshold()" class="run-btn" style="width:auto; padding:2px 8px; font-size:10px; font-weight:bold; background:var(--navy);">發佈為公司 SOP 基準</button>
     `;
@@ -3295,7 +3331,7 @@ function applyThresholdRecommendation(type) {
     ? lastThresholdTuning.best_expected_cost
     : lastThresholdTuning.best_f1;
     
-  if (currentRole === 'manager' && !isSandboxMode) {
+  if (isPrivilegedRole() && !isSandboxMode) {
     isSandboxMode = true;
   }
   
@@ -3313,6 +3349,12 @@ function renderExecutiveSummary(d) {
   const topMode = (d.top_shipping_modes && d.top_shipping_modes[0]) ? d.top_shipping_modes[0] : null;
 
   // Update Main Dashboard KPI Cards Dynamically based on Executive Summary
+  document.querySelector('#kpiPredictedLateOrders')?.previousElementSibling && (
+    document.querySelector('#kpiPredictedLateOrders').previousElementSibling.textContent = '高風險訂單'
+  );
+  document.querySelector('#kpiExpectedPenaltyLoss')?.previousElementSibling && (
+    document.querySelector('#kpiExpectedPenaltyLoss').previousElementSibling.textContent = '預期罰金損失'
+  );
   if (d.total_orders !== undefined) {
     document.getElementById('kpiTotalOrders').textContent = d.total_orders.toLocaleString();
   }
@@ -3320,8 +3362,8 @@ function renderExecutiveSummary(d) {
   document.getElementById('kpiPredictedDesc').textContent = `延遲機率 ≥ ${(threshold * 100).toFixed(0)}%`;
   
   document.getElementById('kpiExpectedPenaltyLoss').textContent = '$' + Math.round(d.expected_penalty_exposure || 0).toLocaleString();
-  const savings = Math.max(0, (d.expected_penalty_exposure || 0) - (d.recommended_budget || 0));
-  document.getElementById('kpiExpectedDesc').textContent = `建議升級預算: $${Math.round(d.recommended_budget || 0).toLocaleString()}`;
+  const savings = Math.max(0, d.recommended_loss_reduction || 0);
+  document.getElementById('kpiExpectedDesc').textContent = `升級改善前的罰金暴險`;
 
   // Actionable Insights Banner Decision Logic
   const banner = document.getElementById('actionableInsightsBanner');
@@ -3329,7 +3371,7 @@ function renderExecutiveSummary(d) {
   if (banner && bannerText) {
     if ((d.recommended_budget || 0) > 0 && savings > 0) {
       banner.style.display = 'flex';
-      bannerText.innerHTML = `建議投入物流預算 <strong>$${Math.round(d.recommended_budget).toLocaleString()}</strong>，可挽回 <strong>${d.positive_roi_orders.toLocaleString()}</strong> 筆訂單的延遲罰金損失，預估為公司省下淨額 <strong>$${Math.round(savings).toLocaleString()}</strong>！`;
+      bannerText.innerHTML = `建議升級預算 <strong>$${Math.round(d.recommended_budget).toLocaleString()}</strong>，可改善 <strong>${d.positive_roi_orders.toLocaleString()}</strong> 筆訂單，預估少付損失約 <strong>$${Math.round(savings).toLocaleString()}</strong>。`;
     } else {
       banner.style.display = 'none';
     }
@@ -3339,15 +3381,20 @@ function renderExecutiveSummary(d) {
   document.getElementById('execSlaRiskNote').textContent =
     `目標 90%，目前 ${d.at_risk_orders.toLocaleString()} 筆訂單高於風險門檻。`;
 
-  document.getElementById('execExposure').textContent =
-    '$' + Math.round(d.expected_penalty_exposure || 0).toLocaleString();
+  document.querySelector('#execExposure')?.previousElementSibling && (
+    document.querySelector('#execExposure').previousElementSibling.textContent = '高風險比例'
+  );
+  document.getElementById('execExposure').textContent = `${atRiskRate}%`;
   document.getElementById('execExposureNote').textContent =
-    `約 ${atRiskRate}% 訂單可能影響準時交付。`;
+    `${d.at_risk_orders.toLocaleString()} / ${d.total_orders.toLocaleString()} 筆訂單高於目前門檻。`;
 
+  document.querySelector('#execBudget')?.previousElementSibling && (
+    document.querySelector('#execBudget').previousElementSibling.textContent = '可改善訂單'
+  );
   document.getElementById('execBudget').textContent =
-    '$' + Math.round(d.recommended_budget || 0).toLocaleString();
+    d.positive_roi_orders.toLocaleString();
   document.getElementById('execBudgetNote').textContent =
-    `${d.positive_roi_orders.toLocaleString()} 筆高風險訂單升級後仍有正淨效益。`;
+    `扣除升級成本後仍可減少損失。`;
 
   document.getElementById('execDriver').textContent =
     topRegion ? topRegion.label : (topMode ? topMode.label : '—');
@@ -3373,10 +3420,10 @@ function renderBudgetScenarios(d) {
   }
 
   const visibleScenarios = scenarios.slice(0, 4);
-  const bestSaving = Math.max(...visibleScenarios.map(s => Number(s.expected_total_saving || 0)));
+  const bestSaving = Math.max(...visibleScenarios.map(s => Number(s.expected_total_loss_reduction ?? s.expected_total_saving ?? 0)));
 
   grid.innerHTML = visibleScenarios.map(s => {
-    const saving = Number(s.expected_total_saving || 0);
+    const saving = Number(s.expected_total_loss_reduction ?? s.expected_total_saving ?? 0);
     const selected = Number(s.selected_count || 0);
     const isRecommended = saving === bestSaving;
     return `
@@ -3384,7 +3431,7 @@ function renderBudgetScenarios(d) {
       <div class="scenario-budget">$${Math.round(s.budget || 0).toLocaleString()}</div>
       <div class="scenario-line"><span>升級訂單</span><strong>${selected.toLocaleString()} 筆</strong></div>
       <div class="scenario-line"><span>避免罰金</span><strong>$${Math.round(s.expected_total_penalty_avoided || 0).toLocaleString()}</strong></div>
-      <div class="scenario-line"><span>淨效益</span><strong class="benefit">$${Math.round(saving).toLocaleString()}</strong></div>
+      <div class="scenario-line"><span>少付損失</span><strong class="benefit">$${Math.round(saving).toLocaleString()}</strong></div>
       <div class="scenario-line"><span>預算使用率</span><strong>${Number(s.budget_usage_pct || 0).toFixed(0)}%</strong></div>
     </div>`;
   }).join('');
@@ -3414,9 +3461,9 @@ function getReasonText(o) {
 }
 
 function getActionText(o) {
-  // Action logic mimicking optimizer expected savings
-  const expected_saving = o.expected_penalty - o.upgrade_cost;
-  if (o.p_late >= threshold && expected_saving > 0) {
+  // Action logic mimicking optimizer loss reduction after upgrade cost.
+  const expectedLossReduction = o.expected_penalty - o.upgrade_cost;
+  if (o.p_late >= threshold && expectedLossReduction > 0) {
     return `<span class="risk-pill r-high" style="font-weight:600; cursor:pointer;" onclick="openExplainModal('${o.order_id_hash}')">💡 建議升級運送</span>`;
   }
   return `<span class="risk-pill r-low" style="font-weight:500; cursor:pointer;" onclick="openExplainModal('${o.order_id_hash}')">✔ 監控並維持原狀</span>`;
@@ -3516,7 +3563,7 @@ function renderOptResult(d) {
   el.style.display = 'flex';
   const _sel = Array.isArray(d.selected_orders) ? d.selected_orders : [];
   document.getElementById('optSelected').textContent = _sel.length;
-  document.getElementById('optSaving').textContent = '$' + d.expected_total_saving.toLocaleString();
+  document.getElementById('optSaving').textContent = '$' + (d.expected_total_loss_reduction ?? d.expected_total_saving).toLocaleString();
   document.getElementById('optCost').textContent = '$' + d.total_cost.toLocaleString();
   const pct = ((d.total_cost / d.budget) * 100).toFixed(0);
   document.getElementById('optUsage').textContent = pct + '%';
@@ -3527,9 +3574,9 @@ function renderOptResult(d) {
     <div class="ord-item" style="animation-delay:${i*0.07}s">
       <div>
         <div class="ord-id" title="${o.order_id_hash}">${o.display_order_id || displayOrderId(o.order_id_hash)}</div>
-        <div class="ord-sub">升級成本 $${o.upgrade_cost} · 延遲率 ${(o.p_late*100).toFixed(0)}% · ${o.reason || 'positive net benefit'}</div>
+        <div class="ord-sub">升級成本 $${o.upgrade_cost} · 延遲率 ${(o.p_late*100).toFixed(0)}% · ${o.reason || '可減少損失'}</div>
       </div>
-      <div class="ord-saving">+$${(o.net_benefit ?? o.expected_saving).toLocaleString()}</div>
+      <div class="ord-saving">少付 $${(o.expected_loss_reduction ?? o.avoided_loss_after_upgrade_cost ?? o.net_benefit ?? o.expected_saving).toLocaleString()}</div>
     </div>
   `).join('');
 }
@@ -3588,6 +3635,21 @@ function initTheme() {
   setTheme(localStorage.getItem('edis_theme') || 'dark');
 }
 
+function normalizeRoleCopy() {
+  const replacements = [
+    ['lockedUploadBox', '需要 Manager 或 Engineer 權限才能上傳訓練資料。'],
+    ['lockedBox', '需要 Manager 或 Engineer 權限才能執行最佳化。'],
+    ['aiLockedBox', '需要 Manager 或 Engineer 權限'],
+    ['diagViewerNote', '需要 Manager 或 Engineer 權限才能標記事件或重訓。'],
+    ['optPageLockedBox', '需要 Manager 或 Engineer 權限才能執行最佳化。'],
+    ['llmSettingsLocked', '需要 Manager 或 Engineer 權限才能查看與修改 LLM 設定。'],
+  ];
+  replacements.forEach(([id, text]) => {
+    const el = document.getElementById(id);
+    if (el) el.textContent = text;
+  });
+}
+
 function applyRoleNavigation() {
   document.body.dataset.role = currentRole;
   const hiddenForViewer = document.querySelector('.sidebar-nav .nav-item.active.manager-only-nav');
@@ -3598,15 +3660,15 @@ function applyRoleNavigation() {
 
 // ══ Role Switcher ══
 async function setRole(role) {
-  if (role === 'manager' && currentRole !== 'manager' && !window._managerAuthenticated) {
-    document.getElementById('loginUsername').value = '';
+  if (isPrivilegedRole(role) && currentRole !== role && !window._privilegedAuthenticated) {
+    updateLoginModalForRole(role);
     document.getElementById('loginPassword').value = '';
     document.getElementById('loginError').classList.remove('show');
     document.getElementById('loginModal').classList.add('show');
     setTimeout(() => document.getElementById('loginUsername').focus(), 100);
     return;
   }
-  window._managerAuthenticated = false;
+  window._privilegedAuthenticated = false;
   currentRole = role;
   applyRoleNavigation();
   if (role === 'viewer') {
@@ -3614,18 +3676,18 @@ async function setRole(role) {
     sessionStorage.removeItem('edis_session_id');
   }
   document.querySelectorAll('.role-btn').forEach(b =>
-    b.classList.toggle('active', b.textContent.toLowerCase() === role));
+    b.classList.toggle('active', b.dataset.role === role));
 
 
-  const isM = role === 'manager';
+  const isM = isPrivilegedRole(role);
   
   // Header badges
-  document.getElementById('roleBadge').className = isM ? 'role-badge badge-manager' : 'role-badge badge-viewer';
-  document.getElementById('roleBadge').textContent = isM ? '● 管理者' : '● 檢視者';
-  document.getElementById('optRoleBadge').className = isM ? 'role-badge badge-manager' : 'role-badge badge-viewer';
-  document.getElementById('optRoleBadge').textContent = isM ? '管理者' : '檢視者';
-  document.getElementById('optPageRoleBadge').className = isM ? 'role-badge badge-manager' : 'role-badge badge-viewer';
-  document.getElementById('optPageRoleBadge').textContent = isM ? '管理者' : '檢視者';
+  document.getElementById('roleBadge').className = roleBadgeClass(role);
+  document.getElementById('roleBadge').textContent = roleLabel(role);
+  document.getElementById('optRoleBadge').className = roleBadgeClass(role);
+  document.getElementById('optRoleBadge').textContent = roleLabel(role);
+  document.getElementById('optPageRoleBadge').className = roleBadgeClass(role);
+  document.getElementById('optPageRoleBadge').textContent = roleLabel(role);
 
   // Lock/Unlock Uploading for Manager
   document.getElementById('uploadCsvBtn').style.display = isM ? 'inline-flex' : 'none';
@@ -3638,8 +3700,8 @@ async function setRole(role) {
   if (aiBriefBtn) aiBriefBtn.disabled = !isM;
   if (aiLockedBox) aiLockedBox.style.display = isM ? 'none' : 'inline-flex';
   if (aiRoleBadge) {
-    aiRoleBadge.className = isM ? 'role-badge badge-manager' : 'role-badge badge-viewer';
-    aiRoleBadge.textContent = isM ? '管理者' : '檢視者';
+    aiRoleBadge.className = roleBadgeClass(role);
+    aiRoleBadge.textContent = roleLabel(role);
   }
   updateLLMSettingsAccess();
   if (isM && !document.getElementById('page-llm-settings').classList.contains('hidden')) {
@@ -3718,7 +3780,7 @@ async function runPageOptimize() {
     resultPanel.classList.remove('hidden');
     
     document.getElementById('optPageSelected').textContent = data.selected_orders.length;
-    document.getElementById('optPageSaving').textContent = '$' + data.expected_total_saving.toLocaleString();
+    document.getElementById('optPageSaving').textContent = '$' + (data.expected_total_loss_reduction ?? data.expected_total_saving).toLocaleString();
     document.getElementById('optPageCost').textContent = '$' + data.total_cost.toLocaleString();
     
     const pct = ((data.total_cost / budget) * 100).toFixed(0);
@@ -3730,9 +3792,9 @@ async function runPageOptimize() {
       <div class="ord-item" style="animation-delay:${i*0.03}s">
         <div>
           <div class="ord-id" title="${o.order_id_hash}">${o.display_order_id || displayOrderId(o.order_id_hash)}</div>
-          <div class="ord-sub">升級成本 $${o.upgrade_cost} · 延遲機率 ${(o.p_late*100).toFixed(0)}% · ${o.reason || 'positive net benefit'}</div>
+          <div class="ord-sub">升級成本 $${o.upgrade_cost} · 延遲機率 ${(o.p_late*100).toFixed(0)}% · ${o.reason || '可減少損失'}</div>
         </div>
-        <div class="ord-saving">+$${(o.net_benefit ?? o.expected_saving).toLocaleString()}</div>
+        <div class="ord-saving">少付 $${(o.expected_loss_reduction ?? o.avoided_loss_after_upgrade_cost ?? o.net_benefit ?? o.expected_saving).toLocaleString()}</div>
       </div>
     `).join('');
     
@@ -3934,7 +3996,7 @@ async function openExplainModal(orderId) {
   
   try {
     const res = await fetch(`${API_BASE}/api/explain/${orderId}`, {
-      headers: { 'X-Role': currentRole === 'manager' ? 'Logistics_Manager' : 'Viewer' }
+      headers: { 'X-Role': roleToApiRole() }
     });
     if (!res.ok) throw new Error('分析資料讀取失敗');
     const data = await res.json();
@@ -3968,22 +4030,26 @@ function closeExplainModal() {
 // ══ Dashboard Refresh Helper ══
 async function refreshDashboard() {
   try {
-    const [p, executive, scenarios, tuning] = await Promise.all([
+    const [p, executive, metrics, tuning] = await Promise.all([
       fetchPredictions(currentPage),
       fetchExecutiveSummary(),
-      fetchScenarioAnalysis(),
+      fetchMetrics(),
       fetchThresholdTuning().catch(() => null)
     ]);
     if (p) {
       totalPredictionsCount = p.count || 0;
       renderBossTable(p.data || []);
-      
-      const m = await fetchMetrics();
-      if (m) renderMetrics(m);
     }
+    if (metrics) renderMetrics(metrics);
     if (executive) renderExecutiveSummary(executive);
-    if (scenarios) renderBudgetScenarios(scenarios);
     if (tuning) renderThresholdTuning(tuning);
+    fetchScenarioAnalysis()
+      .then(renderBudgetScenarios)
+      .catch(e => {
+        console.warn('Scenario analysis is unavailable', e);
+        const note = document.getElementById('scenarioRecommendation');
+        if (note) note.textContent = '預算情境分析仍在計算中，或目前暫時無法取得。';
+      });
   } catch (e) {
     console.error('Failed to refresh dashboard', e);
   }
@@ -3993,7 +4059,7 @@ async function refreshDashboard() {
 async function init() {
   try {
     // Check role to set CSV button visibility initially
-    const isM = currentRole === 'manager';
+    const isM = isPrivilegedRole();
     document.getElementById('uploadCsvBtn').style.display = isM ? 'inline-flex' : 'none';
     document.getElementById('lockedUploadBox').style.display = isM ? 'none' : 'inline-flex';
     const aiUploadBtn = document.getElementById('aiUploadPredictBtn');
@@ -4175,7 +4241,7 @@ function openDiagnoseModal(month) {
   if (_retrainBtn) { _retrainBtn.style.display = 'block'; _retrainBtn.disabled = false; }
   if (_retrainStatus) { _retrainStatus.style.display = 'none'; _retrainStatus.style.color = ''; }
 
-  const isManager = currentRole === 'manager';
+  const isManager = isPrivilegedRole();
   document.getElementById('diagManagerActions').style.display = isManager ? 'flex' : 'none';
   document.getElementById('diagViewerNote').style.display    = isManager ? 'none' : 'block';
 
@@ -4237,7 +4303,7 @@ async function flagMonthEvent() {
   const selected = document.querySelector('input[name="diagEventType"]:checked');
   if (!selected) { alert('請先選擇事件類型'); return; }
   const note  = document.getElementById('diagEventNote').value.trim();
-  const xRole = currentRole === 'manager' ? 'Logistics_Manager' : 'Viewer';
+  const xRole = roleToApiRole();
   const btn   = document.getElementById('diagFlagBtn');
   if (btn) { btn.disabled = true; btn.textContent = '標記中…'; }
   try {
@@ -4283,7 +4349,7 @@ async function startRetrain() {
   const checked = [...document.querySelectorAll('input[name="retrainFeature"]:checked')];
   if (!checked.length) { alert('請至少選擇一個要排除的特徵'); return; }
   const excluded = checked.map(c => c.value);
-  const xRole = currentRole === 'manager' ? 'Logistics_Manager' : 'Viewer';
+  const xRole = roleToApiRole();
 
   const btn    = document.getElementById('diagStartRetrainBtn');
   const status = document.getElementById('diagRetrainStatus');
@@ -4390,7 +4456,7 @@ function renderDiagRetrainResult(data) {
 
 async function diagAdoptNewModel() {
   if (!pendingRetrainSession) return;
-  const xRole = currentRole === 'manager' ? 'Logistics_Manager' : 'Viewer';
+  const xRole = roleToApiRole();
   const btn = document.getElementById('diagAdoptBtn');
   if (btn) { btn.disabled = true; btn.textContent = '採用中...'; }
   try {
@@ -4420,7 +4486,7 @@ async function diagAdoptNewModel() {
 
 async function diagDiscardNewModel() {
   if (!pendingRetrainSession) return;
-  const xRole = currentRole === 'manager' ? 'Logistics_Manager' : 'Viewer';
+  const xRole = roleToApiRole();
   const btn = document.getElementById('diagDiscardBtn');
   if (btn) { btn.disabled = true; btn.textContent = '捨棄中...'; }
   try {
@@ -4479,7 +4545,7 @@ function renderRetrainResult(data) {
 
 async function adoptNewModel() {
   if (!pendingRetrainSession) return;
-  const xRole = currentRole === 'manager' ? 'Logistics_Manager' : 'Viewer';
+  const xRole = roleToApiRole();
   const btn = document.getElementById('adoptBtn');
   if (btn) { btn.disabled = true; btn.textContent = '採用中…'; }
   try {
@@ -4501,7 +4567,7 @@ async function adoptNewModel() {
 
 async function discardNewModel() {
   if (!pendingRetrainSession) return;
-  const xRole = currentRole === 'manager' ? 'Logistics_Manager' : 'Viewer';
+  const xRole = roleToApiRole();
   try {
     await fetch(`${API_BASE}/api/retrain/discard`, {
       method: 'POST',
@@ -4529,7 +4595,7 @@ function showToast(msg, type = 'info') {
 function closeLoginModal() {
   document.getElementById('loginModal').classList.remove('show');
   document.querySelectorAll('.role-btn').forEach(b =>
-    b.classList.toggle('active', b.textContent.toLowerCase() === 'viewer'));
+    b.classList.toggle('active', b.dataset.role === 'viewer'));
 }
 async function submitLogin() {
   const username = document.getElementById('loginUsername').value.trim();
@@ -4547,8 +4613,11 @@ async function submitLogin() {
       sessionStorage.setItem('edis_token', data.token);
       sessionStorage.setItem('edis_session_id', data.session_id);
       document.getElementById('loginModal').classList.remove('show');
-      window._managerAuthenticated = true;
-      await setRole('manager');
+      const clientRole = data.role === 'Logistics_Manager'
+        ? 'manager'
+        : (data.role === 'Engineer' ? 'engineer' : 'viewer');
+      window._privilegedAuthenticated = clientRole !== 'viewer';
+      await setRole(clientRole);
     } else {
       errEl.classList.add('show');
     }
@@ -4580,6 +4649,7 @@ document.addEventListener('input', function(e) {
 });
 window.addEventListener('load', function() {
   initTheme();
+  normalizeRoleCopy();
   applyRoleNavigation();
   syncOptimizationControls();
 });
@@ -4617,20 +4687,20 @@ window.addEventListener('load', function() {
 
 <div class="modal-overlay" id="loginModal">
   <div class="modal-box">
-    <div class="modal-title">🔐 Manager 登入</div>
-    <div class="modal-sub">請輸入 Manager 帳號密碼以切換權限</div>
+    <div class="modal-title" id="loginModalTitle">Manager Login</div>
+    <div class="modal-sub" id="loginModalSub">Sign in to access protected workflow tools.</div>
     <div class="modal-field">
-      <label>帳號 Username</label>
+      <label>Username</label>
       <input type="text" class="modal-input" id="loginUsername" placeholder="admin">
     </div>
     <div class="modal-field">
-      <label>密碼 Password</label>
+      <label>Password</label>
       <input type="password" class="modal-input" id="loginPassword" placeholder="••••••••">
     </div>
-    <div class="modal-error" id="loginError">帳號或密碼錯誤，請重試。</div>
+    <div class="modal-error" id="loginError">Invalid username or password.</div>
     <div class="modal-btns">
-      <button class="modal-confirm" onclick="submitLogin()">登入</button>
-      <button class="modal-cancel" onclick="closeLoginModal()">取消</button>
+      <button class="modal-confirm" onclick="submitLogin()">Login</button>
+      <button class="modal-cancel" onclick="closeLoginModal()">Cancel</button>
     </div>
   </div>
 </div>

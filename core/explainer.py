@@ -149,7 +149,7 @@ class ManagerExplainer:
         summary = (
             f"建議主管核准本批調度：在預算 USD ${budget:,.0f} 下，"
             f"使用 {solver} 選出 {selected_count} 筆升級訂單，"
-            f"預估淨效益 USD ${expected_total_saving:,.0f}，預算使用率 {budget_usage:.0f}%。"
+            f"預估可少付損失 USD ${expected_total_saving:,.0f}，預算使用率 {budget_usage:.0f}%。"
             f"主要調整方向是：{top_action}"
         )
 
@@ -189,7 +189,7 @@ class ManagerExplainer:
                 feature=feature,
                 label="運送模式",
                 impact="raises risk" if shipping_mode == "Standard Class" else "context",
-                evidence=f"此訂單使用 {shipping_mode}，需搭配延遲機率與淨效益判斷是否升級",
+                evidence=f"此訂單使用 {shipping_mode}，需搭配延遲機率與損失減少幅度判斷是否升級",
                 weight=float(importances.get(feature, 0.0)),
             ))
         if not any("region" in f.feature.lower() or "Order Region" in f.feature for f in factors):
@@ -274,7 +274,7 @@ class ManagerExplainer:
             f"此訂單延遲風險為 {risk_bucket}（p_late={p_late:.0%}），"
             f"目前運送模式為 {shipping_mode}，目的地為 {order_region or 'Unknown'}。"
             f"若升級運送，預期可避免罰款 USD ${expected_penalty:,.0f}，"
-            f"扣除升級成本 USD ${upgrade_cost:,.0f} 後，淨效益約 USD ${net_benefit:,.0f}。"
+            f"扣除升級成本 USD ${upgrade_cost:,.0f} 後，預估可少付損失約 USD ${net_benefit:,.0f}。"
             f"主要 X 因子為：{factor_text}。建議：{action}。"
         )
 
@@ -288,8 +288,8 @@ class ManagerExplainer:
             for factor in e.get("top_x_factors", [])
             if factor.get("label") == "運送模式"
         ]
-        mode_hint = common_modes[0] if common_modes else "優先處理高風險與正淨效益訂單"
-        return f"優先升級高風險且淨效益為正的訂單；樣本中 {high_count} 筆為 High risk，{mode_hint}。"
+        mode_hint = common_modes[0] if common_modes else "優先處理高風險且可減少預期損失的訂單"
+        return f"優先升級高風險且扣除升級成本後仍可減少損失的訂單；樣本中 {high_count} 筆為 High risk，{mode_hint}。"
 
     def _build_llm_prompt(self, optimization_result: dict, explanations: list[dict]) -> str:
         compact = {

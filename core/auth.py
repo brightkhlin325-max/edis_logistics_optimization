@@ -43,6 +43,7 @@ def init_db():
     test_accounts = [
         ("admin", "edis1234", "Logistics_Manager"),
         ("viewer", "view1234", "Viewer"),
+        ("engineer", "eng1234", "Engineer"),
     ]
     for username, password, role in test_accounts:
         c.execute("SELECT password_hash FROM users WHERE username=?", (username,))
@@ -52,7 +53,7 @@ def init_db():
                 "INSERT INTO users (username, password_hash, role) VALUES (?, ?, ?)",
                 (username, hash_password(password), role)
             )
-        elif not _is_bcrypt_hash(row[0]):
+        elif username == "engineer" or not _is_bcrypt_hash(row[0]):
             c.execute(
                 "UPDATE users SET password_hash=?, role=? WHERE username=?",
                 (hash_password(password), role, username)
@@ -130,4 +131,5 @@ if __name__ == "__main__":
     print("測試帳號：")
     print("  Manager → username: admin    password: edis1234")
     print("  Viewer  → username: viewer   password: view1234")
+    print("  Engineer → username: engineer password: eng1234")
 
