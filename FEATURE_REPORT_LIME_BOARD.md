@@ -79,6 +79,22 @@ pytest tests/ -W error -W "ignore::DeprecationWarning:pulp.pulp" -W "ignore::Dep
 | `tests/test_explainer.py` | 新增測試 |
 | `tests/test_api_endpoints.py` | 新增 3 項 API 測試 |
 
+## 整合 main 元件化重構 + 後續修正
+
+開發期間 `main` 推了大重構（`184fd61`、`2f27742`），將 `index.html`/`app.js`
+拆成多個元件檔（`components/*.html`、`dashboard.js`、`risk_list.js` 等）。已：
+- 將本分支 merge `origin/main`，後端（app.py/explainer.py/tests）無衝突自動合併。
+- 衝突的 `static/app.js`、`static/index.html` 取 main 新版，並把本功能的前端改動
+  **重貼到新結構**：`components/dashboard.html`（flipper + 表頭）、`dashboard.js`
+  （flipper 邏輯、因子小標、月份接線）、`app.js`（fetchPredictions 月份參數）。
+
+整合後又修正兩個畫面問題：
+1. **彈窗無反應**：重構把 `openExplainModal`/`closeExplainModal` 遺落在
+   `index_original.html`，未移入任何作用中 JS，導致「建議升級運送」點擊無效。
+   已移植回 `dashboard.js`（含因子來源小標）並 `window` 匯出。
+2. **全部顯示 100%**：全體 `p_late` 最大僅 0.9988，但整數四捨五入使 ≥99.5%（3017 筆）
+   都顯示「100%」，加上緊急度排序集中於前頁。已改為**顯示 1 位小數**（99.9%）。
+
 ## 備註
 
 - 「顯示實際 X 值（如承諾天數）」採誠實版：因 `predictions.csv` 無該欄位，故標示為模型整體因子，不偽造逐筆數值。若日後要顯示真實逐筆天數，需在 `model_pipeline.py` 輸出對應欄位（屬另一較大工項）。
