@@ -79,6 +79,10 @@ async function loadComponents() {
 
 // ── 4. 頁面切換機制 (SPA Routing) ──────────────────────────────────────────
 function showPage(pageId) {
+  if (pageId && window.location.hash !== `#${pageId}`) {
+    history.replaceState(null, '', `#${pageId}`);
+  }
+
   // 更新側邊欄 Active 狀態
   document.querySelectorAll('.sidebar-nav .nav-item').forEach(el => {
     el.classList.remove('active');
@@ -498,7 +502,7 @@ async function setRole(role) {
     'nav-optimization': true,
     'nav-risk-list': isMOrEng,
     'nav-ai-assistant': isMOrEng,
-    'nav-profit-prediction': isMOrEng,
+    'nav-profit-prediction': true,
     'nav-model-perf': isEng,
     'nav-region-map': isEng,
     'nav-rbac': isEng,
@@ -511,7 +515,7 @@ async function setRole(role) {
   }
 
   const allowedPages = {
-    viewer: ['dashboard', 'optimization'],
+    viewer: ['dashboard', 'optimization', 'profit-prediction'],
     manager: ['dashboard', 'optimization', 'risk-list', 'ai-assistant', 'profit-prediction', 'llm-settings'],
     engineer: ['dashboard', 'optimization', 'risk-list', 'ai-assistant', 'profit-prediction', 'model-perf', 'region-map', 'rbac', 'llm-settings']
   };
@@ -619,6 +623,13 @@ function getRoleFromToken() {
 }
 
 // ── 11. 初始化與 Refresh 機制 ───────────────────────────────────────────────
+function getInitialPageFromUrl() {
+  const hashPage = window.location.hash ? window.location.hash.replace('#', '') : '';
+  if (hashPage) return hashPage;
+  if (window.location.pathname === '/profit-prediction') return 'profit-prediction';
+  return 'dashboard';
+}
+
 async function init() {
   initTheme();
   startSplashScreen();
@@ -636,6 +647,10 @@ async function init() {
 
     // 3. 呼叫 setRole 以同步 UI 權限限制與顯示
     await setRole(window.edisState.currentRole);
+    const initialPage = getInitialPageFromUrl();
+    if (initialPage && initialPage !== 'dashboard') {
+      showPage(initialPage);
+    }
     if (window.loadMonthlyChart) await loadMonthlyChart();
 
     const status = document.getElementById('statusText');

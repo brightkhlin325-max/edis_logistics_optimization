@@ -182,10 +182,18 @@ def test_profit_metrics_manager_access():
     assert "is_trained" in data
 
 
-def test_profit_metrics_viewer_forbidden():
+def test_profit_metrics_viewer_access():
     response = client.get(
         "/api/profit/metrics",
         headers={"X-Role": "Viewer"},
     )
-    assert response.status_code == 403
+    assert response.status_code == 200
+    data = response.json()
+    assert "is_trained" in data
+
+
+def test_profit_prediction_page_route():
+    response = client.get("/profit-prediction")
+    assert response.status_code == 200
+    assert "text/html" in response.headers.get("content-type", "")
 

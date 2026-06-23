@@ -36,7 +36,7 @@ from typing import Optional
 
 try:
     from fastapi import FastAPI, HTTPException, Header, Request, UploadFile, File, BackgroundTasks
-    from fastapi.responses import JSONResponse
+    from fastapi.responses import FileResponse, JSONResponse
     from fastapi.staticfiles import StaticFiles
     from fastapi.middleware.cors import CORSMiddleware
     from pydantic import BaseModel
@@ -171,6 +171,11 @@ app.add_middleware(
 static_dir = BASE_DIR / "static"
 if static_dir.exists():
     app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
+
+
+@app.get("/profit-prediction")
+async def profit_prediction_page():
+    return FileResponse(static_dir / "index.html")
 
 
 def init_db():
@@ -2536,9 +2541,6 @@ async def get_profit_metrics(
     x_role: Optional[str] = Header(default=None),
     authorization: Optional[str] = Header(default=None),
 ):
-    role = get_role(x_role, authorization)
-    require_manager(role)
-
     metrics = _load_profit_metrics()
     manifest = _load_profit_manifest()
     if not metrics:
@@ -2570,9 +2572,6 @@ async def get_profit_feature_importance(
     authorization: Optional[str] = Header(default=None),
     limit: int = 20,
 ):
-    role = get_role(x_role, authorization)
-    require_manager(role)
-
     metrics = _load_profit_metrics()
     importance = metrics.get("feature_importance") or {}
     rows = [
@@ -2594,9 +2593,6 @@ async def get_profit_predictions(
     page: int = 1,
     sort: str = "abs_residual",
 ):
-    role = get_role(x_role, authorization)
-    require_manager(role)
-
     if not PROFIT_PREDICTIONS_PATH.exists():
         return {
             "is_trained": False,
