@@ -11,7 +11,8 @@ dependencies:
   - scikit-learn>=1.3
   # 機器學習
   - xgboost>=2.0
-  # macOS 上 XGBoost/LightGBM 載入所需 OpenMP runtime
+  # XGBoost/LightGBM compiled runtime; especially important on macOS,
+  # harmless in the shared Conda environment used by Windows teammates.
   - libomp
   # 收益預測迴歸主力（core/profit_model_pipeline.py）
   - lightgbm>=4.0

@@ -26,6 +26,16 @@ Improve the final-project readiness of EDIS / SLIDE based on six identified gaps
 | `requirements.txt` | Added `pytest>=8.0` so test commands are reproducible. |
 | `environment.yml` | Added `pytest>=8.0` and Conda `libomp` so macOS XGBoost/LightGBM tests have an OpenMP runtime. |
 
+## Windows Team Update
+
+The team primarily uses Windows, so this branch now documents Windows first:
+
+- `setup_and_run.bat` is the recommended team launcher.
+- README includes PowerShell/Conda commands and venv fallback commands.
+- README documents the PowerShell execution policy fix for venv activation.
+- README recommends Conda when compiled ML packages such as XGBoost/LightGBM fail in plain venv.
+- `environment.yml` keeps `libomp` as part of the shared Conda environment; it is harmless for Windows users and fixes OpenMP runtime availability for teammates on macOS.
+
 ## Validation Performed
 
 - Confirmed latest branch was based on current `main`.

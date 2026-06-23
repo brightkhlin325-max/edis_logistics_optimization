@@ -138,7 +138,8 @@ Teacher feedback mapping: `reports/teacher_feedback_alignment.md`
 ### Requirements
 
 - Python 3.10+
-- Conda, Miniconda, or venv
+- Windows 10/11 with Miniconda or Anaconda is recommended for team members.
+- Plain `venv` also works when Python and compiled ML dependencies are already installed correctly.
 
 ### Clone
 
@@ -147,12 +148,58 @@ git clone https://github.com/brightkhlin325-max/edis_logistics_optimization.git
 cd edis_logistics_optimization
 ```
 
-### Install
+### Windows Recommended Setup
+
+Most team members use Windows, so the safest path is:
+
+1. Install Miniconda or Anaconda.
+2. Open **Anaconda Prompt** or **PowerShell**.
+3. Run the included launcher:
+
+```bat
+setup_and_run.bat
+```
+
+The launcher will:
+
+- use `.venv\Scripts\python.exe` if a local venv already exists;
+- otherwise find Conda and create/update the `Fastapp` environment from `environment.yml`;
+- initialize the local login database;
+- start FastAPI at `http://localhost:8000/static/index.html`;
+- open the dashboard in the default browser.
+
+Manual Windows Conda commands:
+
+```powershell
+conda env create -f environment.yml
+conda activate Fastapp
+python core/auth.py
+python -m uvicorn app:app --host 127.0.0.1 --port 8000
+```
+
+Manual Windows venv commands:
+
+```powershell
+py -3.10 -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python -m pip install -r requirements.txt
+python core/auth.py
+python -m uvicorn app:app --host 127.0.0.1 --port 8000
+```
+
+If PowerShell blocks activation, run:
+
+```powershell
+Set-ExecutionPolicy -Scope CurrentUser RemoteSigned
+```
+
+Then reopen PowerShell and activate the venv again.
+
+### macOS / Linux Setup
 
 ```bash
 python -m venv .venv
 source .venv/bin/activate       # macOS / Linux
-# or .venv\Scripts\activate     # Windows PowerShell
 pip install -r requirements.txt
 ```
 
@@ -213,8 +260,12 @@ If pytest is missing in an older local environment:
 pip install -r requirements.txt
 ```
 
+Windows note: prefer Conda or the included `setup_and_run.bat` because XGBoost
+and LightGBM depend on compiled runtime libraries. If plain venv installation
+fails, recreate the `Fastapp` Conda environment from `environment.yml`.
+
 macOS note: XGBoost requires the OpenMP runtime. The provided `environment.yml`
-includes `libomp` for Conda users. If you build a plain venv and see
+includes Conda `libomp`. If you build a plain venv and see
 `Library not loaded: @rpath/libomp.dylib`, install OpenMP through your system
 package manager or use the Conda environment.
 
