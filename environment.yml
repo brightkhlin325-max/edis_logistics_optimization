@@ -11,6 +11,8 @@ dependencies:
   - scikit-learn>=1.3
   # 機器學習
   - xgboost>=2.0
+  # 收益預測迴歸主力（core/profit_model_pipeline.py）
+  - lightgbm>=4.0
   # 最佳化
   - scipy>=1.11
   - pip:

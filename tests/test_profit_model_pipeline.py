@@ -73,7 +73,10 @@ def test_profit_model_pipeline_trains_and_writes_artifacts(tmp_path):
     assert (tmp_path / "profit_predictions.csv").exists()
 
     manifest = json.loads((tmp_path / "profit_feature_manifest.json").read_text())
-    assert "Order Item Profit Ratio" in manifest["leakage_columns_blocked"]
+    # 團隊決策：Order Item Profit Ratio 視為已知 margin（合法特徵），只有 Benefit per order
+    # 仍為純洩漏（見 reports/profit_data_pipeline_decisions_2026-06-23.md §11.6）。
+    assert "Benefit per order" in manifest["leakage_columns_blocked"]
+    assert "Order Item Profit Ratio" not in manifest["leakage_columns_blocked"]
     assert manifest["feature_columns"] == [
         "Product Price",
         "Order Item Quantity",
@@ -86,7 +89,7 @@ def test_profit_model_pipeline_trains_and_writes_artifacts(tmp_path):
 
 def test_profit_model_pipeline_rejects_leakage_columns(tmp_path):
     df = _ready_frame(8)
-    df["Order Item Profit Ratio"] = 0.2
+    df["Benefit per order"] = 0.2   # 純洩漏欄（== 利潤本身）仍須被擋
     path = tmp_path / "profit_train_ready.csv"
     df.to_csv(path, index=False)
 

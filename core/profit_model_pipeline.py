@@ -22,8 +22,9 @@ try:
     import lightgbm as lgb
 except ImportError as exc:  # pragma: no cover - exercised only when dependency is missing
     raise ImportError(
-        "LightGBM is required for ProfitModelPipeline. Install with: "
-        "conda install -n AI -c conda-forge lightgbm"
+        "LightGBM is required for ProfitModelPipeline. Install into the project "
+        "environment with: conda install -n Fastapp -c conda-forge lightgbm "
+        "(or: pip install -r requirements.txt)"
     ) from exc
 
 
@@ -35,7 +36,7 @@ DEFAULT_MANIFEST_PATH = "models/profit_feature_manifest.json"
 
 LEAKAGE_COLUMNS = {
     "Benefit per order",
-    "Order Item Profit Ratio",
+    # Order Item Profit Ratio 依團隊決策視為「下單時已知 margin」→ 改列合法特徵（見 MD §11.6）。
 }
 
 NON_MODEL_COLUMNS = {
@@ -86,12 +87,18 @@ class ProfitModelPipeline:
         params: dict | None = None,
         target_column: str = TARGET_COLUMN,
         leakage_policy: str = "raise",
+        categorical_columns: list | None = None,
+        categorical_codes: dict | None = None,
     ):
         if leakage_policy not in {"raise", "drop"}:
             raise ValueError("leakage_policy must be either 'raise' or 'drop'")
         self.params = dict(params or LIGHTGBM_REGRESSOR_PARAMS)
         self.target_column = target_column
         self.leakage_policy = leakage_policy
+        # 原生類別支援：資料端以整數碼交付，這裡轉回 category dtype 交給 LightGBM 原生處理。
+        # categorical_codes[col] = 該欄所有合法整數碼（含 Unknown=0），用來固定三段 category 一致。
+        self.categorical_columns = list(categorical_columns or [])
+        self.categorical_codes = dict(categorical_codes or {})
         self.model: lgb.LGBMRegressor | lgb.Booster | None = None
         self.feature_names: list[str] = []
         self.eval_metrics: dict = {}
@@ -206,13 +213,28 @@ class ProfitModelPipeline:
         y = pd.to_numeric(df[self.target_column], errors="raise")
         X = df.drop(columns=[self.target_column])
 
-        non_numeric = sorted(X.select_dtypes(exclude=[np.number, "bool"]).columns)
+        # 指定的類別欄：整數碼 → category dtype（固定 categories 讓 train/val/test 一致），
+        # 交給 LightGBM 原生類別處理（零 target 洩漏、不爆欄）。
+        cat_cols = [c for c in self.categorical_columns if c in X.columns]
+        for c in cat_cols:
+            codes = self.categorical_codes.get(c)
+            if codes is not None:
+                X[c] = pd.Categorical(X[c], categories=codes)
+            else:
+                X[c] = X[c].astype("category")
+
+        # 其餘欄位必須是數值/布林，否則 raise（指定類別欄已豁免）。
+        numeric_cols = [c for c in X.columns if c not in cat_cols]
+        non_numeric = sorted(
+            X[numeric_cols].select_dtypes(exclude=[np.number, "bool"]).columns
+        )
         if non_numeric:
             raise ValueError(
-                "ProfitModelPipeline expects preprocessed numeric features. "
-                f"Non-numeric columns found: {', '.join(non_numeric)}"
+                "ProfitModelPipeline expects preprocessed numeric features "
+                "(non-categorical). Non-numeric columns found: "
+                f"{', '.join(non_numeric)}"
             )
-        X = X.astype(float)
+        X[numeric_cols] = X[numeric_cols].astype(float)
         return X, y
 
     def _assert_same_features(
@@ -284,15 +306,31 @@ def parse_args(argv: Iterable[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--model-dir", default="models")
     parser.add_argument("--target", default=TARGET_COLUMN)
     parser.add_argument("--leakage-policy", choices=["raise", "drop"], default="raise")
+    parser.add_argument(
+        "--schema",
+        default="data/processed/profit_feature_schema.json",
+        help="資料端輸出的 schema，標明類別欄供原生類別處理（可選）。",
+    )
     return parser.parse_args(argv)
 
 
 def main(argv: Iterable[str] | None = None) -> dict:
     args = parse_args(argv)
     val_path = args.val if os.path.exists(args.val) else None
+
+    categorical_columns: list = []
+    categorical_codes: dict = {}
+    if args.schema and os.path.exists(args.schema):
+        with open(args.schema, encoding="utf-8") as f:
+            schema = json.load(f)
+        categorical_columns = schema.get("categorical_columns", [])
+        categorical_codes = schema.get("categorical_codes", {})
+
     pipeline = ProfitModelPipeline(
         target_column=args.target,
         leakage_policy=args.leakage_policy,
+        categorical_columns=categorical_columns,
+        categorical_codes=categorical_codes,
     )
     metrics = pipeline.run(
         train_path=args.train,
