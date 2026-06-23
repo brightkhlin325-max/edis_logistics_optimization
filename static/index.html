@@ -11,6 +11,20 @@
 </head>
 <body>
 
+<!-- Splash Screen -->
+<div class="splash-screen" id="splashScreen">
+  <div class="splash-content">
+    <div class="splash-logo-container">
+      <img src="/static/slide_mark.png" alt="SLIDE Logo" class="splash-logo">
+    </div>
+    <div class="splash-title">SLIDE</div>
+    <div class="splash-subtitle">供應鏈物流智慧調度引擎</div>
+    <div class="splash-progress-container">
+      <div class="splash-progress-bar" id="splashProgressBar"></div>
+    </div>
+  </div>
+</div>
+
 <!-- ── Sidebar ── -->
 <aside class="sidebar">
   <div class="sidebar-brand">
@@ -77,6 +91,7 @@
         <button class="role-btn" onclick="setRole('manager')">Manager</button>
         <button class="role-btn" onclick="setRole('engineer')">Engineer</button>
       </div>
+      <button class="theme-switch-btn" id="themeSwitchBtn" onclick="toggleTheme()" title="切換視覺風格">🎨</button>
     </div>
   </div>
 

@@ -617,6 +617,8 @@ function getRoleFromToken() {
 
 // ── 11. 初始化與 Refresh 機制 ───────────────────────────────────────────────
 async function init() {
+  initTheme();
+  startSplashScreen();
   try {
     // 1. 載入組件 HTML
     await loadComponents();
@@ -691,3 +693,55 @@ window.displayOrderId = displayOrderId;
 window.populateRegionDropdown = populateRegionDropdown;
 window.toggleSandboxMode = toggleSandboxMode;
 window.publishSopThreshold = publishSopThreshold;
+window.toggleTheme = toggleTheme;
+
+// ── 13. 視覺模式與啟動動畫控制 ──────────────────────────────────────────────────
+function initTheme() {
+  const currentTheme = localStorage.getItem('slide_theme') || 'default';
+  if (currentTheme === 'minimalist') {
+    document.body.classList.add('theme-minimalist');
+  } else {
+    document.body.classList.remove('theme-minimalist');
+  }
+  updateThemeButton();
+}
+
+function toggleTheme() {
+  const isMinimalist = document.body.classList.toggle('theme-minimalist');
+  const theme = isMinimalist ? 'minimalist' : 'default';
+  localStorage.setItem('slide_theme', theme);
+  updateThemeButton();
+}
+
+function updateThemeButton() {
+  const btn = document.getElementById('themeSwitchBtn');
+  if (btn) {
+    const isMin = document.body.classList.contains('theme-minimalist');
+    btn.textContent = isMin ? '👁️' : '🎨';
+    btn.title = isMin ? '切換為預設風格' : '切換為極簡風格';
+  }
+}
+
+function startSplashScreen() {
+  const splash = document.getElementById('splashScreen');
+  const bar = document.getElementById('splashProgressBar');
+  if (!splash) return;
+
+  let progress = 0;
+  const interval = setInterval(() => {
+    progress += Math.random() * 15;
+    if (progress > 100) progress = 100;
+    if (bar) bar.style.width = `${progress}%`;
+
+    if (progress === 100) {
+      clearInterval(interval);
+      setTimeout(() => {
+        splash.classList.add('fade-out');
+        setTimeout(() => {
+          splash.remove();
+        }, 600);
+      }, 400);
+    }
+  }, 100);
+}
+
