@@ -51,6 +51,9 @@
     <a class="nav-item" id="nav-ai-assistant" onclick="showPage('ai-assistant')">
       <i class="nav-icon">✦</i> AI 決策助理
     </a>
+    <a class="nav-item" id="nav-profit-prediction" onclick="showPage('profit-prediction')">
+      <i class="nav-icon">$</i> 收益預測
+    </a>
     
     <div class="nav-section" id="section-engineer">Engineer 系統後台</div>
     <a class="nav-item" id="nav-model-perf" onclick="showPage('model-perf')">
@@ -109,13 +112,16 @@
     <!-- 4. MANAGER — AI ASSISTANT PANEL -->
     <div class="page-section hidden" id="page-ai-assistant" data-src="/static/components/ai_assistant.html"></div>
 
-    <!-- 5. ENGINEER — MODEL PERFORMANCE & RETRAINING PANEL -->
+    <!-- 5. MANAGER — PROFIT PREDICTION PANEL -->
+    <div class="page-section hidden" id="page-profit-prediction" data-src="/static/components/profit_prediction.html"></div>
+
+    <!-- 6. ENGINEER — MODEL PERFORMANCE & RETRAINING PANEL -->
     <div class="page-section hidden" id="page-model-perf" data-src="/static/components/model_perf.html"></div>
 
-    <!-- 6. ENGINEER — REGIONAL RISK MAP PANEL -->
+    <!-- 7. ENGINEER — REGIONAL RISK MAP PANEL -->
     <div class="page-section hidden" id="page-region-map" data-src="/static/components/region_map.html"></div>
 
-    <!-- 7. ENGINEER — RBAC PANEL -->
+    <!-- 8. ENGINEER — RBAC PANEL -->
     <div class="page-section hidden" id="page-rbac" data-src="/static/components/rbac.html"></div>
 
     <!-- H. LLM SETTINGS PANEL -->
@@ -274,6 +280,7 @@
 <script src="/static/risk_list.js"></script>
 <script src="/static/simulator.js"></script>
 <script src="/static/model_perf.js"></script>
+<script src="/static/profit_prediction.js"></script>
 <script src="/static/llm_settings.js"></script>
 <script src="/static/monthly_diagnose.js"></script>
 </body>

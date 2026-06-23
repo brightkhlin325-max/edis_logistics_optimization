@@ -113,6 +113,8 @@ function showPage(pageId) {
     if (window.loadMonthlyChart) loadMonthlyChart();
   } else if (pageId === 'model-perf') {
     if (window.loadModelPerformance) loadModelPerformance();
+  } else if (pageId === 'profit-prediction') {
+    if (window.loadProfitPrediction) loadProfitPrediction();
   } else if (pageId === 'region-map') {
     if (window.loadRegionalRisk) loadRegionalRisk();
   } else if (pageId === 'llm-settings') {
@@ -496,6 +498,7 @@ async function setRole(role) {
     'nav-optimization': true,
     'nav-risk-list': isMOrEng,
     'nav-ai-assistant': isMOrEng,
+    'nav-profit-prediction': isMOrEng,
     'nav-model-perf': isEng,
     'nav-region-map': isEng,
     'nav-rbac': isEng,
@@ -509,8 +512,8 @@ async function setRole(role) {
 
   const allowedPages = {
     viewer: ['dashboard', 'optimization'],
-    manager: ['dashboard', 'optimization', 'risk-list', 'ai-assistant', 'llm-settings'],
-    engineer: ['dashboard', 'optimization', 'risk-list', 'ai-assistant', 'model-perf', 'region-map', 'rbac', 'llm-settings']
+    manager: ['dashboard', 'optimization', 'risk-list', 'ai-assistant', 'profit-prediction', 'llm-settings'],
+    engineer: ['dashboard', 'optimization', 'risk-list', 'ai-assistant', 'profit-prediction', 'model-perf', 'region-map', 'rbac', 'llm-settings']
   };
 
   let activePageId = 'dashboard';

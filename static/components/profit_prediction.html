@@ -1,0 +1,88 @@
+<div class="page-header">
+  <h1 class="page-title">收益預測</h1>
+  <div class="page-sub">以獨立迴歸模型預測每筆訂單的 Order Profit Per Order</div>
+</div>
+
+<div id="profitEmptyState" class="panel" style="display:none; padding:24px; margin-bottom:20px;">
+  <div class="panel-head">
+    <div>
+      <div class="panel-title">尚未有收益模型結果</div>
+      <div class="panel-subtitle">請先由前處理組產出 profit_*_ready.csv，再執行 profit_model_pipeline.py。</div>
+    </div>
+  </div>
+  <div style="font-size:13px; color:var(--muted); line-height:1.7; margin-top:12px;">
+    預期輸出：<code>data/processed/profit_model_metrics.json</code>、
+    <code>data/processed/profit_predictions.csv</code>、
+    <code>models/profit_feature_manifest.json</code>
+  </div>
+</div>
+
+<div id="profitContent">
+  <div style="display:grid; grid-template-columns:repeat(4, minmax(0, 1fr)); gap:16px; margin-bottom:20px;">
+    <div class="kpi-card">
+      <div class="kpi-label">RMSE</div>
+      <div class="kpi-value" id="profitRmse">--</div>
+      <div class="kpi-foot">平均平方誤差開根號</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-label">MAE</div>
+      <div class="kpi-value" id="profitMae">--</div>
+      <div class="kpi-foot">平均絕對金額誤差</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-label">R2</div>
+      <div class="kpi-value" id="profitR2">--</div>
+      <div class="kpi-foot">收益變異解釋力</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-label">Rows / Features</div>
+      <div class="kpi-value" id="profitShape">--</div>
+      <div class="kpi-foot" id="profitTarget">Target: --</div>
+    </div>
+  </div>
+
+  <div class="grid-2" style="align-items:start;">
+    <div class="panel">
+      <div class="panel-head">
+        <div>
+          <div class="panel-title">收益影響因子</div>
+          <div class="panel-subtitle">LightGBM feature importance Top 20</div>
+        </div>
+      </div>
+      <div id="profitFeatureImportance" style="padding:18px; display:flex; flex-direction:column; gap:10px;">
+        <div style="color:var(--muted); font-size:13px;">載入中...</div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-head">
+        <div>
+          <div class="panel-title">測試集預測誤差</div>
+          <div class="panel-subtitle">依絕對誤差由大到小排序，方便快速檢查模型失準樣本</div>
+        </div>
+        <span class="tag" id="profitPredictionCount">0 rows</span>
+      </div>
+      <div class="table-scroll">
+        <table class="risk-table">
+          <thead>
+            <tr>
+              <th>樣本</th>
+              <th>實際收益</th>
+              <th>預測收益</th>
+              <th>誤差</th>
+              <th>|誤差|</th>
+            </tr>
+          </thead>
+          <tbody id="profitPredictionTableBody">
+            <tr><td colspan="5" style="text-align:center;padding:24px;color:var(--muted)">載入中...</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div style="display:flex; justify-content:space-between; align-items:center; padding:14px 18px; border-top:1px solid var(--border);">
+        <button class="run-btn" id="profitPrevBtn" onclick="changeProfitPage(-1)" style="width:auto; padding:7px 14px;">上一頁</button>
+        <span id="profitPageIndicator" style="font-size:12px; color:var(--muted);">Page 1 / 1</span>
+        <button class="run-btn" id="profitNextBtn" onclick="changeProfitPage(1)" style="width:auto; padding:7px 14px;">下一頁</button>
+      </div>
+    </div>
+  </div>
+</div>

@@ -71,6 +71,9 @@ BASE_DIR = Path(__file__).parent
 DATA_DIR = BASE_DIR / "data" / "processed"
 METRICS_PATH = DATA_DIR / "model_metrics.json"
 PREDICTIONS_PATH = DATA_DIR / "predictions.csv"
+PROFIT_METRICS_PATH = DATA_DIR / "profit_model_metrics.json"
+PROFIT_PREDICTIONS_PATH = DATA_DIR / "profit_predictions.csv"
+PROFIT_MANIFEST_PATH = BASE_DIR / "models" / "profit_feature_manifest.json"
 LLM_RUNTIME_CONFIG_PATH = DATA_DIR / "llm_runtime_config.json"
 
 # DataFrame 快取機制
@@ -2507,6 +2510,152 @@ def discard_retrain(
 
 
 # ── 全域錯誤處理 ──────────────────────────────────────────────────────────────
+
+def _load_profit_metrics() -> dict:
+    if not PROFIT_METRICS_PATH.exists():
+        return {}
+    try:
+        with open(PROFIT_METRICS_PATH, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except Exception:
+        return {}
+
+
+def _load_profit_manifest() -> dict:
+    if not PROFIT_MANIFEST_PATH.exists():
+        return {}
+    try:
+        with open(PROFIT_MANIFEST_PATH, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except Exception:
+        return {}
+
+
+@app.get("/api/profit/metrics")
+async def get_profit_metrics(
+    x_role: Optional[str] = Header(default=None),
+    authorization: Optional[str] = Header(default=None),
+):
+    role = get_role(x_role, authorization)
+    require_manager(role)
+
+    metrics = _load_profit_metrics()
+    manifest = _load_profit_manifest()
+    if not metrics:
+        return {
+            "is_trained": False,
+            "message": "Profit model metrics are not available yet. Run core/profit_model_pipeline.py after preprocessing is complete.",
+            "expected_files": [
+                str(PROFIT_METRICS_PATH.relative_to(BASE_DIR)),
+                str(PROFIT_PREDICTIONS_PATH.relative_to(BASE_DIR)),
+                str(PROFIT_MANIFEST_PATH.relative_to(BASE_DIR)),
+            ],
+        }
+
+    return {
+        "is_trained": True,
+        "metrics": metrics,
+        "manifest": {
+            "target_column": manifest.get("target_column", metrics.get("target_column", "Order Profit Per Order")),
+            "feature_count": len(manifest.get("feature_columns", [])) or metrics.get("feature_count", 0),
+            "feature_columns": manifest.get("feature_columns", []),
+            "model_path": manifest.get("model_path", "models/profit_lightgbm_model.txt"),
+        },
+    }
+
+
+@app.get("/api/profit/feature-importance")
+async def get_profit_feature_importance(
+    x_role: Optional[str] = Header(default=None),
+    authorization: Optional[str] = Header(default=None),
+    limit: int = 20,
+):
+    role = get_role(x_role, authorization)
+    require_manager(role)
+
+    metrics = _load_profit_metrics()
+    importance = metrics.get("feature_importance") or {}
+    rows = [
+        {"feature": feature, "importance": float(value)}
+        for feature, value in importance.items()
+    ]
+    rows.sort(key=lambda row: row["importance"], reverse=True)
+    return {
+        "is_trained": bool(metrics),
+        "data": rows[: max(1, min(limit, 100))],
+    }
+
+
+@app.get("/api/profit/predictions")
+async def get_profit_predictions(
+    x_role: Optional[str] = Header(default=None),
+    authorization: Optional[str] = Header(default=None),
+    limit: int = 25,
+    page: int = 1,
+    sort: str = "abs_residual",
+):
+    role = get_role(x_role, authorization)
+    require_manager(role)
+
+    if not PROFIT_PREDICTIONS_PATH.exists():
+        return {
+            "is_trained": False,
+            "count": 0,
+            "page": page,
+            "limit": limit,
+            "data": [],
+            "message": "Profit predictions are not available yet.",
+        }
+
+    df = load_cached_predictions(PROFIT_PREDICTIONS_PATH)
+    required = {"actual_profit", "predicted_profit", "residual"}
+    if not required.issubset(df.columns):
+        raise HTTPException(
+            status_code=500,
+            detail=f"profit_predictions.csv must contain columns: {sorted(required)}",
+        )
+
+    df = df.copy()
+    for col in required:
+        df[col] = pd.to_numeric(df[col], errors="coerce")
+    df = df.dropna(subset=list(required))
+    df["abs_residual"] = df["residual"].abs()
+
+    if sort == "predicted_profit":
+        df = df.sort_values("predicted_profit", ascending=False)
+    elif sort == "actual_profit":
+        df = df.sort_values("actual_profit", ascending=False)
+    else:
+        df = df.sort_values("abs_residual", ascending=False)
+
+    limit = max(1, min(limit, 100))
+    page = max(1, page)
+    total = int(len(df))
+    start = (page - 1) * limit
+    end = start + limit
+    rows = df.iloc[start:end].reset_index(drop=True)
+
+    data = []
+    for idx, row in rows.iterrows():
+        absolute_index = start + idx
+        data.append({
+            "row_id": f"profit_test_{absolute_index + 1:05d}",
+            "actual_profit": round(float(row["actual_profit"]), 4),
+            "predicted_profit": round(float(row["predicted_profit"]), 4),
+            "residual": round(float(row["residual"]), 4),
+            "abs_residual": round(float(row["abs_residual"]), 4),
+        })
+
+    return {
+        "is_trained": True,
+        "count": total,
+        "page": page,
+        "limit": limit,
+        "total_pages": int((total + limit - 1) // limit) if total else 1,
+        "sort": sort,
+        "data": data,
+    }
+
 
 @app.exception_handler(HTTPException)
 async def http_exception_handler(request: Request, exc: HTTPException):

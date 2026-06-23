@@ -171,3 +171,21 @@ def test_rbac_retrain_engineer():
     data = response.json()
     assert "task_id" in data
 
+
+def test_profit_metrics_manager_access():
+    response = client.get(
+        "/api/profit/metrics",
+        headers={"X-Role": "Logistics_Manager"},
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert "is_trained" in data
+
+
+def test_profit_metrics_viewer_forbidden():
+    response = client.get(
+        "/api/profit/metrics",
+        headers={"X-Role": "Viewer"},
+    )
+    assert response.status_code == 403
+
