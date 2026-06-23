@@ -1,5 +1,5 @@
 // ==========================================
-// simulator.js — EDIS What-if 模擬器控制與結果渲染邏輯
+// simulator.js — SLIDE What-if 模擬器控制與結果渲染邏輯
 // ==========================================
 
 async function runInstantPredict() {

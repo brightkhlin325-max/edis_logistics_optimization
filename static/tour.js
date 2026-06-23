@@ -1,5 +1,5 @@
 const _TOUR = [
-  { center:true,  icon:'🚀', title:'歡迎使用 EDIS',     desc:'這是一套物流延遲預估與優化調度系統。\n只需 1 分鐘，帶你快速認識各功能。' },
+  { center:true,  icon:'🚀', title:'歡迎使用 SLIDE',     desc:'這是一套供應鏈物流智慧調度引擎，提供延遲預估與優化調度。\n只需 1 分鐘，帶你快速認識各功能。' },
   { target:'nav-dashboard',    icon:'📊', title:'Dashboard 總覽',  desc:'查看關鍵預估指標與延遲趨勢，\n快速掌握整體物流狀況。' },
   { target:'nav-optimization', icon:'⚡', title:'最佳化調度',      desc:'設定預算，系統自動找出效益最佳的升級方案，\n降低延遲損失。' },
   { target:'nav-risk-list',    icon:'⚠️', title:'風險訂單管理',    desc:'瀏覽高風險訂單，支援搜尋與篩選，\n點擊訂單可查看延遲原因分析。（需主管與工程師權限）' },

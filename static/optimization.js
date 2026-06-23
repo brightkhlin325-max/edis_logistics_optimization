@@ -1,5 +1,5 @@
 // ==========================================
-// optimization.js — EDIS 最佳化求解與情境分析頁面邏輯
+// optimization.js — SLIDE 最佳化求解與情境分析頁面邏輯
 // ==========================================
 
 async function runOptimize() {

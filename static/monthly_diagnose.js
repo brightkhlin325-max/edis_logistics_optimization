@@ -1,5 +1,5 @@
 // ==========================================
-// monthly_diagnose.js — EDIS 月份 SLAs 診斷與重訓對比彈窗
+// monthly_diagnose.js — SLIDE 月份 SLAs 診斷與重訓對比彈窗
 // ==========================================
 
 async function loadMonthlyChart() {

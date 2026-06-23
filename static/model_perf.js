@@ -1,5 +1,5 @@
 // ==========================================
-// model_perf.js — EDIS 模型診斷與排除特徵重訓頁面邏輯
+// model_perf.js — SLIDE 模型診斷與排除特徵重訓頁面邏輯
 // ==========================================
 
 async function loadModelPerformance() {

@@ -150,7 +150,7 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(
-    title="EDIS — 物流延遲預測與最佳化調度系統",
+    title="SLIDE — 供應鏈物流智慧調度引擎",
     description="DataCo 供應鏈 AI 預測與最佳化 API（含 RBAC）",
     version="1.0.0",
     lifespan=lifespan,
@@ -554,8 +554,8 @@ def build_llm_safe_payload(
     }
 
 
-EDIS_LLM_SYSTEM_PROMPT = """
-你正在角色扮演 EDIS 物流延遲預測與最佳化調度系統裡的 AI 助理。
+SLIDE_LLM_SYSTEM_PROMPT = """
+你正在角色扮演 SLIDE 供應鏈物流智慧調度引擎裡的 AI 助理。
 
 你熟悉這個介面：Dashboard、風險訂單列表、最佳化調度、AI 助理、模型效能、區域風險地圖、RBAC 權限、LLM 設定。使用者問怎麼操作時，你就像坐在旁邊帶他用系統一樣回答。
 
@@ -570,7 +570,7 @@ EDIS_LLM_SYSTEM_PROMPT = """
 def build_llm_prompt(safe_payload: dict, language: str = "zh-TW", question: str = "") -> str:
     question_text = question.strip() or "請用自然的方式說明目前這批訂單可以怎麼判讀。"
     return (
-        "請進入 EDIS AI 助理角色，直接回答使用者。"
+        "請進入 SLIDE AI 助理角色，直接回答使用者。"
         f"請使用語言：{language}。\n"
         f"使用者問題：{question_text}\n\n"
         f"目前可參考的系統資料：{json.dumps(safe_payload, ensure_ascii=False, default=str)}"
@@ -715,9 +715,9 @@ def _derive_secret_stream(secret: str, salt: bytes, length: int) -> bytes:
 
 
 def _env_secret_protect(secret: str) -> str:
-    config_secret = os.environ.get("EDIS_LLM_CONFIG_SECRET", "")
+    config_secret = os.environ.get("SLIDE_LLM_CONFIG_SECRET", "")
     if not config_secret:
-        raise RuntimeError("非 Windows 環境需設定 EDIS_LLM_CONFIG_SECRET 才能加密儲存 API key。")
+        raise RuntimeError("非 Windows 環境需設定 SLIDE_LLM_CONFIG_SECRET 才能加密儲存 API key。")
     salt = os.urandom(16)
     data = secret.encode("utf-8")
     stream = _derive_secret_stream(config_secret, salt, len(data))
@@ -727,9 +727,9 @@ def _env_secret_protect(secret: str) -> str:
 
 
 def _env_secret_unprotect(protected_b64: str) -> str:
-    config_secret = os.environ.get("EDIS_LLM_CONFIG_SECRET", "")
+    config_secret = os.environ.get("SLIDE_LLM_CONFIG_SECRET", "")
     if not config_secret:
-        raise RuntimeError("缺少 EDIS_LLM_CONFIG_SECRET，無法解密 API key。")
+        raise RuntimeError("缺少 SLIDE_LLM_CONFIG_SECRET，無法解密 API key。")
     raw = base64.b64decode(protected_b64.encode("ascii"))
     salt, tag, cipher = raw[:16], raw[16:48], raw[48:]
     key = hashlib.sha256(config_secret.encode("utf-8")).digest()
@@ -809,15 +809,15 @@ def get_llm_config() -> dict:
     Read the backend-wide LLM provider settings.
 
     Configure before starting uvicorn:
-      EDIS_LLM_PROVIDER=local|openai|openai_compatible|gemini|claude|ollama
-      EDIS_LLM_MODEL=<provider model name>
-      EDIS_LLM_API_KEY=<provider API key>
-      EDIS_LLM_API_URL=<optional custom endpoint>
+      SLIDE_LLM_PROVIDER=local|openai|openai_compatible|gemini|claude|ollama
+      SLIDE_LLM_MODEL=<provider model name>
+      SLIDE_LLM_API_KEY=<provider API key>
+      SLIDE_LLM_API_URL=<optional custom endpoint>
     """
     runtime_config = read_llm_runtime_config()
-    provider = (runtime_config.get("provider") or os.environ.get("EDIS_LLM_PROVIDER", "")).strip().lower()
+    provider = (runtime_config.get("provider") or os.environ.get("SLIDE_LLM_PROVIDER", "")).strip().lower()
     if not provider:
-        provider = "openai" if (os.environ.get("EDIS_LLM_API_KEY") or os.environ.get("OPENAI_API_KEY")) else "local"
+        provider = "openai" if (os.environ.get("SLIDE_LLM_API_KEY") or os.environ.get("OPENAI_API_KEY")) else "local"
 
     provider_keys = {
         "openai": os.environ.get("OPENAI_API_KEY"),
@@ -827,7 +827,7 @@ def get_llm_config() -> dict:
         "ollama": "",
         "local": "",
     }
-    api_key = runtime_config.get("api_key") or os.environ.get("EDIS_LLM_API_KEY") or provider_keys.get(provider, "")
+    api_key = runtime_config.get("api_key") or os.environ.get("SLIDE_LLM_API_KEY") or provider_keys.get(provider, "")
 
     default_models = {
         "openai": "gpt-4o-mini",
@@ -846,7 +846,7 @@ def get_llm_config() -> dict:
         "local": None,
     }
 
-    configured_api_url = runtime_config.get("api_url") or os.environ.get("EDIS_LLM_API_URL") or default_urls.get(provider)
+    configured_api_url = runtime_config.get("api_url") or os.environ.get("SLIDE_LLM_API_URL") or default_urls.get(provider)
     if provider == "openai" and configured_api_url == "https://api.openai.com/v1/chat/completions":
         configured_api_url = default_urls["openai"]
 
@@ -854,7 +854,7 @@ def get_llm_config() -> dict:
         "provider": provider,
         "api_key": api_key,
         "api_url": configured_api_url,
-        "model": runtime_config.get("model") or os.environ.get("EDIS_LLM_MODEL") or default_models.get(provider),
+        "model": runtime_config.get("model") or os.environ.get("SLIDE_LLM_MODEL") or default_models.get(provider),
         "source": "manager_ui" if runtime_config else "environment",
     }
 
@@ -909,7 +909,7 @@ def call_configured_llm(prompt: str, fallback_text: str) -> dict:
                 "input": [
                     {
                         "role": "system",
-                        "content": EDIS_LLM_SYSTEM_PROMPT,
+                        "content": SLIDE_LLM_SYSTEM_PROMPT,
                     },
                     {"role": "user", "content": prompt},
                 ],
@@ -943,7 +943,7 @@ def call_configured_llm(prompt: str, fallback_text: str) -> dict:
                 "messages": [
                     {
                         "role": "system",
-                        "content": EDIS_LLM_SYSTEM_PROMPT,
+                        "content": SLIDE_LLM_SYSTEM_PROMPT,
                     },
                     {"role": "user", "content": prompt},
                 ],
@@ -967,7 +967,7 @@ def call_configured_llm(prompt: str, fallback_text: str) -> dict:
             response_id = None
             gemini_url = api_url or f"https://generativelanguage.googleapis.com/v1beta/models/{quote(model)}:generateContent?key={api_key}"
             body = json.dumps({
-                "systemInstruction": {"parts": [{"text": EDIS_LLM_SYSTEM_PROMPT}]},
+                "systemInstruction": {"parts": [{"text": SLIDE_LLM_SYSTEM_PROMPT}]},
                 "contents": [
                     {"parts": [{"text": prompt}]}
                 ],
@@ -989,7 +989,7 @@ def call_configured_llm(prompt: str, fallback_text: str) -> dict:
                 "model": model,
                 "max_tokens": 800,
                 "temperature": 0.2,
-                "system": EDIS_LLM_SYSTEM_PROMPT,
+                "system": SLIDE_LLM_SYSTEM_PROMPT,
                 "messages": [{"role": "user", "content": prompt}],
             }).encode("utf-8")
             req = UrlRequest(
@@ -998,7 +998,7 @@ def call_configured_llm(prompt: str, fallback_text: str) -> dict:
                 method="POST",
                 headers={
                     "x-api-key": api_key,
-                    "anthropic-version": os.environ.get("EDIS_LLM_ANTHROPIC_VERSION", "2023-06-01"),
+                    "anthropic-version": os.environ.get("SLIDE_LLM_ANTHROPIC_VERSION", "2023-06-01"),
                     "Content-Type": "application/json",
                 },
             )
@@ -1014,7 +1014,7 @@ def call_configured_llm(prompt: str, fallback_text: str) -> dict:
                 "messages": [
                     {
                         "role": "system",
-                        "content": EDIS_LLM_SYSTEM_PROMPT,
+                        "content": SLIDE_LLM_SYSTEM_PROMPT,
                     },
                     {"role": "user", "content": prompt},
                 ],
@@ -1280,7 +1280,7 @@ async def root():
     index_path = BASE_DIR / "static" / "index.html"
     if index_path.exists():
         return FileResponse(str(index_path), media_type="text/html")
-    return {"system": "EDIS", "version": "1.0.0", "docs": "/docs"}
+    return {"system": "SLIDE", "version": "1.0.0", "docs": "/docs"}
 
 
 @app.post("/api/upload")
@@ -2061,7 +2061,7 @@ def generate_manager_llm_brief(
     """
     [Manager 限定] 以去識別化最佳化結果產生 LLM 主管摘要。
 
-    使用 Manager UI runtime 設定；若未設定則讀取 EDIS_LLM_* 環境變數。
+    使用 Manager UI runtime 設定；若未設定則讀取 SLIDE_LLM_* 環境變數。
     """
     role = get_role(x_role, authorization)
     require_manager(role)

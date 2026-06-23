@@ -9,18 +9,18 @@ set "PYTHONIOENCODING=utf-8"
 :: LLM backend configuration template.
 :: Manager UI settings are preferred and persist encrypted in data\processed\llm_runtime_config.json.
 :: These environment defaults are used only when Manager UI settings do not exist.
-if not defined EDIS_LLM_PROVIDER set "EDIS_LLM_PROVIDER=openai"
-if not defined EDIS_LLM_MODEL set "EDIS_LLM_MODEL=gpt-4o-mini"
-if not defined EDIS_LLM_API_KEY set "EDIS_LLM_API_KEY="
+if not defined SLIDE_LLM_PROVIDER set "SLIDE_LLM_PROVIDER=openai"
+if not defined SLIDE_LLM_MODEL set "SLIDE_LLM_MODEL=gpt-4o-mini"
+if not defined SLIDE_LLM_API_KEY set "SLIDE_LLM_API_KEY="
 :: To use a free local LLM instead, install Ollama, run `ollama pull llama3.1`,
 :: then uncomment the Ollama lines below.
-:: set "EDIS_LLM_PROVIDER=ollama"
-:: set "EDIS_LLM_MODEL=llama3.1"
-:: set "EDIS_LLM_API_URL=http://localhost:11434/api/chat"
+:: set "SLIDE_LLM_PROVIDER=ollama"
+:: set "SLIDE_LLM_MODEL=llama3.1"
+:: set "SLIDE_LLM_API_URL=http://localhost:11434/api/chat"
 :: For cloud providers, change provider/model and paste your own key below.
-:: Example: set "EDIS_LLM_PROVIDER=openai"
-:: Example: set "EDIS_LLM_MODEL=gpt-4o-mini"
-:: Example: set "EDIS_LLM_API_KEY=你的_key"
+:: Example: set "SLIDE_LLM_PROVIDER=openai"
+:: Example: set "SLIDE_LLM_MODEL=gpt-4o-mini"
+:: Example: set "SLIDE_LLM_API_KEY=你的_key"
 
 set "ENV_NAME=Fastapp"
 set "APP_URL=http://localhost:8000/static/index.html"
