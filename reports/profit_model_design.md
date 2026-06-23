@@ -32,15 +32,23 @@ Each file must contain:
 The model layer rejects non-numeric features because category/date encoding belongs to
 preprocessing.
 
-## Leakage Guard
+## Leakage Guard And Margin Assumption
 
-The model layer blocks known profit leakage columns before training:
+The model layer permanently blocks known direct profit leakage:
 - `Benefit per order`
-- `Order Item Profit Ratio`
 
-It also blocks raw PII, IDs, and non-model fields listed in `core/profit_model_pipeline.py`.
-Default behavior is `--leakage-policy raise`, which fails fast and asks preprocessing to
-fix the ready files. Use `--leakage-policy drop` only for an explicit defensive drop.
+The team intentionally treats `Order Item Profit Ratio` as a known pricing-margin
+feature at decision time. This is the assumption that makes the current profit model
+useful as a pre-shipment predictor.
+
+If a real deployment only knows margin after order fulfillment, `Order Item Profit Ratio`
+must be removed and the module should be presented as retrospective profit analysis
+instead of forward-looking prediction.
+
+The model also blocks raw PII, IDs, and non-model fields listed in
+`core/profit_model_pipeline.py`. Default behavior is `--leakage-policy raise`, which
+fails fast and asks preprocessing to fix the ready files. Use `--leakage-policy drop`
+only for an explicit defensive drop.
 
 ## Outputs
 
@@ -57,6 +65,16 @@ Metrics:
 - residual mean
 - absolute residual p95
 - top 20 feature importance values
+
+Current demo metrics from the committed artifacts:
+
+| Metric | Value |
+|---|---:|
+| RMSE | 61.6712 |
+| MAE | 7.3617 |
+| R2 | 0.8069 |
+| Rows | 27,078 |
+| Features | 37 |
 
 ## Run Command
 

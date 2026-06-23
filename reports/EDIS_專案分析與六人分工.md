@@ -6,6 +6,30 @@
 
 ---
 
+## 0. 2026-06-23 最新整合狀態補充
+
+目前專案已從原本的延遲預測 MVP，擴充為 SLIDE / EDIS 決策支援系統：
+
+1. XGBoost 延遲風險預測：提供 ROC-AUC、F1、Precision、Recall、混淆矩陣與高風險訂單。
+2. PuLP 最佳化調度：把 `p_late`、預期罰金、升級成本與預算限制轉成可執行的升級建議。
+3. LIME-style / manager explanation：把模型原因轉成主管可讀的風險解釋。
+4. LightGBM 收益預測：新增 `收益預測` 頁面，展示 RMSE、MAE、R2、feature importance 與高誤差樣本。
+5. RBAC demo flow：Viewer、Logistics_Manager、Engineer 具有不同頁面與操作權限。
+6. LLM 設定與 AI 決策助理：外部 LLM 可選；沒有 API key 時仍保留本機/規則式 fallback。
+
+最後交付前應優先處理六個「專案完美度」項目：
+
+| 項目 | 修正方向 |
+|---|---|
+| README 與簡報敘事落後 | 更新為目前 SLIDE / EDIS 完整功能，不只描述舊版 XGBoost + PuLP |
+| Demo flow 分散 | 固定一條從 Dashboard → Optimization → AI Assistant → Profit Prediction → Engineer 的故事線 |
+| Profit 模型假設需誠實 | 明確說明 `Order Item Profit Ratio` 必須是決策時已知 margin，否則要視為洩漏 |
+| 測試環境缺依賴 | 將 `pytest` 納入 requirements/environment，確保 `python -m pytest` 可重現 |
+| RBAC 安全口徑 | 說明 `X-Role` 是課堂 demo 便利設計，production 應只信任 signed bearer token |
+| 老師建議回應 | 用一頁表格對應「老師建議 → 系統功能 → 展示位置」 |
+
+---
+
 ## 1. 專案核心分析
 
 ### 1.1 專案定位

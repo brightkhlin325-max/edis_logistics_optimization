@@ -5,12 +5,21 @@ Purpose: Keep backend, optimizer, and dashboard aligned during integration.
 
 ## Roles
 
-Use the `X-Role` request header.
+The current demo supports both signed bearer tokens and the `X-Role` request header.
+Bearer tokens are preferred. `X-Role` remains available so the class demo can quickly
+show role differences without a full production identity provider.
 
 | Role | Meaning | Optimize Access |
 |---|---|---|
 | `Viewer` | Can view metrics and prediction summaries | No, must return 403 |
 | `Logistics_Manager` | Can view predictions and run optimization | Yes |
+| `Engineer` | Can operate diagnostics, model maintenance, and settings | Yes |
+
+Production hardening recommendation:
+
+- Disable role decisions from raw `X-Role`.
+- Require `Authorization: Bearer <signed token>` for Manager and Engineer actions.
+- Keep `/api/login` as the only place that issues role-bearing credentials.
 
 ## GET `/api/metrics`
 
@@ -190,6 +199,39 @@ Response:
 ```
 
 Viewer must receive HTTP 403 when calling `POST /api/optimize`.
+
+## Profit Prediction Endpoints
+
+These endpoints support the `收益預測` page.
+
+### GET `/api/profit/metrics`
+
+Returns LightGBM regression metrics and model metadata.
+
+Current demo metrics:
+
+```json
+{
+  "is_trained": true,
+  "metrics": {
+    "rmse": 61.6712,
+    "mae": 7.3617,
+    "r2": 0.8069,
+    "row_count": 27078,
+    "feature_count": 37
+  }
+}
+```
+
+### GET `/api/profit/feature-importance`
+
+Returns top profit-model feature importance rows.
+
+### GET `/api/profit/predictions`
+
+Returns paginated test-set actual profit, predicted profit, residual, and absolute residual values.
+
+Important assumption: the profit model treats `Order Item Profit Ratio` as a known pricing-margin feature. If that assumption is not valid in production, retrain without the feature and present the module as retrospective analysis.
 
 Notes:
 

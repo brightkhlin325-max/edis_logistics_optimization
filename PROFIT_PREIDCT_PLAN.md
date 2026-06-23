@@ -30,7 +30,7 @@
 |---|---|---|
 | `Order Profit Per Order` | 每筆訂單利潤（金額） | ✅ **採用** |
 | `Benefit per order` | 與上面幾乎重複 | ⚠️ 重複欄位，視為洩漏 → 丟棄 |
-| `Order Item Profit Ratio` | 利潤率(%) | ❌ 由利潤推導 → 洩漏 → 丟棄 |
+| `Order Item Profit Ratio` | 利潤率 / 定價 margin | ⚠️ 若決策時已知可作為特徵；若事後才知道則視為洩漏 |
 | `Sales` / `Sales per customer` / `Order Item Total` | 營業額（收入，非利潤） | ❌ 非目標（但可當特徵） |
 
 ---
@@ -43,12 +43,14 @@
 利潤 (Order Profit Per Order) ≈ Sales × Order Item Profit Ratio
 ```
 
-若把下列欄位留作特徵，模型 R² 會逼近 1.0，看似完美但實際無用（部署後拿不到這些欄位）。
+若把事後才知道的欄位留作特徵，模型 R² 會逼近 1.0，看似完美但實際無用。報告時要主動說明哪些欄位在決策時可得，哪些欄位不可得。
 
 **訓練前必丟（洩漏欄位）：**
 - `Benefit per order`
-- `Order Item Profit Ratio`
 - 任何由利潤直接計算而來的欄位
+
+**條件式保留：**
+- `Order Item Profit Ratio`：本專案 demo 假設它是下單或定價時已知的 margin，因此保留；若實務情境中它是事後才得到，必須移除並重新訓練。
 
 **訓練前必丟（無資訊／個資／識別碼）：**
 - 個資：`Customer Email`, `Customer Password`, `Customer Fname`, `Customer Lname`, `Customer Street`, `Customer Zipcode`
