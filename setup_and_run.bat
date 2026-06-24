@@ -112,6 +112,17 @@ if not exist "data\raw\DataCoSupplyChainDataset.csv" (
 :model_outputs_ready
 echo [INFO] Model and prediction files are ready.
 
+:: 3b. Build the unified decision dataset for the ROI Simulator (only when missing).
+:: Non-fatal: if inputs are absent the app still launches; ROI pages return 404 until built.
+if exist "data\processed\decision_dataset.csv" goto decision_ready
+echo [INFO] Building decision dataset for ROI Simulator...
+call %RUN_CMD_INTERACTIVE% scripts\build_decision_dataset.py
+if errorlevel 1 (
+    echo [WARNING] Decision dataset build failed. The ROI Simulator pages will be
+    echo           unavailable until "python scripts\build_decision_dataset.py" succeeds.
+)
+:decision_ready
+
 if /I "%~1"=="tune-threshold" (
     echo [INFO] Running threshold tuning report...
     call %RUN_CMD_INTERACTIVE% scripts\tune_threshold.py

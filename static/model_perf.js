@@ -5,7 +5,10 @@
 async function loadModelPerformance() {
   const featList = document.getElementById('featureImportanceList');
   if (featList) featList.innerHTML = '載入中...';
-  
+
+  if (window.loadDeterioration) loadDeterioration();
+  if (window.loadLeakageAudit) loadLeakageAudit();
+
   try {
     const d = await fetchMetrics();
     
@@ -324,3 +327,88 @@ window.renderDiagRetrainResult = renderDiagRetrainResult;
 window.renderRetrainResult = renderRetrainResult;
 window.adoptNewModel = adoptNewModel;
 window.discardNewModel = discardNewModel;
+
+// ==========================================
+// 診斷落地：帳戶劣化趨勢 + forecast（點3）、洩漏守門狀態（點4）
+// 防 overflow：圖表先 destroy 再建；切換 unit 只重抓本面板。
+// ==========================================
+let _deterChart = null;
+const _mpMoney = (v) => (v < 0 ? '-$' : '$') + Math.abs(Math.round(v)).toLocaleString();
+
+async function loadDeterioration() {
+  const unit = document.getElementById('deterUnit')?.value || 'segment';
+  try {
+    const d = await fetch(`${API_BASE}/api/diagnose/deterioration?unit=${unit}&penalty=250`).then(r => r.json());
+    renderDeterChart(d.series || []);
+    const body = document.getElementById('deterBody');
+    if (body) body.innerHTML = (d.deteriorating || []).map(g => `
+      <tr><td>${g.group}</td>
+      <td style="font-weight:700;color:${g.trend_slope < 0 ? '#b91c1c' : '#15803d'};">${g.trend_slope}</td>
+      <td>${_mpMoney(g.last_net_of_service)}</td>
+      <td>${_mpMoney(g.forecast_next)}</td></tr>`).join('')
+      || `<tr><td colspan="4" style="text-align:center;padding:20px;color:var(--muted)">資料不足</td></tr>`;
+  } catch (e) { console.error('deterioration', e); }
+}
+
+function renderDeterChart(series) {
+  const canvas = document.getElementById('deterChart');
+  const fb = document.getElementById('deterFallback');
+  if (!window.Chart || !canvas) { if (fb) { fb.style.display = 'block'; } if (canvas) canvas.style.display = 'none'; return; }
+  if (fb) fb.style.display = 'none';
+  canvas.style.display = 'block';
+  // 月份取聯集排序，避免群組月份不一致時錯位
+  const monthSet = new Set();
+  series.forEach(s => s.months.forEach(m => monthSet.add(m)));
+  const labels = Array.from(monthSet).sort();
+  labels.push('下月(預測)');
+  const palette = ['#437096', '#e07b54', '#15803d', '#9b59b6', '#d68910', '#16a085', '#c0392b'];
+  const datasets = series.map((s, i) => {
+    const map = {};
+    s.months.forEach((m, j) => { map[m] = s.net_of_service[j]; });
+    const data = labels.slice(0, -1).map(m => (m in map ? map[m] : null));
+    data.push(s.forecast_next);   // 最後一格＝外推預測
+    return { label: s.group, data, borderColor: palette[i % palette.length], backgroundColor: 'transparent', tension: 0.25, spanGaps: true, pointRadius: 2, borderWidth: 2 };
+  });
+  if (_deterChart) { _deterChart.destroy(); _deterChart = null; }
+  _deterChart = new Chart(canvas.getContext('2d'), {
+    type: 'line',
+    data: { labels, datasets },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { position: 'bottom', labels: { boxWidth: 12, font: { size: 11 } } },
+        tooltip: { callbacks: { label: (c) => `${c.dataset.label}: ${_mpMoney(c.parsed.y)}` } } },
+      scales: { y: { title: { display: true, text: '真價值 Net-of-Service $' } } },
+    },
+  });
+}
+
+async function loadLeakageAudit() {
+  try {
+    const d = await fetch(`${API_BASE}/api/profit/leakage-audit`).then(r => r.json());
+    const tag = document.getElementById('leakGateTag');
+    if (tag) { tag.textContent = d.gate_status === 'PASS' ? '✓ PASS' : '✗ FAIL';
+      tag.style.background = d.gate_status === 'PASS' ? 'var(--success)' : 'var(--danger)'; tag.style.color = 'white'; }
+    const lbl = d.column_labeling || {};
+    const body = document.getElementById('leakAuditBody');
+    if (body) body.innerHTML = `
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;">
+        <div>
+          <div style="font-size:12px;font-weight:700;margin-bottom:6px;">被擋欄位 (Blocked)</div>
+          <div style="font-size:11px;color:var(--muted);line-height:1.8;">
+            洩漏：${(d.blocked?.leakage || []).join('、') || '—'}<br>
+            個資：${(d.blocked?.pii || []).length} 欄、ID：${(d.blocked?.id || []).length} 欄、雜訊：${(d.blocked?.noise || []).length} 欄</div>
+          <div style="font-size:12px;font-weight:700;margin:12px 0 6px;">白名單 (Whitelist)</div>
+          ${(d.whitelist || []).map(w => `<div style="font-size:11px;color:var(--muted);line-height:1.6;">• <b>${w.column}</b>：${w.reason}</div>`).join('')}
+          <div style="font-size:11px;color:var(--muted);margin-top:10px;">守門規則：${d.identity_corr_guard?.rule || ''}<br>位置：<code>${d.identity_corr_guard?.enforced_in || ''}</code></div>
+        </div>
+        <div>
+          <div style="font-size:12px;font-weight:700;margin-bottom:6px;">欄位標示 (actual / pred)</div>
+          ${Object.entries(lbl).map(([k, v]) => `<div style="font-size:11px;line-height:1.7;padding:6px 8px;background:var(--slate-lt);border-radius:6px;margin-bottom:5px;"><b>${k}</b><br><span style="color:var(--muted);">${v}</span></div>`).join('')}
+          <div style="font-size:11px;color:var(--muted);margin-top:8px;">特徵數：${d.feature_count}；洩漏入侵：${(d.leaked_in_features || []).length === 0 ? '無' : d.leaked_in_features.join('、')}</div>
+        </div>
+      </div>`;
+  } catch (e) { console.error('leakage audit', e); }
+}
+
+window.loadDeterioration = loadDeterioration;
+window.loadLeakageAudit = loadLeakageAudit;
