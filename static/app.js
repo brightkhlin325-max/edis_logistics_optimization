@@ -115,6 +115,8 @@ function showPage(pageId) {
     if (window.loadRegionalRisk) loadRegionalRisk();
   } else if (pageId === 'optimization') {
     if (window.loadMonthlyChart) loadMonthlyChart();
+  } else if (pageId === 'roi-simulator') {
+    if (window.loadRoiSimulator) loadRoiSimulator();
   } else if (pageId === 'model-perf') {
     if (window.loadModelPerformance) loadModelPerformance();
   } else if (pageId === 'profit-prediction') {
@@ -500,6 +502,7 @@ async function setRole(role) {
   const navItems = {
     'nav-dashboard': true,
     'nav-optimization': true,
+    'nav-roi-simulator': true,
     'nav-risk-list': isMOrEng,
     'nav-ai-assistant': isMOrEng,
     'nav-profit-prediction': true,
@@ -515,9 +518,9 @@ async function setRole(role) {
   }
 
   const allowedPages = {
-    viewer: ['dashboard', 'optimization', 'profit-prediction'],
-    manager: ['dashboard', 'optimization', 'risk-list', 'ai-assistant', 'profit-prediction', 'llm-settings'],
-    engineer: ['dashboard', 'optimization', 'risk-list', 'ai-assistant', 'profit-prediction', 'model-perf', 'region-map', 'rbac', 'llm-settings']
+    viewer: ['dashboard', 'optimization', 'roi-simulator', 'profit-prediction'],
+    manager: ['dashboard', 'optimization', 'roi-simulator', 'risk-list', 'ai-assistant', 'profit-prediction', 'llm-settings'],
+    engineer: ['dashboard', 'optimization', 'roi-simulator', 'risk-list', 'ai-assistant', 'profit-prediction', 'model-perf', 'region-map', 'rbac', 'llm-settings']
   };
 
   let activePageId = 'dashboard';
@@ -596,8 +599,9 @@ async function setRole(role) {
   }
 
   updateSopUI();
+  if (window.syncRoiSimulatorRole) syncRoiSimulatorRole();
   if (window.refreshDashboard) refreshDashboard();
-  
+
   const riskPage = document.getElementById('page-risk-list');
   if (riskPage && !riskPage.classList.contains('hidden') && window.applyFilters) {
     applyFilters();

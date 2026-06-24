@@ -66,6 +66,21 @@ ID_COLUMNS = [
 NOISE_COLUMNS = ["Order Zipcode", "Product Description", "Product Image"]
 REDUNDANT_DATE_COLUMNS = ["shipping date (DateOrders)"]
 
+# 乘積式恆等洩漏守門（SLIDE 落地點 4 / E5）：
+#   對「非白名單」的單欄或欄位乘積與目標近似恆等（|corr| > 門檻）報錯，
+#   攔下未預期的洩漏；margin（下單已知毛利率）× total = 利潤屬「已知意圖」白名單放行。
+IDENTITY_CORR_THRESHOLD = 0.98
+MARGIN_WHITELIST = {"Order Item Profit Ratio"}
+
+
+def _abs_corr(x: pd.Series, y: pd.Series) -> float:
+    """穩健的 |Pearson corr|：零變異/NaN 一律回 0，避免除零警告與誤判。"""
+    sx, sy = float(x.std()), float(y.std())
+    if sx < 1e-12 or sy < 1e-12:
+        return 0.0
+    r = float(np.corrcoef(x.to_numpy(dtype=float), y.to_numpy(dtype=float))[0, 1])
+    return 0.0 if np.isnan(r) else abs(r)
+
 NUMERIC_FEATURES = [
     "Days for shipping (real)", "Days for shipment (scheduled)",
     "Sales per customer", "Late_delivery_risk", "Latitude", "Longitude",
@@ -303,6 +318,30 @@ class ProfitDataPipeline:
         leaked = [c for c in (LEAKAGE_COLUMNS + PII_COLUMNS + ID_COLUMNS) if c in feat]
         if leaked:
             errors.append(f"洩漏/個資/ID 欄出現在特徵中：{leaked}")
+
+        # 乘積式恆等洩漏守門（SLIDE 落地點 4 / E5）：非白名單單欄/乘積與目標近似恆等 → 報錯
+        import itertools
+        num_feats = [c for c in a["numeric_columns"] if c in feat]
+        y_target = pd.to_numeric(train[TARGET_COLUMN], errors="coerce")
+        y_target = y_target.fillna(y_target.median())
+        series: dict[str, pd.Series] = {}
+        for c in num_feats:
+            s = pd.to_numeric(train[c], errors="coerce")
+            s = s.fillna(s.median())
+            if float(s.std()) > 1e-9:          # 跳過零變異欄（如 Product Status 全常數）
+                series[c] = s
+        for c, s in series.items():
+            if c in MARGIN_WHITELIST:
+                continue
+            if _abs_corr(s, y_target) > IDENTITY_CORR_THRESHOLD:
+                errors.append(f"單欄近似恆等洩漏：{c}（|corr| > {IDENTITY_CORR_THRESHOLD}）")
+        for a_col, b_col in itertools.combinations(series.keys(), 2):
+            if a_col in MARGIN_WHITELIST or b_col in MARGIN_WHITELIST:
+                continue                        # margin × total＝利潤，已知意圖白名單放行
+            if _abs_corr(series[a_col] * series[b_col], y_target) > IDENTITY_CORR_THRESHOLD:
+                errors.append(
+                    f"乘積式恆等洩漏：{a_col} × {b_col}（|corr| > {IDENTITY_CORR_THRESHOLD}）"
+                )
 
         for name, t in (("train", train_t), ("val", val_t), ("test", test_t)):
             if int(t[feat].isna().sum().sum()):

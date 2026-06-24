@@ -1215,9 +1215,8 @@ def predict_single_order(
     import pandas as _pd
     row_df = _pd.DataFrame([X])[feature_cols].fillna(0)
 
-    # ── 模型推論 ─────────────────────────────────────────────────────
-    model = xgb.XGBClassifier()
-    model.load_model(str(model_path))
+    # ── 模型推論（cached model：避免每次請求重載，What-if 掃描可重用）──
+    model = _get_delay_xgb_model(model_path)
     p_late = float(model.predict_proba(row_df)[:, 1][0])
 
     # ── 後處理 ───────────────────────────────────────────────────────
@@ -2650,6 +2649,519 @@ async def get_profit_predictions(
         "total_pages": int((total + limit - 1) // limit) if total else 1,
         "sort": sort,
         "data": data,
+    }
+
+
+# ════════════════════════════════════════════════════════════════════════════
+# 最佳化ROI模擬器 + 模型診斷落地（SLIDE 決策框架點 1–4）
+#   - 資料基礎：data/processed/decision_dataset.csv（scripts/build_decision_dataset.py 產出）
+#   - 全部「新增」端點，不更動既有路由/資料來源（零衝突）。
+#   - 重模型/資料一律 cache（mtime / 單例），避免每請求重載造成效能與重入問題。
+# ════════════════════════════════════════════════════════════════════════════
+
+DECISION_DATASET_PATH = DATA_DIR / "decision_dataset.csv"
+DECISION_SUMMARY_PATH = DATA_DIR / "decision_dataset_summary.json"
+DECISION_TRUST_PATH = DATA_DIR / "decision_trust_map.json"
+
+_XGB_MODEL_CACHE: dict = {}
+_PROFIT_RUNTIME: dict = {}
+
+
+def _get_delay_xgb_model(model_path: Path):
+    """以 mtime 快取載入 XGBoost 延遲模型（單例，供單筆預測與 What-if 重用）。"""
+    import xgboost as xgb
+    mtime = model_path.stat().st_mtime
+    entry = _XGB_MODEL_CACHE.get(model_path)
+    if entry is None or entry["mtime"] != mtime:
+        model = xgb.XGBClassifier()
+        model.load_model(str(model_path))
+        _XGB_MODEL_CACHE[model_path] = {"mtime": mtime, "model": model}
+        return model
+    return entry["model"]
+
+
+def _get_profit_runtime() -> dict:
+    """單例載入收益模型 runtime（pipeline 編碼 + LightGBM booster + schema）。"""
+    if not _PROFIT_RUNTIME:
+        import lightgbm as lgb
+        from profit_data_pipeline import ProfitDataPipeline
+
+        artifacts_path = BASE_DIR / "models" / "profit" / "serving_artifacts.json"
+        schema_path = DATA_DIR / "profit_feature_schema.json"
+        model_path = BASE_DIR / "models" / "profit_lightgbm_model.txt"
+        if not (artifacts_path.exists() and schema_path.exists() and model_path.exists()):
+            raise HTTPException(status_code=503, detail="收益模型尚未就緒，請先執行收益管線與訓練。")
+
+        with open(artifacts_path, encoding="utf-8") as f:
+            artifacts = json.load(f)
+        with open(schema_path, encoding="utf-8") as f:
+            schema = json.load(f)
+        pipe = ProfitDataPipeline()
+        pipe.artifacts = artifacts
+        _PROFIT_RUNTIME.update(
+            pipe=pipe, schema=schema,
+            booster=lgb.Booster(model_file=str(model_path)),
+        )
+    return _PROFIT_RUNTIME
+
+
+def _load_decision_df() -> pd.DataFrame:
+    """載入統一決策資料集（mtime 快取）。"""
+    if not DECISION_DATASET_PATH.exists():
+        raise HTTPException(
+            status_code=404,
+            detail="decision_dataset.csv 尚未產生，請先執行：python scripts/build_decision_dataset.py",
+        )
+    return load_cached_predictions(DECISION_DATASET_PATH)
+
+
+def _apply_value_risk(df: pd.DataFrame, value_axis: str, risk_axis: str, penalty: float) -> pd.DataFrame:
+    """依使用者選的價值/風險軸與罰金，計算 value/risk 欄（不污染快取，操作於 copy）。"""
+    df = df.copy()
+    # net_of_service 隨 penalty 重算（真延遲 true_label × 罰金）；profit_actual 不受罰金影響
+    df["net_of_service"] = (df["profit_actual"] - df["true_label"] * penalty).round(4)
+    df["value"] = df["net_of_service"] if value_axis == "net_of_service" else df["profit_actual"]
+    df["risk"] = df["true_label"] if risk_axis == "true_label" else df["p_late"]
+    return df
+
+
+def _filter_decision(df: pd.DataFrame, segment, region, category, shipping, discount_band) -> pd.DataFrame:
+    if segment:
+        df = df[df["customer_segment"] == segment]
+    if region:
+        df = df[df["order_region"] == region]
+    if category:
+        df = df[df["category_name"] == category]
+    if shipping:
+        df = df[df["shipping_mode"] == shipping]
+    if discount_band == "low":
+        df = df[df["discount_rate"] < 0.10]
+    elif discount_band == "mid":
+        df = df[(df["discount_rate"] >= 0.10) & (df["discount_rate"] < 0.25)]
+    elif discount_band == "high":
+        df = df[df["discount_rate"] >= 0.25]
+    return df
+
+
+class ProfitSingleRequest(BaseModel):
+    shipping_mode: str = "Standard Class"
+    order_region: str = "Western Europe"
+    category_name: str = "Cleats"
+    customer_segment: str = "Consumer"
+    market: str = "Europe"
+    product_price: float = 59.99
+    order_item_quantity: int = 1
+    discount_rate: float = 0.1
+    days_for_shipment: float = 4.0
+    order_date: Optional[str] = None
+    sales: Optional[float] = None
+
+
+class WhatIfRequest(ProfitSingleRequest):
+    discount_grid: list[float] = [0.0, 0.05, 0.1, 0.15, 0.2, 0.25]
+    mode_grid: list[str] = ["Standard Class", "Second Class", "First Class", "Same Day"]
+    penalty: float = 250.0
+
+
+def _build_profit_raw_row(f: dict) -> pd.DataFrame:
+    """把 What-if 槓桿組成「原始格式單列」，其餘欄位留空 → 由 pipeline 以 SSOT 中位數/Unknown 補。"""
+    import numpy as np
+    from profit_data_pipeline import (
+        NUMERIC_FEATURES, CATEGORICAL_FEATURES, DATE_COLUMN, TARGET_COLUMN,
+    )
+    row = {c: np.nan for c in NUMERIC_FEATURES}
+    row.update({c: np.nan for c in CATEGORICAL_FEATURES})
+    row[DATE_COLUMN] = f.get("order_date") or "2017-06-15 12:00"
+    row[TARGET_COLUMN] = np.nan
+    if f.get("shipping_mode"):
+        row["Shipping Mode"] = f["shipping_mode"]
+    if f.get("customer_segment"):
+        row["Customer Segment"] = f["customer_segment"]
+    if f.get("order_region"):
+        row["Order Region"] = f["order_region"]
+    if f.get("category_name"):
+        row["Category Name"] = f["category_name"]
+    if f.get("market"):
+        row["Market"] = f["market"]
+    if f.get("discount_rate") is not None:
+        row["Order Item Discount Rate"] = f["discount_rate"]
+    if f.get("product_price") is not None:
+        row["Product Price"] = f["product_price"]
+        row["Order Item Product Price"] = f["product_price"]
+    if f.get("order_item_quantity") is not None:
+        row["Order Item Quantity"] = f["order_item_quantity"]
+    if f.get("days_for_shipment") is not None:
+        row["Days for shipment (scheduled)"] = f["days_for_shipment"]
+    sales = f.get("sales")
+    if sales is None and f.get("product_price") is not None and f.get("order_item_quantity") is not None:
+        sales = float(f["product_price"]) * float(f["order_item_quantity"]) * (1 - float(f.get("discount_rate") or 0))
+    if sales is not None:
+        row["Sales"] = sales
+        row["Order Item Total"] = sales
+        row["Sales per customer"] = sales
+    return pd.DataFrame([row])
+
+
+def _predict_profit_single(features: dict) -> float:
+    """收益模型單筆評分（沿用 ProfitDataPipeline.transform 編碼，零漂移）。"""
+    rt = _get_profit_runtime()
+    ready = rt["pipe"].transform(_build_profit_raw_row(features))
+    cols = rt["schema"]["feature_columns"]
+    cat = rt["schema"].get("categorical_columns", [])
+    codes = rt["schema"].get("categorical_codes", {})
+    X = ready[cols].copy()
+    for c in cat:
+        if c in X.columns:
+            cc = codes.get(c)
+            X[c] = pd.Categorical(X[c], categories=cc) if cc is not None else X[c].astype("category")
+    numeric_cols = [c for c in X.columns if c not in cat]
+    X[numeric_cols] = X[numeric_cols].astype(float)
+    return float(rt["booster"].predict(X)[0])
+
+
+@app.get("/api/roi/summary")
+async def roi_summary(
+    penalty: float = 250.0,
+    x_role: Optional[str] = Header(default=None),
+    authorization: Optional[str] = Header(default=None),
+):
+    """ROI 模擬器頂部 KPI：帳載利潤 vs 真價值(net-of-service)、被服務侵蝕、假性賺錢比例、EPAR。"""
+    df = _load_decision_df()
+    penalty = max(0.0, float(penalty))
+    nos = df["profit_actual"] - df["true_label"] * penalty
+    fp = int(((df["profit_actual"] > 0) & (nos < 0)).sum())
+    profit_pos = int((df["profit_actual"] > 0).sum())
+    book = float(df["profit_actual"].sum())
+    nos_total = float(nos.sum())
+    by_seg = []
+    for seg, g in df.groupby("customer_segment"):
+        g_nos = g["profit_actual"] - g["true_label"] * penalty
+        by_seg.append({
+            "segment": str(seg),
+            "orders": int(len(g)),
+            "book_profit": round(float(g["profit_actual"].sum()), 2),
+            "net_of_service": round(float(g_nos.sum()), 2),
+            "epar": round(float(g["epar"].sum()), 2),
+        })
+    by_seg.sort(key=lambda r: r["net_of_service"])
+    return {
+        "rows_orders": int(len(df)),
+        "penalty_basis": penalty,
+        "book_profit_total": round(book, 2),
+        "net_of_service_total": round(nos_total, 2),
+        "service_erosion_total": round(book - nos_total, 2),
+        "false_positive_value_orders": fp,
+        "profit_positive_orders": profit_pos,
+        "false_positive_value_pct": round(fp / profit_pos, 4) if profit_pos else 0.0,
+        "epar_total": round(float(df["epar"].sum()), 2),
+        "by_segment": by_seg,
+    }
+
+
+@app.get("/api/roi/portfolio")
+async def roi_portfolio(
+    value_axis: str = "net_of_service",
+    risk_axis: str = "p_late",
+    segment: Optional[str] = None,
+    region: Optional[str] = None,
+    category: Optional[str] = None,
+    shipping: Optional[str] = None,
+    discount_band: Optional[str] = None,
+    penalty: float = 250.0,
+    max_points: int = 1500,
+    x_role: Optional[str] = Header(default=None),
+    authorization: Optional[str] = Header(default=None),
+):
+    """真價值-風險散點 + 預期在險利潤(EPAR)名單；支援軸切換與 faceted 篩選。"""
+    df = _apply_value_risk(_load_decision_df(), value_axis, risk_axis, max(0.0, float(penalty)))
+    df = _filter_decision(df, segment, region, category, shipping, discount_band)
+    total = int(len(df))
+
+    # 散點封頂取樣，避免巨量 payload 與前端卡頓（不是無效迴圈，是保護）
+    max_points = max(100, min(int(max_points), 3000))
+    sample = df.sample(n=max_points, random_state=42) if total > max_points else df
+    points = [
+        {
+            "id": make_display_order_id(r.order_id_hash),
+            "value": round(float(r.value), 2),
+            "risk": round(float(r.risk), 4),
+            "epar": round(float(r.epar), 2),
+            "segment": str(r.customer_segment),
+            "region": str(r.order_region),
+            "fp": int(r.is_false_positive_value),
+        }
+        for r in sample.itertuples(index=False)
+    ]
+
+    at_risk = df.sort_values("epar", ascending=False).head(50)
+    at_risk_list = [
+        {
+            "id": make_display_order_id(r.order_id_hash),
+            "epar": round(float(r.epar), 2),
+            "profit_actual": round(float(r.profit_actual), 2),
+            "p_late": round(float(r.p_late), 4),
+            "net_of_service": round(float(r.net_of_service), 2),
+            "segment": str(r.customer_segment),
+            "region": str(r.order_region),
+            "risk_bucket": str(r.risk_bucket),
+        }
+        for r in at_risk.itertuples(index=False)
+    ]
+
+    return {
+        "value_axis": value_axis,
+        "risk_axis": risk_axis,
+        "total_filtered": total,
+        "points_returned": len(points),
+        "truncated": total > max_points,
+        "points": points,
+        "at_risk_list": at_risk_list,
+        "filters": {
+            "segments": sorted(_load_decision_df()["customer_segment"].dropna().unique().tolist()),
+            "regions": sorted(_load_decision_df()["order_region"].dropna().unique().tolist()),
+        },
+    }
+
+
+@app.post("/api/roi/optimize")
+def roi_optimize(
+    body: OptimizeRequest,
+    x_role: Optional[str] = Header(default=None),
+    authorization: Optional[str] = Header(default=None),
+):
+    """[Manager] 在決策資料集上跑 ROI 最佳化（重用既有 ShippingOptimizer），附 EPAR 與客戶層彙整。"""
+    role = get_role(x_role, authorization)
+    require_manager(role)
+    if ShippingOptimizer is None:
+        raise HTTPException(status_code=500, detail="optimizer.py 載入失敗，請確認 core/ 目錄存在。")
+
+    df = _load_decision_df()
+    optimizer = ShippingOptimizer(
+        budget=body.budget,
+        upgrade_cost=body.upgrade_cost,
+        delay_penalty=body.delay_penalty,
+        risk_threshold=body.risk_threshold,
+    )
+    result = optimizer.run(predictions_path_or_df=df, output_dir=str(DATA_DIR), save_results=False)
+    res = result.to_dict()
+
+    dmap = df.set_index("order_id_hash")
+    rollup: dict = {}
+    for o in res.get("selected_orders", []):
+        h = o.get("order_id_hash")
+        if h in dmap.index:
+            r = dmap.loc[h]
+            o["profit_actual"] = round(float(r["profit_actual"]), 2)
+            o["epar"] = round(float(r["epar"]), 2)
+            o["customer_segment"] = str(r["customer_segment"])
+            o["display_order_id"] = make_display_order_id(h)
+            cid = str(r["customer_id_hash"])
+            c = rollup.setdefault(cid, {
+                "customer": make_display_order_id(cid).replace("ORD-", "CUST-"),
+                "orders": 0, "epar": 0.0, "net_benefit": 0.0, "upgrade_cost": 0.0,
+            })
+            c["orders"] += 1
+            c["epar"] += float(r["epar"])
+            c["net_benefit"] += float(o.get("net_benefit", o.get("expected_saving", 0)) or 0)
+            c["upgrade_cost"] += float(o.get("upgrade_cost", 0) or 0)
+
+    customers = sorted(rollup.values(), key=lambda x: x["epar"], reverse=True)[:20]
+    for c in customers:
+        c["epar"] = round(c["epar"], 2)
+        c["net_benefit"] = round(c["net_benefit"], 2)
+        c["upgrade_cost"] = round(c["upgrade_cost"], 2)
+
+    res["role"] = role
+    res["customer_rollup"] = customers
+    res["candidate_pool"] = int((df["p_late"] >= body.risk_threshold).sum())
+    return res
+
+
+@app.post("/api/profit/predict-single")
+def profit_predict_single(
+    body: ProfitSingleRequest,
+    x_role: Optional[str] = Header(default=None),
+    authorization: Optional[str] = Header(default=None),
+):
+    """收益模型單筆預測（What-if 基礎）。"""
+    profit_pred = _predict_profit_single(body.dict())
+    return {"predicted_profit": round(profit_pred, 2)}
+
+
+@app.post("/api/roi/whatif")
+def roi_whatif(
+    body: WhatIfRequest,
+    x_role: Optional[str] = Header(default=None),
+    authorization: Optional[str] = Header(default=None),
+):
+    """What-if 模擬：掃 折扣 × 運送 網格 → 預測收益 + 預測延遲 → 預期淨值；回最佳組合 + 熱圖。"""
+    # 網格封頂，避免巨量組合造成過載（非無效迴圈，是上限保護）
+    discounts = list(dict.fromkeys([round(float(d), 4) for d in body.discount_grid]))[:8]
+    modes = list(dict.fromkeys([str(m) for m in body.mode_grid]))[:6]
+    if not discounts or not modes:
+        raise HTTPException(status_code=400, detail="discount_grid 與 mode_grid 不可為空。")
+    penalty = max(0.0, float(body.penalty))
+
+    base = body.dict()
+    grid = []
+    best = None
+    for disc in discounts:
+        for mode in modes:
+            feat = {**base, "discount_rate": disc, "shipping_mode": mode}
+            profit_pred = _predict_profit_single(feat)
+            delay_req = SingleOrderPredictRequest(
+                shipping_mode=mode,
+                order_region=body.order_region,
+                days_for_shipment=body.days_for_shipment,
+                product_price=body.product_price,
+                order_item_quantity=body.order_item_quantity,
+                customer_segment=body.customer_segment,
+                market=body.market,
+                order_date=body.order_date,
+                order_item_discount_rate=disc,
+            )
+            delay = predict_single_order(delay_req)   # 重用既有延遲單筆預測（cached model）
+            p_late = float(delay["p_late"])
+            net = profit_pred - p_late * penalty
+            cell = {
+                "discount_rate": disc,
+                "shipping_mode": mode,
+                "profit_pred": round(profit_pred, 2),
+                "p_late": round(p_late, 4),
+                "expected_net": round(net, 2),
+            }
+            grid.append(cell)
+            if best is None or net > best["expected_net"]:
+                best = cell
+
+    decision = "接單 (Accept)" if best and best["expected_net"] > 0 else "婉拒/重議 (Decline/Renegotiate)"
+    return {
+        "best": best,
+        "decision": decision,
+        "penalty_basis": penalty,
+        "grid": grid,
+        "discounts": discounts,
+        "modes": modes,
+    }
+
+
+@app.get("/api/roi/trust-map")
+async def roi_trust_map(
+    x_role: Optional[str] = Header(default=None),
+    authorization: Optional[str] = Header(default=None),
+):
+    """預測-vs-實際校準 trust map（樣本外；由 build_decision_dataset.py 預算）。"""
+    if not DECISION_TRUST_PATH.exists():
+        raise HTTPException(
+            status_code=404,
+            detail="decision_trust_map.json 尚未產生，請先執行 scripts/build_decision_dataset.py",
+        )
+    with open(DECISION_TRUST_PATH, encoding="utf-8") as f:
+        return json.load(f)
+
+
+@app.get("/api/diagnose/deterioration")
+async def diagnose_deterioration(
+    unit: str = "segment",
+    penalty: float = 250.0,
+    x_role: Optional[str] = Header(default=None),
+    authorization: Optional[str] = Header(default=None),
+):
+    """[診斷] 帳戶劣化趨勢：客群/區域 逐月真價值與延遲率 + 簡單線性外推下月。"""
+    import numpy as np
+    col = "customer_segment" if unit == "segment" else "order_region"
+    df = _load_decision_df().copy()
+    penalty = max(0.0, float(penalty))
+    df["net_of_service"] = df["profit_actual"] - df["true_label"] * penalty
+    dt = pd.to_datetime(df["order_date"], errors="coerce")
+    df = df.assign(_month=dt.dt.to_period("M").astype(str)).dropna(subset=["_month"])
+    df = df[df["_month"] != "NaT"]
+
+    series = []
+    deteriorating = []
+    for name, g in df.groupby(col):
+        monthly = g.groupby("_month").agg(
+            net_of_service=("net_of_service", "sum"),
+            late_rate=("true_label", "mean"),
+            orders=("order_id_hash", "count"),
+        ).reset_index().sort_values("_month")
+        if len(monthly) < 3:
+            continue
+        months = monthly["_month"].tolist()
+        nos_vals = monthly["net_of_service"].tolist()
+        late_vals = monthly["late_rate"].tolist()
+        x = np.arange(len(nos_vals), dtype=float)
+        slope = float(np.polyfit(x, nos_vals, 1)[0])
+        forecast = float(np.polyval(np.polyfit(x, nos_vals, 1), len(nos_vals)))
+        series.append({
+            "group": str(name),
+            "months": months,
+            "net_of_service": [round(float(v), 2) for v in nos_vals],
+            "late_rate": [round(float(v), 4) for v in late_vals],
+            "orders": [int(v) for v in monthly["orders"].tolist()],
+            "trend_slope": round(slope, 2),
+            "forecast_next": round(forecast, 2),
+        })
+        deteriorating.append({
+            "group": str(name),
+            "trend_slope": round(slope, 2),
+            "last_net_of_service": round(float(nos_vals[-1]), 2),
+            "forecast_next": round(forecast, 2),
+        })
+
+    deteriorating.sort(key=lambda r: r["trend_slope"])
+    return {
+        "unit": unit,
+        "penalty_basis": penalty,
+        "series": series,
+        "deteriorating": deteriorating,
+        "note": "forecast 為各群逐月真價值的線性趨勢外推（簡單法），僅供方向參考。",
+    }
+
+
+@app.get("/api/profit/leakage-audit")
+async def profit_leakage_audit(
+    x_role: Optional[str] = Header(default=None),
+    authorization: Optional[str] = Header(default=None),
+):
+    """[診斷] 洩漏守門狀態 + actual/pred 欄位標示（落地點 4 的檢視層）。"""
+    try:
+        from profit_data_pipeline import LEAKAGE_COLUMNS, PII_COLUMNS, ID_COLUMNS, NOISE_COLUMNS
+    except Exception:
+        LEAKAGE_COLUMNS, PII_COLUMNS, ID_COLUMNS, NOISE_COLUMNS = [], [], [], []
+
+    manifest = _load_profit_manifest()
+    schema_path = DATA_DIR / "profit_feature_schema.json"
+    feature_cols = []
+    if schema_path.exists():
+        with open(schema_path, encoding="utf-8") as f:
+            feature_cols = json.load(f).get("feature_columns", [])
+
+    leaked_in_features = [c for c in (list(LEAKAGE_COLUMNS) + list(PII_COLUMNS) + list(ID_COLUMNS)) if c in feature_cols]
+    return {
+        "gate_status": "PASS" if not leaked_in_features else "FAIL",
+        "blocked": {
+            "leakage": list(LEAKAGE_COLUMNS),
+            "pii": list(PII_COLUMNS),
+            "id": list(ID_COLUMNS),
+            "noise": list(NOISE_COLUMNS),
+        },
+        "whitelist": [
+            {"column": "Order Item Profit Ratio", "reason": "下單時已知的定價 margin，非由結果反推 → 合法特徵"},
+        ],
+        "identity_corr_guard": {
+            "rule": "對非白名單的乘積式恆等（|corr|>0.98）報錯，margin×total 白名單放行",
+            "enforced_in": "core/profit_data_pipeline.py::_validate",
+        },
+        "leaked_in_features": leaked_in_features,
+        "feature_count": len(feature_cols),
+        "column_labeling": {
+            "profit_actual": "真利潤（驗證集回填的實際 Order Profit Per Order）",
+            "profit_pred": "收益模型預測值（前瞻估計，非實際）",
+            "true_label / late_actual": "驗證集實際是否延遲",
+            "p_late / late_pred": "延遲模型預測機率",
+        },
+        "note": "收益欄一律標 actual/pred，不混稱『預測收益』當前瞻賭注（SLIDE 落地點 4）。",
     }
 
 

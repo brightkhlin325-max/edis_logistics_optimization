@@ -156,3 +156,39 @@
     </table>
   </div>
 </div>
+
+<!-- 帳戶劣化趨勢 + forecast（SLIDE 落地點 3） -->
+<div class="panel">
+  <div class="panel-head">
+    <div>
+      <div class="panel-title">帳戶劣化趨勢 (Account Deterioration)</div>
+      <div class="panel-subtitle">客群/區域 逐月真價值 (Net-of-Service) 與延遲率；最後一點為線性趨勢外推之下月預測</div>
+    </div>
+    <select id="deterUnit" onchange="loadDeterioration()" style="padding:7px 10px;border:1px solid var(--border);border-radius:8px;background:white;font-size:12px;cursor:pointer;">
+      <option value="segment">以客群</option>
+      <option value="region">以區域</option>
+    </select>
+  </div>
+  <div style="padding:16px; height:320px; position:relative;">
+    <canvas id="deterChart"></canvas>
+    <div id="deterFallback" style="display:none;color:var(--muted);font-size:13px;text-align:center;padding-top:40px;">圖表元件未載入</div>
+  </div>
+  <div class="table-scroll" style="max-height:200px; border-top:1px solid var(--border);">
+    <table class="risk-table">
+      <thead><tr><th>群組</th><th>趨勢斜率 (↓劣化)</th><th>最近月真價值</th><th>預測下月</th></tr></thead>
+      <tbody id="deterBody"><tr><td colspan="4" style="text-align:center;padding:20px;color:var(--muted)">載入中...</td></tr></tbody>
+    </table>
+  </div>
+</div>
+
+<!-- 洩漏守門狀態 + actual/pred 標示（SLIDE 落地點 4） -->
+<div class="panel">
+  <div class="panel-head">
+    <div>
+      <div class="panel-title">洩漏守門狀態 (Leakage Gate)</div>
+      <div class="panel-subtitle">收益模型特徵洩漏防護與 actual / pred 欄位標示</div>
+    </div>
+    <span class="tag" id="leakGateTag">--</span>
+  </div>
+  <div style="padding:18px;" id="leakAuditBody">載入中...</div>
+</div>

@@ -1,0 +1,167 @@
+<style>
+  .roi-select{padding:7px 10px;border:1px solid var(--border);border-radius:8px;background:white;font-size:12px;color:var(--text);cursor:pointer;font-family:inherit;}
+  .roi-info{display:inline-flex;align-items:center;justify-content:center;width:15px;height:15px;border-radius:50%;background:var(--slate-lt);color:var(--muted);font-size:10px;cursor:pointer;margin-left:3px;font-style:normal;}
+  .roi-info:hover{background:var(--primary);color:white;}
+</style>
+<div class="page-header">
+  <h1 class="page-title">最佳化ROI模擬器 (ROI Simulator)</h1>
+  <div class="page-sub">用驗證集真答案 + 預測，整合「真價值 × 在險利潤 × What-if × 預測校準」的決策工作台</div>
+</div>
+
+<!-- 控制列：SLA 罰金（重算真價值） -->
+<div class="panel" style="margin-bottom:16px;">
+  <div style="padding:14px 20px; display:flex; align-items:center; gap:18px; flex-wrap:wrap;">
+    <div style="display:flex; align-items:center; gap:10px;">
+      <span class="field-label" style="margin:0;">每筆延遲罰金 (SLA Penalty $)
+        <span class="roi-info" onclick="openRoiInfo('penalty')" title="說明">ⓘ</span>
+      </span>
+      <input type="number" class="budget-input" id="roiPenalty" value="250" min="0" step="10" style="width:110px;" oninput="onRoiPenaltyChange()">
+    </div>
+    <div style="font-size:12px; color:var(--muted);">真價值 (Net-of-Service) = 帳載利潤 − 實際延遲 × 罰金；資料：驗證集 22,544 筆訂單。</div>
+  </div>
+</div>
+
+<!-- A. KPI -->
+<div style="display:grid; grid-template-columns:repeat(5, minmax(0,1fr)); gap:14px; margin-bottom:18px;" id="roiKpiRow">
+  <div class="kpi-card"><div class="kpi-label">帳載利潤 (Book Profit)</div><div class="kpi-value" id="roiBookProfit">--</div><div class="kpi-foot">帳面看起來賺的</div></div>
+  <div class="kpi-card"><div class="kpi-label">真價值 (Net-of-Service) <span class="roi-info" onclick="openRoiInfo('nos')">ⓘ</span></div><div class="kpi-value" id="roiNetValue">--</div><div class="kpi-foot">扣掉延遲代價後</div></div>
+  <div class="kpi-card"><div class="kpi-label">被服務侵蝕 (Erosion)</div><div class="kpi-value" id="roiErosion" style="color:var(--danger);">--</div><div class="kpi-foot">延遲吃掉的金額</div></div>
+  <div class="kpi-card"><div class="kpi-label">假性賺錢比例 <span class="roi-info" onclick="openRoiInfo('fp')">ⓘ</span></div><div class="kpi-value" id="roiFpPct" style="color:var(--danger);">--</div><div class="kpi-foot">帳面賺/實際賠</div></div>
+  <div class="kpi-card"><div class="kpi-label">預期在險利潤 (EPAR) <span class="roi-info" onclick="openRoiInfo('epar')">ⓘ</span></div><div class="kpi-value" id="roiEpar">--</div><div class="kpi-foot">利潤×延遲機率</div></div>
+</div>
+
+<!-- B. 真價值-風險散點 + 在險名單 -->
+<div class="grid-2" style="align-items:start; margin-bottom:18px;">
+  <div class="panel">
+    <div class="panel-head">
+      <div><div class="panel-title">真價值 — 風險散點 (Value × Risk)</div>
+        <div class="panel-subtitle">每點一筆訂單；紅點＝假性賺錢。點擊任一點看明細</div></div>
+    </div>
+    <div style="padding:14px 18px; display:flex; gap:10px; flex-wrap:wrap; border-bottom:1px solid var(--border);">
+      <select class="roi-select" id="roiValueAxis" onchange="loadRoiPortfolio()">
+        <option value="net_of_service">價值軸：真價值 Net-of-Service</option>
+        <option value="profit_actual">價值軸：帳載利潤 Book Profit</option>
+      </select>
+      <select class="roi-select" id="roiRiskAxis" onchange="loadRoiPortfolio()">
+        <option value="p_late">風險軸：延遲機率 P(late)</option>
+        <option value="true_label">風險軸：實際延遲 (0/1)</option>
+      </select>
+      <select class="roi-select" id="roiSegFilter" onchange="loadRoiPortfolio()"><option value="">全部客群</option></select>
+      <select class="roi-select" id="roiRegionFilter" onchange="loadRoiPortfolio()"><option value="">全部區域</option></select>
+      <select class="roi-select" id="roiDiscFilter" onchange="loadRoiPortfolio()">
+        <option value="">全部折扣</option><option value="low">折扣 &lt;10%</option>
+        <option value="mid">折扣 10–25%</option><option value="high">折扣 &gt;25%</option>
+      </select>
+    </div>
+    <div style="padding:16px; position:relative; height:340px;">
+      <canvas id="roiScatter"></canvas>
+      <div id="roiScatterFallback" style="display:none; color:var(--muted); font-size:13px; text-align:center; padding-top:40px;"></div>
+    </div>
+    <div id="roiScatterNote" style="padding:8px 18px; font-size:11px; color:var(--muted); border-top:1px solid var(--border);"></div>
+  </div>
+
+  <div class="panel">
+    <div class="panel-head">
+      <div><div class="panel-title">預期在險利潤名單 (At-Risk by EPAR)</div>
+        <div class="panel-subtitle">最該優先處理的訂單（利潤高且延遲機率高）</div></div>
+      <span class="tag" id="roiAtRiskCount">0 筆</span>
+    </div>
+    <div class="table-scroll" style="max-height:380px;">
+      <table class="risk-table">
+        <thead><tr><th>訂單</th><th>EPAR</th><th>帳載利潤</th><th>P(late)</th><th>客群</th></tr></thead>
+        <tbody id="roiAtRiskBody"><tr><td colspan="5" style="text-align:center;padding:24px;color:var(--muted)">載入中...</td></tr></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- C. ROI 最佳化（Manager） -->
+<div class="panel" style="margin-bottom:18px;">
+  <div class="panel-head">
+    <div><div class="panel-title">ROI 最佳化求解 (PuLP) — 該救誰</div>
+      <div class="panel-subtitle">預算內最大化淨效益，並彙整到客戶層</div></div>
+    <span class="role-badge badge-viewer" id="roiOptRoleBadge">Viewer</span>
+  </div>
+  <div style="padding:18px; display:grid; grid-template-columns:repeat(4,1fr) auto; gap:12px; align-items:end;">
+    <div><label class="field-label">預算上限 ($)</label><input type="number" class="budget-input" id="roiBudget" value="5000" min="0"></div>
+    <div><label class="field-label">單筆升級成本 ($)</label><input type="number" class="budget-input" id="roiUpgradeCost" value="80" min="0"></div>
+    <div><label class="field-label">延遲罰金 ($)</label><input type="number" class="budget-input" id="roiOptPenalty" value="250" min="0"></div>
+    <div><label class="field-label">風險門檻</label><input type="number" class="budget-input" id="roiRiskThreshold" value="0.3" min="0" max="1" step="0.05"></div>
+    <button class="run-btn hidden" id="roiOptRunBtn" onclick="runRoiOptimize()" style="white-space:nowrap;">執行 ROI 最佳化</button>
+  </div>
+  <div class="locked-box" id="roiOptLockedBox" style="margin:0 18px 18px;">🔒 需要 Manager 權限才能執行 ROI 最佳化</div>
+
+  <div id="roiOptResult" class="hidden" style="padding:0 18px 18px;">
+    <div style="display:grid; grid-template-columns:repeat(4,1fr); gap:10px; margin-bottom:14px;">
+      <div class="stat-box" style="background:var(--slate-lt);padding:10px;border-radius:8px;"><div class="stat-label" style="font-size:10px;">建議升級訂單</div><div class="stat-value" style="font-size:16px;font-weight:700;" id="roiOptSelected">--</div></div>
+      <div class="stat-box" style="background:var(--slate-lt);padding:10px;border-radius:8px;"><div class="stat-label" style="font-size:10px;">預估淨效益</div><div class="stat-value green" style="font-size:16px;font-weight:700;" id="roiOptSaving">--</div></div>
+      <div class="stat-box" style="background:var(--slate-lt);padding:10px;border-radius:8px;"><div class="stat-label" style="font-size:10px;">升級花費</div><div class="stat-value" style="font-size:16px;font-weight:700;" id="roiOptCost">--</div></div>
+      <div class="stat-box" style="background:var(--slate-lt);padding:10px;border-radius:8px;"><div class="stat-label" style="font-size:10px;">候選池</div><div class="stat-value" style="font-size:16px;font-weight:700;" id="roiOptPool">--</div></div>
+    </div>
+    <div class="grid-2" style="align-items:start;">
+      <div>
+        <div class="field-label">客戶層彙整 (先救哪些客戶)</div>
+        <div class="table-scroll" style="max-height:240px;"><table class="risk-table">
+          <thead><tr><th>客戶</th><th>單數</th><th>EPAR</th><th>淨效益</th></tr></thead>
+          <tbody id="roiCustRollupBody"></tbody></table></div>
+      </div>
+      <div>
+        <div class="field-label">入選訂單明細</div>
+        <div class="table-scroll" style="max-height:240px;"><table class="risk-table">
+          <thead><tr><th>訂單</th><th>P(late)</th><th>淨效益</th><th>升級</th></tr></thead>
+          <tbody id="roiSelOrdBody"></tbody></table></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- D. What-if 模擬器 -->
+<div class="panel" style="margin-bottom:18px;">
+  <div class="panel-head">
+    <div><div class="panel-title">What-if 模擬器 (折扣 × 運送)</div>
+      <div class="panel-subtitle">掃描槓桿 → 預測收益 + 預測延遲 → 預期淨值；建議接單/婉拒與條件</div></div>
+  </div>
+  <div style="padding:18px; display:grid; grid-template-columns:repeat(4,1fr); gap:12px;">
+    <div><label class="field-label">客群</label><select class="budget-input" id="wfSegment"><option>Consumer</option><option>Corporate</option><option>Home Office</option></select></div>
+    <div><label class="field-label">區域</label><select class="budget-input" id="wfRegion"></select></div>
+    <div><label class="field-label">品類</label><input class="budget-input" id="wfCategory" value="Cleats"></div>
+    <div><label class="field-label">市場</label><select class="budget-input" id="wfMarket"><option>Europe</option><option>LATAM</option><option>Pacific Asia</option><option>USCA</option><option>Africa</option></select></div>
+    <div><label class="field-label">商品單價 ($)</label><input type="number" class="budget-input" id="wfPrice" value="59.99" min="0"></div>
+    <div><label class="field-label">數量</label><input type="number" class="budget-input" id="wfQty" value="2" min="1"></div>
+    <div><label class="field-label">預計天數</label><input type="number" class="budget-input" id="wfDays" value="4" min="1" max="7"></div>
+    <div style="display:flex; align-items:end;"><button class="run-btn" id="wfRunBtn" onclick="runWhatif()" style="width:100%;">執行 What-if 掃描</button></div>
+  </div>
+  <div id="wfResult" class="hidden" style="padding:0 18px 18px;">
+    <div id="wfBest" style="padding:12px 14px; border-radius:8px; background:#f0f7ff; font-size:13px; margin-bottom:14px;"></div>
+    <div class="field-label">預期淨值熱力圖（列＝折扣，欄＝運送；點格子看明細）</div>
+    <div id="wfHeatmap" style="overflow-x:auto; padding-top:8px;"></div>
+  </div>
+</div>
+
+<!-- E. 預測-vs-實際校準 trust map -->
+<div class="panel">
+  <div class="panel-head">
+    <div><div class="panel-title">預測-vs-實際 校準 (Trust Map)</div>
+      <div class="panel-subtitle">用「樣本外」測試集背書預測可信度。點群組看說明</div></div>
+  </div>
+  <div class="grid-2" style="align-items:start; padding:18px; gap:18px;">
+    <div>
+      <div class="field-label">延遲模型可信度（AUC，越高越準）</div>
+      <div id="trustDelay" style="display:flex; flex-direction:column; gap:8px; margin-top:8px;"></div>
+    </div>
+    <div>
+      <div class="field-label">收益模型可信度（R²，越高越準）</div>
+      <div id="trustProfit" style="display:flex; flex-direction:column; gap:8px; margin-top:8px;"></div>
+    </div>
+  </div>
+  <div style="padding:0 18px 16px; font-size:11px; color:var(--muted);" id="trustNote"></div>
+</div>
+
+<!-- 共用說明 / 明細 popup -->
+<div id="roiInfoModal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(15,23,42,0.55); z-index:1200; align-items:center; justify-content:center; padding:20px;" onclick="closeRoiInfo(event)">
+  <div style="background:white; border-radius:14px; width:100%; max-width:440px; padding:24px; box-shadow:0 20px 25px -5px rgba(0,0,0,0.18); position:relative;" onclick="event.stopPropagation()">
+    <button onclick="closeRoiInfo()" style="position:absolute; top:12px; right:16px; border:none; background:transparent; font-size:22px; cursor:pointer; color:var(--muted);">&times;</button>
+    <div style="font-size:15px; font-weight:700; margin-bottom:10px;" id="roiInfoTitle">說明</div>
+    <div style="font-size:13px; line-height:1.7; color:var(--text);" id="roiInfoBody"></div>
+  </div>
+</div>
