@@ -105,6 +105,32 @@ def test_predict_exposes_available_months():
     assert "active_month" in body
 
 
+def test_predict_exposes_whatif_source_fields():
+    """風險清單的「模擬」須帶入原始可用欄位，而非固定預設值。"""
+    response = client.get("/api/predict?limit=10&threshold=0.5")
+    assert response.status_code == 200, response.text
+    rows = response.json()["data"]
+    assert rows, "預測清單不可為空"
+
+    for row in rows:
+        assert "days_for_shipment" in row
+        assert "product_price" in row
+        assert "order_item_quantity" in row
+        assert row["days_for_shipment"] is not None
+        assert row["product_price"] is not None
+        assert row["order_item_quantity"] is not None
+
+    tuples = {
+        (
+            row["days_for_shipment"],
+            round(float(row["product_price"]), 2),
+            row["order_item_quantity"],
+        )
+        for row in rows
+    }
+    assert tuples != {(4, 59.99, 1)}, "What-if 欄位仍全數落回預設值"
+
+
 def test_predict_month_filter():
     """指定 month 後，回應的 active_month 應一致，且資料量不超過全量。"""
     full = client.get("/api/predict?limit=5").json()
@@ -223,3 +249,34 @@ def test_roi_frontend_preserves_zero_penalty_input():
     assert "function _roiPenalty() { return _numberFromInput('roiPenalty', 250); }" in js
     assert "parseFloat(document.getElementById('roiPenalty')?.value) || 250" not in js
     assert "delay_penalty: _numberFromInput('roiOptPenalty', 250)" in js
+
+
+def test_geojson_endpoint_serves_country_feature_collection():
+    """地圖應使用原本國界 GeoJSON 熱力圖資料，不依賴外部網路成功與否。"""
+    response = client.get("/api/geojson/countries")
+    assert response.status_code == 200, response.text
+    data = response.json()
+    assert data["type"] == "FeatureCollection"
+    assert data["features"]
+
+
+def test_region_map_keeps_country_heatmap_without_bubble_fallback():
+    """風險訂單管理的地圖仍應是國界熱力圖，不可改成區域泡泡圖。"""
+    js = (Path(__file__).parent.parent / "static" / "region_map.js").read_text(encoding="utf-8")
+
+    assert "L.geoJSON" in js
+    assert "renderLeafletRegionBubbleMap" not in js
+    assert "renderStaticRegionHeatmap" not in js
+    assert "REGION_COORDS" not in js
+    assert "泡泡" not in js
+    assert "if (container) container.innerHTML" in js
+
+
+def test_risk_list_simulator_button_uses_safe_arguments():
+    """風險訂單的模擬按鈕應安全帶入欄位，避免引號造成整頁渲染失敗。"""
+    js = (Path(__file__).parent.parent / "static" / "risk_list.js").read_text(encoding="utf-8")
+
+    assert "JSON.stringify(String(value ?? fallback))" in js
+    assert "const simulatorArgs = [" in js
+    assert "onclick=\"loadOrderIntoSimulator(${simulatorArgs})\"" in js
+    assert "'${o.customer_segment||'Consumer'}'" not in js

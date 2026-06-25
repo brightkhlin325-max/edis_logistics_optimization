@@ -71,6 +71,7 @@ BASE_DIR = Path(__file__).parent
 DATA_DIR = BASE_DIR / "data" / "processed"
 METRICS_PATH = DATA_DIR / "model_metrics.json"
 PREDICTIONS_PATH = DATA_DIR / "predictions.csv"
+TEST_READY_PATH = DATA_DIR / "test_ready.csv"
 PROFIT_METRICS_PATH = DATA_DIR / "profit_model_metrics.json"
 PROFIT_PREDICTIONS_PATH = DATA_DIR / "profit_predictions.csv"
 PROFIT_MANIFEST_PATH = BASE_DIR / "models" / "profit_feature_manifest.json"
@@ -1651,7 +1652,24 @@ def get_predictions(
             "note": "示範資料（請先執行 model_pipeline.py）",
         }
 
-    df = load_cached_predictions(pred_path)
+    df = load_cached_predictions(pred_path).reset_index(drop=True).copy()
+
+    # What-if simulator fields: these are input features, not answer/leakage fields.
+    # predictions.csv is aligned row-by-row with test_ready.csv for the default validation set.
+    if pred_path == PREDICTIONS_PATH and TEST_READY_PATH.exists():
+        whatif_cols = {
+            "Days for shipment (scheduled)": "days_for_shipment",
+            "Product Price": "product_price",
+            "Order Item Quantity": "order_item_quantity",
+        }
+        try:
+            details = pd.read_csv(TEST_READY_PATH, usecols=list(whatif_cols.keys()))
+            if len(details) == len(df):
+                for src, dst in whatif_cols.items():
+                    if dst not in df.columns:
+                        df[dst] = pd.to_numeric(details[src], errors="coerce")
+        except Exception:
+            pass
 
 
     # 動態計算 predicted_late、actual_late 和 is_correct
@@ -1748,6 +1766,9 @@ def get_predictions(
             "risk_bucket": rec.get("risk_bucket"),
             "upgrade_cost": rec.get("upgrade_cost"),
             "expected_penalty": rec.get("expected_penalty"),
+            "days_for_shipment": rec.get("days_for_shipment"),
+            "product_price": rec.get("product_price"),
+            "order_item_quantity": rec.get("order_item_quantity"),
             "actual_late": rec.get("actual_late"),
             "predicted_late": rec.get("predicted_late"),
             "is_correct": rec.get("is_correct"),
@@ -3253,6 +3274,11 @@ if __name__ == "__main__":
 async def get_countries_geojson():
     """代理抓取 GeoJSON，解決前端 CORS 問題"""
     import httpx
+    local_geojson = BASE_DIR / "data" / "countries.geojson"
+    if local_geojson.exists():
+        with open(local_geojson, "r", encoding="utf-8") as f:
+            return JSONResponse(content=json.load(f))
+
     url = "https://raw.githubusercontent.com/datasets/geo-countries/master/data/countries.geojson"
     try:
         async with httpx.AsyncClient(timeout=30) as client:
