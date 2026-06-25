@@ -1,0 +1,7 @@
+# Model artifacts must NEVER get CRLF conversion.
+# LightGBM .txt models require LF; autocrlf=true on Windows corrupts them
+# ("[LightGBM] [Fatal] Model format error, expect a tree here.").
+models/** -text
+
+# Keep processed data CSVs as LF so cross-platform pipelines stay byte-stable.
+data/processed/*.csv text eol=lf
