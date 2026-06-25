@@ -7,6 +7,11 @@ chcp 65001 >nul
 set "PYTHONIOENCODING=utf-8"
 set "PYTHONUTF8=1"
 
+:: XGBoost and LightGBM each ship their own OpenMP runtime; loading both in one
+:: process aborts on Windows ("OMP: Error #15"). The ROI endpoints score with
+:: LightGBM while delay endpoints use XGBoost, so allow the duplicate runtime.
+set "KMP_DUPLICATE_LIB_OK=TRUE"
+
 :: LLM backend configuration template.
 :: Manager UI settings are preferred and persist encrypted in data\processed\llm_runtime_config.json.
 :: These environment defaults are used only when Manager UI settings do not exist.
