@@ -42,6 +42,8 @@ PRED_PATH = BASE_DIR / "data" / "processed" / "predictions.csv"
 SCHEMA_PATH = BASE_DIR / "data" / "processed" / "profit_feature_schema.json"
 ARTIFACTS_PATH = BASE_DIR / "models" / "profit" / "serving_artifacts.json"
 MODEL_PATH = BASE_DIR / "models" / "profit_lightgbm_model.txt"
+if not SCHEMA_PATH.exists():
+    SCHEMA_PATH = ARTIFACTS_PATH
 
 OUT_CSV = BASE_DIR / "data" / "processed" / "decision_dataset.csv"
 OUT_SUMMARY = BASE_DIR / "data" / "processed" / "decision_dataset_summary.json"
@@ -90,8 +92,11 @@ def score_profit(raw_items: pd.DataFrame) -> np.ndarray:
 
     with open(ARTIFACTS_PATH, encoding="utf-8") as f:
         artifacts = json.load(f)
-    with open(SCHEMA_PATH, encoding="utf-8") as f:
-        schema = json.load(f)
+    if SCHEMA_PATH.exists():
+        with open(SCHEMA_PATH, encoding="utf-8") as f:
+            schema = json.load(f)
+    else:
+        schema = artifacts
 
     pdp = ProfitDataPipeline()
     pdp.artifacts = artifacts

@@ -30,6 +30,10 @@ function changeRoiViewMode(mode) {
 
 const _fmtMoney = (v) => (v < 0 ? '-$' : '$') + Math.abs(Math.round(v)).toLocaleString();
 const _fmtPct = (v) => (v * 100).toFixed(1) + '%';
+function _numberFromInput(id, fallback) {
+  const n = parseFloat(document.getElementById(id)?.value);
+  return Number.isFinite(n) ? n : fallback;
+}
 
 const ROI_INFO = {
   penalty: ['SLA 延遲罰金', '每筆訂單延遲時估計付出的代價（退費/賠償/商譽）。調整它會即時重算「真價值」與相關 KPI。預設 $250，對齊最佳化調度。'],
@@ -58,7 +62,7 @@ function closeRoiInfo(e) {
   if (modal) modal.style.display = 'none';
 }
 
-function _roiPenalty() { return parseFloat(document.getElementById('roiPenalty')?.value) || 250; }
+function _roiPenalty() { return _numberFromInput('roiPenalty', 250); }
 
 function setRoiPenalty(v) {
   const el = document.getElementById('roiPenalty');
@@ -335,9 +339,9 @@ function onRoiPenaltyChange() {
 }
 
 function jumpToOptimization() {
-  const budget = document.getElementById('roiBudget')?.value || 5000;
-  const penalty = document.getElementById('roiOptPenalty')?.value || 250;
-  const threshold = document.getElementById('roiRiskThreshold')?.value || 0.3;
+  const budget = _numberFromInput('roiBudget', 5000);
+  const penalty = _numberFromInput('roiOptPenalty', 250);
+  const threshold = _numberFromInput('roiRiskThreshold', 0.3);
 
   // Set global state or simply update the DOM elements in optimization page
   const optBudget = document.getElementById('optPageBudgetInput');
@@ -367,10 +371,10 @@ function syncRoiSimulatorRole() {
 async function runRoiOptimize() {
   const btn = document.getElementById('roiOptRunBtn');
   const payload = {
-    budget: parseFloat(document.getElementById('roiBudget').value) || 5000,
-    upgrade_cost: parseFloat(document.getElementById('roiUpgradeCost').value) || 80,
-    delay_penalty: parseFloat(document.getElementById('roiOptPenalty').value) || 250,
-    risk_threshold: parseFloat(document.getElementById('roiRiskThreshold').value) || 0.3,
+    budget: _numberFromInput('roiBudget', 5000),
+    upgrade_cost: _numberFromInput('roiUpgradeCost', 80),
+    delay_penalty: _numberFromInput('roiOptPenalty', 250),
+    risk_threshold: _numberFromInput('roiRiskThreshold', 0.3),
   };
   if (btn) { btn.disabled = true; btn.innerHTML = '<span class="spinner"></span>計算中...'; }
   try {

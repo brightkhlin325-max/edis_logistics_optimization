@@ -53,7 +53,13 @@ MEAN_REL_WARN = 0.50
 # Benefit per order == 利潤本身（corr=1.0，純恆等式）→ 永遠丟棄。
 # Order Item Profit Ratio（毛利率）：依團隊決策視為「下單時已知的定價 margin」→ 合法特徵，
 #   不列洩漏（見 reports/profit_data_pipeline_decisions_2026-06-23.md §11.6）。
-LEAKAGE_COLUMNS = ["Benefit per order"]
+LEAKAGE_COLUMNS = [
+    "Benefit per order",
+    "Days for shipping (real)",
+    "Delivery Status",
+    "Order Status",
+    "Late_delivery_risk",
+]
 PII_COLUMNS = [
     "Customer Email", "Customer Fname", "Customer Lname",
     "Customer Password", "Customer Street", "Customer Zipcode",
@@ -193,7 +199,10 @@ class ProfitDataPipeline:
         y = pd.to_numeric(df[TARGET_COLUMN], errors="coerce")
         outlier_bounds = {"lower": float(y.quantile(0.01)), "upper": float(y.quantile(0.99))}
 
-        feature_columns = NUMERIC_FEATURES + CATEGORICAL_FEATURES + DATE_FEATURES
+        feature_columns = [
+            c for c in NUMERIC_FEATURES + CATEGORICAL_FEATURES + DATE_FEATURES
+            if c not in LEAKAGE_COLUMNS
+        ]
 
         self.artifacts = {
             "created_at": datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC"),

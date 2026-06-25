@@ -2,10 +2,8 @@
   "target_column": "Order Profit Per Order",
   "model_path": "models/profit_lightgbm_model.txt",
   "feature_columns": [
-    "Days for shipping (real)",
     "Days for shipment (scheduled)",
     "Sales per customer",
-    "Late_delivery_risk",
     "Latitude",
     "Longitude",
     "Order Item Discount",
@@ -18,7 +16,6 @@
     "Product Price",
     "Product Status",
     "Type",
-    "Delivery Status",
     "Category Name",
     "Customer City",
     "Customer Country",
@@ -30,7 +27,6 @@
     "Order Country",
     "Order Region",
     "Order State",
-    "Order Status",
     "Product Name",
     "Shipping Mode",
     "order_year",
@@ -41,7 +37,11 @@
     "order_is_weekend"
   ],
   "leakage_columns_blocked": [
-    "Benefit per order"
+    "Benefit per order",
+    "Days for shipping (real)",
+    "Delivery Status",
+    "Late_delivery_risk",
+    "Order Status"
   ],
   "non_model_columns_blocked": [
     "Category Id",

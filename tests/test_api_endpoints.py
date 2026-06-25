@@ -122,7 +122,7 @@ def test_predict_month_filter():
     assert ps == sorted(ps, reverse=True)
 
 
-def test_executive_summary_net_savings_invariant():
+def test_executive_summary_uses_optimizer_with_500_candidate_cap():
     """驗證 banner 修正：net_savings 為精算淨節省，且不超過舊式樂觀概算。
 
     net_savings = Σ(正 ROI 訂單的 net_benefit)
@@ -132,6 +132,12 @@ def test_executive_summary_net_savings_invariant():
     response = client.get("/api/executive-summary")
     assert response.status_code == 200, response.text
     data = response.json()
+    assert data["optimization_basis"] == "ShippingOptimizer"
+    assert data["optimization_max_candidates"] == 500
+    assert data["positive_roi_orders"] <= 500
+    assert data["optimization_total_orders_considered"] <= 500
+    assert data["recommended_budget"] == data["optimization_total_cost"]
+    assert data["net_savings"] == data["optimization_expected_total_saving"]
     assert "net_savings" in data, "缺少 net_savings 欄位（banner 修正未生效）"
     exposure = data["expected_penalty_exposure"]
     budget = data["recommended_budget"]
@@ -197,3 +203,23 @@ def test_profit_prediction_page_route():
     assert response.status_code == 200
     assert "text/html" in response.headers.get("content-type", "")
 
+
+def test_roi_summary_penalty_zero_is_not_treated_as_default():
+    zero = client.get("/api/roi/summary?penalty=0").json()
+    standard = client.get("/api/roi/summary?penalty=250").json()
+
+    assert zero["penalty_basis"] == 0.0
+    assert standard["penalty_basis"] == 250.0
+    assert zero["net_of_service_total"] == zero["book_profit_total"]
+    assert zero["service_erosion_total"] == 0.0
+    assert standard["net_of_service_total"] != zero["net_of_service_total"]
+    assert standard["service_erosion_total"] > zero["service_erosion_total"]
+
+
+def test_roi_frontend_preserves_zero_penalty_input():
+    js = (Path(__file__).parent.parent / "static" / "roi_simulator.js").read_text(encoding="utf-8")
+
+    assert "Number.isFinite(n) ? n : fallback" in js
+    assert "function _roiPenalty() { return _numberFromInput('roiPenalty', 250); }" in js
+    assert "parseFloat(document.getElementById('roiPenalty')?.value) || 250" not in js
+    assert "delay_penalty: _numberFromInput('roiOptPenalty', 250)" in js

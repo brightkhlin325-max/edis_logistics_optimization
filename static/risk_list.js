@@ -62,7 +62,7 @@ async function loadFilteredRiskList() {
         <td>${o.actual_late===1||o.actual_late===true?'<span style="padding:2px 8px;background:#fee2e2;color:#b91c1c;border-radius:12px;font-size:10px;font-weight:600;">延遲</span>':o.actual_late===0||o.actual_late===false?'<span style="padding:2px 8px;background:#dcfce7;color:#15803d;border-radius:12px;font-size:10px;font-weight:600;">準時</span>':'<span style="color:var(--muted);font-size:12px;">—</span>'}</td>
         <td style="white-space:nowrap;">
           ${o.is_correct===true?'<span style="padding:2px 8px;background:#dcfce7;color:#15803d;border-radius:12px;font-size:10px;font-weight:600;">✓ 正確</span>':o.is_correct===false?'<span style="padding:2px 8px;background:#fee2e2;color:#b91c1c;border-radius:12px;font-size:10px;font-weight:600;">✗ 錯誤</span>':'<span style="color:var(--muted);font-size:12px;">—</span>'}
-          <button class="run-btn" style="width:auto; padding:2px 6px; font-size:10px; margin-left:6px; background:var(--steel);" onclick="loadOrderIntoSimulator('${o.shipping_mode}','${o.order_region}',${o.days_for_shipment||4},${o.product_price||59.99},${o.order_item_quantity||1},'${o.customer_segment||'Consumer'}','${o.market||'Europe'}','${o.order_date||''}')">🧪 模擬</button>
+          <button class="run-btn" title="帶入右側 What-if 模擬器" style="width:auto; padding:2px 8px; font-size:10px; margin-left:6px; background:#dbeafe !important; color:#1e3a8a !important; border:1px solid #bfdbfe;" onclick="loadOrderIntoSimulator('${o.shipping_mode}','${o.order_region}',${o.days_for_shipment||4},${o.product_price||59.99},${o.order_item_quantity||1},'${o.customer_segment||'Consumer'}','${o.market||'Europe'}','${o.order_date||''}')">🧪 模擬</button>
         </td>
       </tr>
     `).join('');

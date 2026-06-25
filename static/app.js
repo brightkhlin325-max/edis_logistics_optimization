@@ -510,7 +510,7 @@ async function setRole(role) {
     'nav-ai-assistant': isMOrEng,
     'nav-model-perf': isEng,
     'nav-rbac': isEng,
-    'nav-llm-settings': isMOrEng
+    'nav-llm-settings': isEng
   };
 
   for (const [id, visible] of Object.entries(navItems)) {
@@ -523,7 +523,7 @@ async function setRole(role) {
   // 故仍列入 allowedPages 以免直接導航時被踢回 dashboard。
   const allowedPages = {
     viewer: ['dashboard', 'optimization', 'roi-simulator'],
-    manager: ['dashboard', 'optimization', 'roi-simulator', 'risk-list', 'ai-assistant', 'profit-prediction', 'llm-settings'],
+    manager: ['dashboard', 'optimization', 'roi-simulator', 'risk-list', 'ai-assistant', 'profit-prediction'],
     engineer: ['dashboard', 'optimization', 'roi-simulator', 'risk-list', 'ai-assistant', 'profit-prediction', 'model-perf', 'region-map', 'rbac', 'llm-settings']
   };
 
@@ -557,7 +557,7 @@ async function setRole(role) {
   
   if (window.updateLLMSettingsAccess) updateLLMSettingsAccess();
   const llmPage = document.getElementById('page-llm-settings');
-  if (isMOrEng && llmPage && !llmPage.classList.contains('hidden') && window.loadLLMSettings) {
+  if (isEng && llmPage && !llmPage.classList.contains('hidden') && window.loadLLMSettings) {
     loadLLMSettings();
   }
   
@@ -770,4 +770,3 @@ function startSplashScreen() {
     }
   }, 100);
 }
-

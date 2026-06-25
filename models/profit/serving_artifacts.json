@@ -8,10 +8,8 @@
   },
   "target_column": "Order Profit Per Order",
   "feature_columns": [
-    "Days for shipping (real)",
     "Days for shipment (scheduled)",
     "Sales per customer",
-    "Late_delivery_risk",
     "Latitude",
     "Longitude",
     "Order Item Discount",
@@ -24,7 +22,6 @@
     "Product Price",
     "Product Status",
     "Type",
-    "Delivery Status",
     "Category Name",
     "Customer City",
     "Customer Country",
@@ -36,7 +33,6 @@
     "Order Country",
     "Order Region",
     "Order State",
-    "Order Status",
     "Product Name",
     "Shipping Mode",
     "order_year",
@@ -47,10 +43,8 @@
     "order_is_weekend"
   ],
   "numeric_columns": [
-    "Days for shipping (real)",
     "Days for shipment (scheduled)",
     "Sales per customer",
-    "Late_delivery_risk",
     "Latitude",
     "Longitude",
     "Order Item Discount",
@@ -65,7 +59,6 @@
   ],
   "categorical_columns": [
     "Type",
-    "Delivery Status",
     "Category Name",
     "Customer City",
     "Customer Country",
@@ -77,7 +70,6 @@
     "Order Country",
     "Order Region",
     "Order State",
-    "Order Status",
     "Product Name",
     "Shipping Mode"
   ],
@@ -90,10 +82,8 @@
     "order_is_weekend"
   ],
   "numeric_medians": {
-    "Days for shipping (real)": 3.0,
     "Days for shipment (scheduled)": 4.0,
     "Sales per customer": 159.9900055,
-    "Late_delivery_risk": 1.0,
     "Latitude": 33.1494751,
     "Longitude": -76.98190308,
     "Order Item Discount": 14.0,
@@ -112,12 +102,6 @@
       "DEBIT": 2,
       "PAYMENT": 3,
       "TRANSFER": 4
-    },
-    "Delivery Status": {
-      "Advance shipping": 1,
-      "Late delivery": 2,
-      "Shipping canceled": 3,
-      "Shipping on time": 4
     },
     "Category Name": {
       "Accessories": 1,
@@ -5579,17 +5563,6 @@
       "Équateur": 1079,
       "Ústí nad Labem": 1080
     },
-    "Order Status": {
-      "CANCELED": 1,
-      "CLOSED": 2,
-      "COMPLETE": 3,
-      "ON_HOLD": 4,
-      "PAYMENT_REVIEW": 5,
-      "PENDING": 6,
-      "PENDING_PAYMENT": 7,
-      "PROCESSING": 8,
-      "SUSPECTED_FRAUD": 9
-    },
     "Product Name": {
       "Bag Boy Beverage Holder": 1,
       "Bridgestone e6 Straight Distance NFL Carolina": 2,
@@ -5655,13 +5628,6 @@
   },
   "categorical_codes": {
     "Type": [
-      0,
-      1,
-      2,
-      3,
-      4
-    ],
-    "Delivery Status": [
       0,
       1,
       2,
@@ -11139,18 +11105,6 @@
       1079,
       1080
     ],
-    "Order Status": [
-      0,
-      1,
-      2,
-      3,
-      4,
-      5,
-      6,
-      7,
-      8,
-      9
-    ],
     "Product Name": [
       0,
       1,
@@ -11239,7 +11193,11 @@
   ],
   "dropped_columns": {
     "leakage": [
-      "Benefit per order"
+      "Benefit per order",
+      "Days for shipping (real)",
+      "Delivery Status",
+      "Late_delivery_risk",
+      "Order Status"
     ],
     "pii": [
       "Customer Email",

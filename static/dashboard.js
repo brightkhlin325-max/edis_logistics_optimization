@@ -158,6 +158,7 @@ function renderExecutiveSummary(d) {
   if (expectedDesc) {
     expectedDesc.textContent = `建議升級預算: $${Math.round(d.recommended_budget || 0).toLocaleString()}`;
   }
+  window.edisState.dashboardOptimizationBudget = Number(d.recommended_budget || 0);
 
   // Actionable Insights 決策 Banner 顯示邏輯
   const banner = document.getElementById('actionableInsightsBanner');
@@ -169,7 +170,7 @@ function renderExecutiveSummary(d) {
   if (banner && bannerText) {
     if ((d.recommended_budget || 0) > 0 && savings > 0) {
       banner.style.display = 'flex';
-      bannerText.innerHTML = `建議投入物流預算 <strong>$${Math.round(d.recommended_budget).toLocaleString()}</strong>，可挽回 <strong>${d.positive_roi_orders.toLocaleString()}</strong> 筆訂單的延遲罰金損失，預估為公司省下淨額 <strong>$${Math.round(savings).toLocaleString()}</strong>！`;
+      bannerText.innerHTML = `最佳化建議投入物流預算 <strong>$${Math.round(d.recommended_budget).toLocaleString()}</strong>，升級 <strong>${d.positive_roi_orders.toLocaleString()}</strong> 筆訂單，預估為公司省下淨額 <strong>$${Math.round(savings).toLocaleString()}</strong>。`;
     } else {
       banner.style.display = 'none';
     }
@@ -189,12 +190,14 @@ function renderExecutiveSummary(d) {
   const budgetEl = document.getElementById('execBudget');
   if (budgetEl) budgetEl.textContent = '$' + Math.round(d.recommended_budget || 0).toLocaleString();
   const budgetNoteEl = document.getElementById('execBudgetNote');
-  if (budgetNoteEl) budgetNoteEl.textContent = `建議升級 ${d.positive_roi_orders.toLocaleString()} 筆訂單。`;
+  if (budgetNoteEl) budgetNoteEl.textContent = `最佳化建議升級 ${d.positive_roi_orders.toLocaleString()} 筆訂單。`;
   
-  document.getElementById('execDriver').textContent = topRegion ? topRegion.label : (topMode ? topMode.label : '—');
+  document.getElementById('execDriver').textContent = topRegion && topMode
+    ? topRegion.label + ' / ' + topMode.label
+    : (topRegion ? topRegion.label : (topMode ? topMode.label : '—'));
   document.getElementById('execDriverNote').textContent = topRegion && topMode
-    ? `${topRegion.label} 與 ${topMode.label} 是目前最主要的延遲原因。`
-    : '目前沒有明顯集中的延遲因素。';
+    ? '高風險訂單較集中於此區域與配送方式；這是統計關聯，不代表單一因果。'
+    : '資料量不足，無法判斷高風險集中組合。';
 
   document.getElementById('execActionText').textContent = `${d.recommended_action} ${d.data_quality_note || ''}`;
 }
@@ -209,19 +212,48 @@ function pillClass(p) {
 }
 
 function getReasonText(o) {
-  let factors = [];
-  if (o.shipping_mode === "Standard Class") {
-    factors.push("Standard Class (運送天數較長，風險高)");
-  } else if (o.shipping_mode === "Same Day") {
-    factors.push("Same Day (計劃天數緊湊，容錯低)");
+  const mode = o.shipping_mode || 'Unknown';
+  const region = o.order_region || '未知區域';
+  const pLate = Number(o.p_late || 0);
+
+  if (mode === 'First Class') {
+    return `First Class 歷史延遲率偏高，可能與承諾時效較短有關；目的地：${region}`;
   }
-  if (o.p_late >= 0.7) {
-    factors.push(`目的地區域 (${o.order_region || '未知'}) 風險性高`);
+  if (mode === 'Second Class') {
+    return `Second Class 在高風險清單中集中出現；需搭配區域與承諾天數判讀`;
   }
-  if (factors.length === 0) {
-    factors.push("時效要求高與承諾天數過緊");
+  if (mode === 'Same Day') {
+    return `Same Day 承諾時效最緊，容錯時間低`;
   }
-  return factors.join(" 且 ");
+  if (mode === 'Standard Class') {
+    return `Standard Class 承諾天數較長，通常不是主要風險訊號`;
+  }
+  if (pLate >= 0.7) {
+    return `模型判定為高風險；目的地：${region}`;
+  }
+  return `風險訊號較分散，建議展開查看特徵影響`;
+}
+
+function openDashboardSimulator(shippingMode, orderRegion, days, price, qty, segment, market, orderDate) {
+  if (window.edisState.currentRole === 'viewer') return;
+  showPage('risk-list');
+  setTimeout(() => {
+    if (window.loadOrderIntoSimulator) {
+      window.loadOrderIntoSimulator(shippingMode, orderRegion, days, price, qty, segment, market, orderDate);
+    }
+  }, 250);
+}
+
+function openRecommendedOptimization() {
+  showPage('optimization');
+  setTimeout(() => {
+    const budget = Math.round(Number(window.edisState.dashboardOptimizationBudget || 0));
+    const input = document.getElementById('optPageBudgetInput');
+    if (input && budget > 0) input.value = String(budget);
+    if (window.edisState.currentRole !== 'viewer' && window.runPageOptimize) {
+      window.runPageOptimize();
+    }
+  }, 250);
 }
 
 function getActionText(o) {
@@ -271,10 +303,12 @@ function renderBossTable(data) {
             <span class="prob-val">${(o.p_late*100).toFixed(1)}%</span>
           </div>
         </td>
-        <td style="font-size:11px; color:var(--muted);">${getReasonText(o)}</td>
+        <td style="font-size:11px; color:var(--muted); line-height:1.5;">${getReasonText(o)}</td>
         <td style="white-space:nowrap;">
           ${getActionText(o)}
-          <button class="run-btn" style="width:auto; padding:2px 6px; font-size:10px; margin-left:6px; background:var(--steel);" onclick="loadOrderIntoSimulator('${sm}','${reg}',${days},${price},${qty},'${segment}','${market}','${date}')">🧪 模擬</button>
+          ${window.edisState.currentRole === 'viewer'
+            ? `<button class="run-btn" disabled title="Viewer 權限不可使用模擬" style="width:auto; padding:2px 8px; font-size:10px; margin-left:6px; background:#eef2f7 !important; color:#334155 !important; border:1px solid var(--border);">🔒 模擬</button>`
+            : `<button class="run-btn" title="帶入 What-if 模擬器" style="width:auto; padding:2px 8px; font-size:10px; margin-left:6px; background:#dbeafe !important; color:#1e3a8a !important; border:1px solid #bfdbfe;" onclick="openDashboardSimulator('${sm}','${reg}',${days},${price},${qty},'${segment}','${market}','${date}')">🧪 模擬</button>`}
         </td>
       </tr>
       <tr id="explain-row-${hash}" class="hidden">
@@ -342,5 +376,6 @@ window.fillClass = fillClass;
 window.pillClass = pillClass;
 window.getReasonText = getReasonText;
 window.getActionText = getActionText;
+window.openRecommendedOptimization = openRecommendedOptimization;
 window.renderBossTable = renderBossTable;
 window.toggleRowExplanation = toggleRowExplanation;

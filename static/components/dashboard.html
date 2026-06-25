@@ -13,7 +13,7 @@
       <div id="actionableInsightsText" style="font-size:13px; opacity:0.9; margin-top:2px;">正在分析目前的訂單調度效益...</div>
     </div>
   </div>
-  <button class="run-btn" onclick="showPage('optimization')" style="background:white; color:var(--primary); font-weight:700; width:auto; padding:8px 16px; border-radius:6px; flex-shrink:0;">為什麼？前往最佳化調度 →</button>
+  <button class="run-btn" onclick="openRecommendedOptimization()" style="background:white; color:var(--primary); font-weight:700; width:auto; padding:8px 16px; border-radius:6px; flex-shrink:0;">查看最佳化調度 →</button>
 </div>
 
 <!-- Combined KPI Metrics Section -->
@@ -49,7 +49,7 @@
   <div class="kpi-card" style="padding: 20px;">
     <div class="kpi-icon-wrap icon-green" style="width: 48px; height: 48px; font-size: 20px;">📊</div>
     <div class="kpi-info">
-      <div class="kpi-label" style="font-size:12px;">關鍵延遲原因</div>
+      <div class="kpi-label" style="font-size:12px;">高風險集中組合</div>
       <div class="kpi-value" style="font-size:18px; font-weight:700; margin-top:2px;" id="execDriver">—</div>
       <div class="kpi-label" id="execDriverNote" style="margin-top:4px; font-size:10px;">—</div>
     </div>
@@ -85,7 +85,7 @@
           <th>運送模式</th>
           <th>目的地區域</th>
           <th>延遲機率</th>
-          <th>主要延遲原因</th>
+          <th>風險判斷依據</th>
           <th>決策動作與模擬</th>
         </tr>
       </thead>

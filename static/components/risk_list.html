@@ -1,4 +1,4 @@
-<div class="page-header">
+﻿<div class="page-header">
   <h1 class="page-title">風險訂單管理與 What-if 模擬</h1>
   <div class="page-sub">動態微調參數模擬，以及互動式地圖視覺化（CSV 匯入已移至 AI 決策助理頁）</div>
 </div>
@@ -73,9 +73,10 @@
     <!-- What-if Single Order Simulator -->
     <div class="panel" id="instantPredictPanel">
       <div class="panel-head">
-        <div class="panel-title">🧪 What-if 單筆訂單模擬器</div>
-        <span class="tag" style="background:var(--slate-lt);">即時試算</span>
+        <div class="panel-title">What-if 部分欄位試算</div>
+        <span class="tag" style="background:var(--slate-lt);" title="使用可編輯欄位與預設值重算，不等同原始訂單完整機率">試算模式</span>
       </div>
+      <div style="margin:0 20px; padding:10px 12px; border:1px solid #bfdbfe; background:#eff6ff; color:#1e3a8a; border-radius:8px; font-size:12px; line-height:1.6;">此區使用目前可編輯欄位加上預設值重新估算，試算結果可能與來源表格顯示的原始預測機率不同。</div>
       <div class="opt-body" style="padding:20px; display:flex; flex-direction:column; gap:12px;">
         <div style="display:grid; grid-template-columns:1fr; gap:10px;">
           <div>
@@ -133,7 +134,7 @@
 
         <!-- Prediction Result Display inside simulator card -->
         <div id="predictResultCard" style="border:1px dashed var(--border); border-radius:8px; padding:12px; margin-top:8px;">
-          <div id="predictPlaceholder" style="text-align:center; font-size:12px; color:var(--muted); padding:10px 0;">輸入參數或在左側訂單列表點擊「🧪 模擬」以帶入數值進行預測。</div>
+          <div id="predictPlaceholder" style="text-align:center; font-size:12px; color:var(--muted); padding:10px 0;">輸入參數或在來源表格點擊「模擬」以帶入可用欄位進行部分欄位試算。</div>
           <div id="predictResultContent" style="display:none; flex-direction:column; align-items:center; gap:8px;">
             <div style="display:flex; justify-content:space-between; width:100%; align-items:center;">
               <span style="font-size:13px; font-weight:700;">延遲風險率</span>

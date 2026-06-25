@@ -465,6 +465,7 @@ def build_optimization_result(request: OptimizeRequest, pred_path: Path, save_re
         upgrade_cost=request.upgrade_cost,
         delay_penalty=request.delay_penalty,
         risk_threshold=request.risk_threshold,
+        max_candidates=500,
     )
     result = optimizer.run(
         predictions_path_or_df=str(pred_path),
@@ -1822,6 +1823,12 @@ def get_executive_summary(
             "positive_roi_orders": positive_roi_orders,
             "recommended_budget": 80.0,
             "net_savings": 125.0,
+            "expected_penalty_avoided": 205.0,
+            "optimization_basis": "demo",
+            "optimization_max_candidates": 500,
+            "optimization_total_orders_considered": 1,
+            "optimization_total_cost": 80.0,
+            "optimization_expected_total_saving": 125.0,
             "recommended_action": "先升級高風險且 ROI 為正的訂單，避免延遲罰金擴大。",
             "top_regions": [{"label": "Western Europe", "count": 1, "avg_p_late": 0.82}],
             "top_shipping_modes": [{"label": "Standard Class", "count": 1, "avg_p_late": 0.82}],
@@ -1847,16 +1854,50 @@ def get_executive_summary(
     estimated_service_level = 1.0 - at_risk_rate
     exposure = float(at_risk["expected_penalty"].sum()) if not at_risk.empty else 0.0
 
-    at_risk["net_benefit"] = (
-        pd.to_numeric(at_risk["expected_penalty"], errors="coerce").fillna(0.0)
-        - pd.to_numeric(at_risk["upgrade_cost"], errors="coerce").fillna(upgrade_cost)
-    )
-    positive_roi = at_risk[at_risk["net_benefit"] > 0]
-    positive_roi_orders = int(len(positive_roi))
-    recommended_budget = float(positive_roi["upgrade_cost"].sum()) if not positive_roi.empty else 0.0
+    optimization_basis = "positive_roi_fallback"
+    optimization_max_candidates = 500
+    optimization_total_orders_considered = 0
+    positive_roi_orders = 0
+    recommended_budget = 0.0
+    net_savings = 0.0
+    expected_penalty_avoided = 0.0
+
+    if ShippingOptimizer is not None:
+        optimizer = ShippingOptimizer(
+            budget=1_000_000_000.0,
+            upgrade_cost=upgrade_cost,
+            delay_penalty=delay_penalty,
+            risk_threshold=threshold,
+            max_candidates=optimization_max_candidates,
+        )
+        optimization_result = optimizer.run(
+            predictions_path_or_df=working,
+            output_dir=str(DATA_DIR),
+            save_results=False,
+        ).to_dict()
+        optimization_basis = "ShippingOptimizer"
+        optimization_total_orders_considered = int(optimization_result.get("total_orders_considered", 0))
+        positive_roi_orders = int(optimization_result.get("selected_count", 0))
+        recommended_budget = float(optimization_result.get("total_cost", 0.0))
+        net_savings = float(optimization_result.get("expected_total_saving", 0.0))
+        expected_penalty_avoided = float(optimization_result.get("expected_total_penalty_avoided", 0.0))
+    else:
+        at_risk["net_benefit"] = (
+            pd.to_numeric(at_risk["expected_penalty"], errors="coerce").fillna(0.0)
+            - pd.to_numeric(at_risk["upgrade_cost"], errors="coerce").fillna(upgrade_cost)
+        )
+        positive_roi = (
+            at_risk[at_risk["net_benefit"] > 0]
+            .sort_values("net_benefit", ascending=False)
+            .head(optimization_max_candidates)
+        )
+        positive_roi_orders = int(len(positive_roi))
+        optimization_total_orders_considered = positive_roi_orders
+        recommended_budget = float(positive_roi["upgrade_cost"].sum()) if not positive_roi.empty else 0.0
+        net_savings = float(positive_roi["net_benefit"].sum()) if not positive_roi.empty else 0.0
+        expected_penalty_avoided = float(positive_roi["expected_penalty"].sum()) if not positive_roi.empty else 0.0
     # 真正的淨節省：只計入「值得升級」訂單的淨效益總和（expected_penalty - upgrade_cost），
     # 不可用「全部曝險 - 建議預算」概算，否則會把未升級訂單的罰金也誤算成節省。
-    net_savings = float(positive_roi["net_benefit"].sum()) if not positive_roi.empty else 0.0
 
     def top_breakdown(column: str) -> list[dict]:
         if column not in at_risk.columns or at_risk.empty:
@@ -1888,6 +1929,12 @@ def get_executive_summary(
         "positive_roi_orders": positive_roi_orders,
         "recommended_budget": round(recommended_budget, 2),
         "net_savings": round(net_savings, 2),
+        "expected_penalty_avoided": round(expected_penalty_avoided, 2),
+        "optimization_basis": optimization_basis,
+        "optimization_max_candidates": optimization_max_candidates,
+        "optimization_total_orders_considered": optimization_total_orders_considered,
+        "optimization_total_cost": round(recommended_budget, 2),
+        "optimization_expected_total_saving": round(net_savings, 2),
         "recommended_action": action,
         "top_regions": top_breakdown("order_region"),
         "top_shipping_modes": top_breakdown("shipping_mode"),
