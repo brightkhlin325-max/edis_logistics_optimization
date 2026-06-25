@@ -1,24 +1,6 @@
 <div class="page-header">
   <h1 class="page-title">風險訂單管理與 What-if 模擬</h1>
-  <div class="page-sub">匯入 CSV 推論資料、動態微調參數模擬、以及互動式地圖視覺化</div>
-</div>
-
-<!-- CSV Import/Export -->
-<div class="panel" style="padding:20px; display:flex; flex-wrap:wrap; gap:20px; align-items:center; justify-content:flex-end;">
-  <span class="sopStatusLockWrap"></span>
-  <div style="display:flex; gap:10px; align-items:center;">
-    <input type="file" id="csvFileInput" accept=".csv" style="display:none;" onchange="uploadTrainingCSV(this)">
-    <a href="/static/template.csv" download="template.csv" class="run-btn" style="width:auto; padding:8px 16px; background:var(--muted); border-radius:6px; font-size:12px; text-decoration:none; color:white;">
-      📥 範本下載
-    </a>
-    <button class="run-btn uploadCsvBtn" id="uploadCsvBtn" onclick="document.getElementById('csvFileInput').click()" style="width:auto; padding:8px 16px; border-radius:6px; font-size:12px;">
-      📤 回填已知結果 CSV
-    </button>
-    <button class="run-btn resetCsvBtn" id="resetCsvBtn" onclick="resetCSV()" style="width:auto; padding:8px 16px; background:var(--danger); border-radius:6px; font-size:12px; display:none;">
-      🔄 還原驗證集
-    </button>
-    <span id="lockedUploadBox" class="locked-box" style="font-size:11px; padding:6px 12px; border-radius:6px;">🔒 需 Manager 權限回填訓練資料</span>
-  </div>
+  <div class="page-sub">動態微調參數模擬，以及互動式地圖視覺化（CSV 匯入已移至 AI 決策助理頁）</div>
 </div>
 
 <!-- Interactive Map & What-if Simulation Simulator Area -->
@@ -167,23 +149,6 @@
             <div id="predictUpgradeHint" class="predict-upgrade-hint" style="font-size:10px; margin-top:4px; padding:4px;">—</div>
           </div>
         </div>
-      </div>
-    </div>
-
-    <!-- What-if Global Simulator -->
-    <div class="panel">
-      <div class="panel-head">
-        <div class="panel-title">⚙ What-if 全域決策模擬器</div>
-      </div>
-      <div class="opt-body" style="padding:20px;">
-        <div class="sim-slider-container">
-          <div class="sim-slider-header">
-            <span>單筆平均升級成本 ($)</span>
-            <span id="globalSimValue" style="color:var(--primary)">80</span>
-          </div>
-          <input type="range" min="30" max="200" step="5" value="80" oninput="runGlobalSimulation(this.value)" class="sim-slider">
-        </div>
-        <div id="globalSimResultNote" style="margin-top:12px; font-size:12px; color:var(--muted); line-height:1.5; padding:8px 10px; background:#fffbeb; border-radius:6px; border-left:3px solid var(--warning);">調整成本拉桿，系統將即時分析全域物流 SLA 的變動情境。</div>
       </div>
     </div>
   </div>

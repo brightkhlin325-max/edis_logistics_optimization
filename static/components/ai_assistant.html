@@ -31,12 +31,18 @@
     <div class="ai-composer">
       <textarea id="aiQuestionInput" rows="2" placeholder="請輸入提問...（例如：請幫我分析目前最容易延遲的地區與原因）"></textarea>
       <div class="ai-composer-actions">
-        <div style="display:flex; align-items:center; gap:8px;">
+        <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
           <input type="file" id="aiPredictCsvInput" accept=".csv" style="display:none;" onchange="uploadPredictionCSV(this)">
           <button class="ai-icon-btn" id="aiUploadPredictBtn" onclick="document.getElementById('aiPredictCsvInput').click()" title="匯入待預測訂單 CSV">➕</button>
           <span class="ai-file-chip" id="aiLlmMode">系統內建模型</span>
           <span id="aiLockedBox" class="ai-file-chip" style="display:none;">🔒 需 Manager 權限</span>
           <button class="ai-file-chip" id="aiResetPredictBtn" onclick="resetCSV()" style="display:none; border:none; background:transparent; cursor:pointer; color:var(--danger);">🔄 還原</button>
+          <span style="width:1px; height:18px; background:var(--border);"></span>
+          <input type="file" id="csvFileInput" accept=".csv" style="display:none;" onchange="uploadTrainingCSV(this)">
+          <a href="/static/template.csv" download="template.csv" class="ai-file-chip" style="text-decoration:none;" title="下載回填範本">📥 範本</a>
+          <button class="ai-file-chip uploadCsvBtn" id="uploadCsvBtn" onclick="document.getElementById('csvFileInput').click()" style="border:none; cursor:pointer;" title="回填已知實際結果以供重訓">📤 回填已知結果 CSV</button>
+          <button class="ai-file-chip resetCsvBtn" id="resetCsvBtn" onclick="resetCSV()" style="display:none; border:none; background:transparent; cursor:pointer; color:var(--danger);">🔄 還原驗證集</button>
+          <span id="lockedUploadBox" class="ai-file-chip lockedUploadBox" style="display:none;">🔒 需 Manager 權限回填</span>
         </div>
         <button class="run-btn" id="aiGenerateBriefBtn" onclick="generateAIBrief()" style="width:auto; padding:6px 16px; border-radius:20px; font-size:12px;">送出提問</button>
       </div>
