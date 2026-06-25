@@ -2634,13 +2634,22 @@ async def get_profit_predictions(
     data = []
     for idx, row in rows.iterrows():
         absolute_index = start + idx
-        data.append({
+        order_id_hash = row.get("order_id_hash")
+        item = {
             "row_id": f"profit_test_{absolute_index + 1:05d}",
             "actual_profit": round(float(row["actual_profit"]), 4),
             "predicted_profit": round(float(row["predicted_profit"]), 4),
             "residual": round(float(row["residual"]), 4),
             "abs_residual": round(float(row["abs_residual"]), 4),
-        })
+        }
+        if pd.notna(order_id_hash) and str(order_id_hash).strip():
+            item["order_id_hash"] = str(order_id_hash)
+            item["row_id"] = str(order_id_hash)
+        if "order_date" in row and pd.notna(row["order_date"]):
+            item["order_date"] = str(row["order_date"])
+        if "is_outlier" in row and pd.notna(row["is_outlier"]):
+            item["is_outlier"] = bool(int(row["is_outlier"]))
+        data.append(item)
 
     return {
         "is_trained": True,

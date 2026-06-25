@@ -39,6 +39,12 @@ LEAKAGE_COLUMNS = {
     # Order Item Profit Ratio 依團隊決策視為「下單時已知 margin」→ 改列合法特徵（見 MD §11.6）。
 }
 
+POST_OUTCOME_COLUMNS = {
+    "Days for shipping (real)",
+    "Late_delivery_risk",
+    "Delivery Status",
+}
+
 NON_MODEL_COLUMNS = {
     "Customer Email",
     "Customer Password",
@@ -129,11 +135,12 @@ class ProfitModelPipeline:
         model_path = Path(model_dir) / "profit_lightgbm_model.txt"
         metrics_path = Path(output_dir) / "profit_model_metrics.json"
         predictions_path = Path(output_dir) / "profit_predictions.csv"
+        test_metadata_path = Path(output_dir) / "profit_test_metadata.csv"
         manifest_path = Path(model_dir) / "profit_feature_manifest.json"
 
         self.save(str(model_path))
         self._save_metrics(metrics_path)
-        self._save_predictions(X_test, y_test, predictions_path)
+        self._save_predictions(X_test, y_test, predictions_path, test_metadata_path)
         self._save_manifest(manifest_path)
 
         return self.eval_metrics
@@ -199,7 +206,9 @@ class ProfitModelPipeline:
         if self.target_column not in df.columns:
             raise ValueError(f"Missing target column '{self.target_column}' in {path}")
 
-        forbidden = sorted((LEAKAGE_COLUMNS | NON_MODEL_COLUMNS).intersection(df.columns))
+        forbidden = sorted(
+            (LEAKAGE_COLUMNS | POST_OUTCOME_COLUMNS | NON_MODEL_COLUMNS).intersection(df.columns)
+        )
         if forbidden and self.leakage_policy == "raise":
             raise ValueError(
                 "Model input still contains forbidden columns: "
@@ -272,6 +281,7 @@ class ProfitModelPipeline:
         X_test: pd.DataFrame,
         y_test: pd.Series,
         path: Path,
+        metadata_path: Path | None = None,
     ) -> None:
         y_pred = self.predict(X_test)
         pred_df = pd.DataFrame(
@@ -281,6 +291,27 @@ class ProfitModelPipeline:
             }
         )
         pred_df["residual"] = pred_df["actual_profit"] - pred_df["predicted_profit"]
+
+        if metadata_path and metadata_path.exists():
+            metadata = pd.read_csv(metadata_path)
+            required = ["order_id_hash", "order_date", "is_outlier"]
+            missing = [col for col in required if col not in metadata.columns]
+            if missing:
+                raise ValueError(
+                    f"{metadata_path} is missing required metadata columns: {missing}"
+                )
+            if len(metadata) != len(pred_df):
+                raise ValueError(
+                    f"{metadata_path} row count ({len(metadata)}) does not match "
+                    f"test predictions row count ({len(pred_df)})."
+                )
+            metadata = metadata[required].reset_index(drop=True)
+            if metadata["order_id_hash"].isna().any() or (
+                metadata["order_id_hash"].astype(str).str.strip() == ""
+            ).any():
+                raise ValueError(f"{metadata_path} contains empty order_id_hash values.")
+            pred_df = pd.concat([metadata, pred_df], axis=1)
+
         pred_df.to_csv(path, index=False)
 
     def _save_manifest(self, path: Path) -> None:
@@ -289,6 +320,7 @@ class ProfitModelPipeline:
             "model_path": DEFAULT_MODEL_PATH,
             "feature_columns": self.feature_names,
             "leakage_columns_blocked": sorted(LEAKAGE_COLUMNS),
+            "post_outcome_columns_blocked": sorted(POST_OUTCOME_COLUMNS),
             "non_model_columns_blocked": sorted(NON_MODEL_COLUMNS),
             "model_type": "lightgbm_regressor",
             "model_params": self.params,

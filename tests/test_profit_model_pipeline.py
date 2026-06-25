@@ -87,9 +87,89 @@ def test_profit_model_pipeline_trains_and_writes_artifacts(tmp_path):
     ]
 
 
+def test_profit_model_pipeline_predictions_include_test_metadata(tmp_path):
+    df = _ready_frame()
+    train_path = tmp_path / "profit_train_ready.csv"
+    val_path = tmp_path / "profit_val_ready.csv"
+    test_path = tmp_path / "profit_test_ready.csv"
+    df.iloc[:14].to_csv(train_path, index=False)
+    df.iloc[14:19].to_csv(val_path, index=False)
+    df.iloc[19:].to_csv(test_path, index=False)
+
+    metadata = pd.DataFrame(
+        {
+            "order_id_hash": [f"hash_{i}" for i in range(5)],
+            "order_date": pd.date_range("2026-01-01", periods=5).astype(str),
+            "is_outlier": [0, 0, 1, 0, 0],
+        }
+    )
+    metadata.to_csv(tmp_path / "profit_test_metadata.csv", index=False)
+
+    pipeline = ProfitModelPipeline(params=_model_params())
+    pipeline.run(
+        train_path=str(train_path),
+        val_path=str(val_path),
+        test_path=str(test_path),
+        output_dir=str(tmp_path),
+        model_dir=str(tmp_path),
+    )
+
+    predictions = pd.read_csv(tmp_path / "profit_predictions.csv")
+    assert predictions.columns.tolist() == [
+        "order_id_hash",
+        "order_date",
+        "is_outlier",
+        "actual_profit",
+        "predicted_profit",
+        "residual",
+    ]
+    assert predictions["order_id_hash"].notna().all()
+    assert predictions["order_id_hash"].tolist() == metadata["order_id_hash"].tolist()
+    assert len(predictions) == len(pd.read_csv(test_path))
+
+
+def test_profit_model_pipeline_rejects_metadata_row_count_mismatch(tmp_path):
+    df = _ready_frame()
+    train_path = tmp_path / "profit_train_ready.csv"
+    val_path = tmp_path / "profit_val_ready.csv"
+    test_path = tmp_path / "profit_test_ready.csv"
+    df.iloc[:14].to_csv(train_path, index=False)
+    df.iloc[14:19].to_csv(val_path, index=False)
+    df.iloc[19:].to_csv(test_path, index=False)
+
+    pd.DataFrame(
+        {
+            "order_id_hash": ["hash_1"],
+            "order_date": ["2026-01-01"],
+            "is_outlier": [0],
+        }
+    ).to_csv(tmp_path / "profit_test_metadata.csv", index=False)
+
+    pipeline = ProfitModelPipeline(params=_model_params())
+    with pytest.raises(ValueError, match="row count"):
+        pipeline.run(
+            train_path=str(train_path),
+            val_path=str(val_path),
+            test_path=str(test_path),
+            output_dir=str(tmp_path),
+            model_dir=str(tmp_path),
+        )
+
+
 def test_profit_model_pipeline_rejects_leakage_columns(tmp_path):
     df = _ready_frame(8)
     df["Benefit per order"] = 0.2   # 純洩漏欄（== 利潤本身）仍須被擋
+    path = tmp_path / "profit_train_ready.csv"
+    df.to_csv(path, index=False)
+
+    pipeline = ProfitModelPipeline(params=_model_params())
+    with pytest.raises(ValueError, match="forbidden columns"):
+        pipeline._load_ready_frame(str(path))
+
+
+def test_profit_model_pipeline_rejects_post_outcome_columns(tmp_path):
+    df = _ready_frame(8)
+    df["Late_delivery_risk"] = [0, 1] * 4
     path = tmp_path / "profit_train_ready.csv"
     df.to_csv(path, index=False)
 

@@ -54,6 +54,11 @@ MEAN_REL_WARN = 0.50
 # Order Item Profit Ratio（毛利率）：依團隊決策視為「下單時已知的定價 margin」→ 合法特徵，
 #   不列洩漏（見 reports/profit_data_pipeline_decisions_2026-06-23.md §11.6）。
 LEAKAGE_COLUMNS = ["Benefit per order"]
+POST_OUTCOME_COLUMNS = [
+    "Days for shipping (real)",
+    "Late_delivery_risk",
+    "Delivery Status",
+]
 PII_COLUMNS = [
     "Customer Email", "Customer Fname", "Customer Lname",
     "Customer Password", "Customer Street", "Customer Zipcode",
@@ -67,15 +72,15 @@ NOISE_COLUMNS = ["Order Zipcode", "Product Description", "Product Image"]
 REDUNDANT_DATE_COLUMNS = ["shipping date (DateOrders)"]
 
 NUMERIC_FEATURES = [
-    "Days for shipping (real)", "Days for shipment (scheduled)",
-    "Sales per customer", "Late_delivery_risk", "Latitude", "Longitude",
+    "Days for shipment (scheduled)",
+    "Sales per customer", "Latitude", "Longitude",
     "Order Item Discount", "Order Item Discount Rate",
     "Order Item Profit Ratio",   # 視為下單時已知的定價 margin（見 MD §11.6）
     "Order Item Product Price", "Order Item Quantity",
     "Sales", "Order Item Total", "Product Price", "Product Status",
 ]
 CATEGORICAL_FEATURES = [
-    "Type", "Delivery Status", "Category Name", "Customer City",
+    "Type", "Category Name", "Customer City",
     "Customer Country", "Customer Segment", "Customer State",
     "Department Name", "Market", "Order City", "Order Country",
     "Order Region", "Order State", "Order Status", "Product Name", "Shipping Mode",
@@ -198,6 +203,7 @@ class ProfitDataPipeline:
             "metadata_columns": ["order_id_hash", "order_date", "is_outlier"],
             "dropped_columns": {
                 "leakage": LEAKAGE_COLUMNS, "pii": PII_COLUMNS, "id": ID_COLUMNS,
+                "post_outcome": POST_OUTCOME_COLUMNS,
                 "noise": NOISE_COLUMNS,
                 "redundant_date": REDUNDANT_DATE_COLUMNS + [DATE_COLUMN],
             },
@@ -300,7 +306,10 @@ class ProfitDataPipeline:
         if not (tr_max <= va_min and va_max <= te_min):
             errors.append(f"時間順序違反：train_max={tr_max}, val=({va_min}~{va_max}), test_min={te_min}")
 
-        leaked = [c for c in (LEAKAGE_COLUMNS + PII_COLUMNS + ID_COLUMNS) if c in feat]
+        leaked = [
+            c for c in (LEAKAGE_COLUMNS + POST_OUTCOME_COLUMNS + PII_COLUMNS + ID_COLUMNS)
+            if c in feat
+        ]
         if leaked:
             errors.append(f"洩漏/個資/ID 欄出現在特徵中：{leaked}")
 

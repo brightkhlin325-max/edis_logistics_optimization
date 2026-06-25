@@ -129,9 +129,17 @@ function renderProfitPredictions(payload) {
   tbody.innerHTML = rows.map(row => {
     const residual = Number(row.residual) || 0;
     const color = residual >= 0 ? 'var(--success)' : 'var(--danger)';
+    const orderLabel = row.order_id_hash || row.row_id;
+    const meta = [
+      row.order_date,
+      row.is_outlier ? 'outlier' : '',
+    ].filter(Boolean).join(' · ');
     return `
       <tr>
-        <td><span class="order-id">${row.row_id}</span></td>
+        <td>
+          <span class="order-id">${orderLabel}</span>
+          ${meta ? `<div style="font-size:11px;color:var(--muted);margin-top:3px;">${meta}</div>` : ''}
+        </td>
         <td>${formatProfitMoney(row.actual_profit)}</td>
         <td>${formatProfitMoney(row.predicted_profit)}</td>
         <td style="color:${color}; font-weight:600;">${formatProfitMoney(row.residual)}</td>
