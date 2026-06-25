@@ -78,6 +78,7 @@ LLM_RUNTIME_CONFIG_PATH = DATA_DIR / "llm_runtime_config.json"
 
 # DataFrame 快取機制
 PREDICTIONS_CACHE = {}
+ASSISTANT_CACHE: dict = {}  # (intent, params_json, pred_path_str) → response dict
 
 def load_cached_predictions(path: Path) -> pd.DataFrame:
     """載入並快取 CSV 預測資料，避免每次請求都重複讀取與解析。"""
@@ -892,7 +893,7 @@ def _llm_fallback(provider: str, model: str | None, fallback_text: str, error: s
     }
 
 
-def call_configured_llm(prompt: str, fallback_text: str) -> dict:
+def call_configured_llm(prompt: str, fallback_text: str, max_tokens: int = 400) -> dict:
     config = get_llm_config()
     provider = config["provider"]
     api_key = config["api_key"]
@@ -922,6 +923,7 @@ def call_configured_llm(prompt: str, fallback_text: str) -> dict:
                     {"role": "user", "content": prompt},
                 ],
                 "temperature": 0.7,
+                "max_output_tokens": max_tokens,
             }).encode("utf-8")
             req = UrlRequest(
                 api_url,
@@ -956,6 +958,7 @@ def call_configured_llm(prompt: str, fallback_text: str) -> dict:
                     {"role": "user", "content": prompt},
                 ],
                 "temperature": 0.2,
+                "max_tokens": max_tokens,
             }).encode("utf-8")
             req = UrlRequest(
                 api_url,
@@ -979,7 +982,7 @@ def call_configured_llm(prompt: str, fallback_text: str) -> dict:
                 "contents": [
                     {"parts": [{"text": prompt}]}
                 ],
-                "generationConfig": {"temperature": 0.2},
+                "generationConfig": {"temperature": 0.2, "maxOutputTokens": max_tokens},
             }).encode("utf-8")
             req = UrlRequest(
                 gemini_url,
@@ -995,7 +998,7 @@ def call_configured_llm(prompt: str, fallback_text: str) -> dict:
             response_id = None
             body = json.dumps({
                 "model": model,
-                "max_tokens": 800,
+                "max_tokens": max_tokens,
                 "temperature": 0.2,
                 "system": SLIDE_LLM_SYSTEM_PROMPT,
                 "messages": [{"role": "user", "content": prompt}],
@@ -1027,6 +1030,7 @@ def call_configured_llm(prompt: str, fallback_text: str) -> dict:
                     {"role": "user", "content": prompt},
                 ],
                 "stream": False,
+                "options": {"num_predict": max_tokens},
             }).encode("utf-8")
             req = UrlRequest(
                 api_url,
@@ -1059,6 +1063,165 @@ def call_configured_llm(prompt: str, fallback_text: str) -> dict:
         return _llm_fallback(provider, model, fallback_text, f"LLM 呼叫失敗：{error_text}")
 
 
+# ── AI 助理意圖路由 ───────────────────────────────────────────────────────────
+
+_ORD_RE = re.compile(r"ORD-[A-Z0-9]{8}", re.IGNORECASE)
+_TOP_N_RE = re.compile(r"前\s*(\d+)|top\s*(\d+)", re.IGNORECASE)
+
+
+def route_assistant_intent(question: str) -> tuple[str, dict]:
+    q = question.strip().lower()
+
+    if _ORD_RE.search(question):
+        return ("order_lookup", {"raw_question": question})
+
+    if any(t in q for t in ["高風險", "風險最高", "前幾", "最可能", "延遲最高", "優先", "排行", "排序", "top"]):
+        m = _TOP_N_RE.search(question)
+        n = int(m.group(1) or m.group(2)) if m else 10
+        return ("risk_ranking", {"top_n": n})
+
+    if any(t in q for t in ["預算", "budget", "最佳化", "省錢", "有限", "怎麼排", "怎麼調", "調度"]):
+        return ("budget_optimize", {})
+
+    _region_names = [
+        "east asia", "northern europe", "south asia", "north america", "latin america",
+        "western europe", "western us", "eastern us", "central america", "africa",
+        "oceania", "middle east",
+        "亞洲", "歐洲", "美洲", "非洲", "中東", "南亞", "東亞", "北美",
+    ]
+    if any(t in q for t in ["地區", "區域", "region", "篩選", "shipping", "運送方式", "類別"] + _region_names):
+        return ("filter", {"raw_question": question})
+
+    return ("general", {"raw_question": question})
+
+
+def fetch_intent_payload(intent: str, params: dict, pred_path: "Path", request) -> dict:
+    if intent == "risk_ranking":
+        df = load_cached_predictions(pred_path)
+        top_n = params.get("top_n", 10)
+        high_risk = df[df["p_late"] >= 0.5].nlargest(top_n, "p_late")
+        total_high = int((df["p_late"] >= 0.5).sum())
+        orders = [
+            {
+                "display_id": display_order_id(str(row.get("order_id_hash", ""))),
+                "p_late": round(float(row.get("p_late", 0)), 3),
+                "order_region": row.get("order_region"),
+                "shipping_mode": row.get("shipping_mode"),
+                "expected_penalty": round(float(row.get("expected_penalty", 0)), 2),
+                "upgrade_cost": round(float(row.get("upgrade_cost", 0)), 2),
+            }
+            for _, row in high_risk.iterrows()
+        ]
+        return {"intent": "risk_ranking", "top_n": top_n, "total_high_risk": total_high, "orders": orders}
+
+    if intent == "order_lookup":
+        order_ctx = find_order_context_for_question(params.get("raw_question", ""), pred_path)
+        return {"intent": "order_lookup", "order": order_ctx}
+
+    if intent == "budget_optimize":
+        opt = build_optimization_result(request, pred_path, save_results=False)
+        analysis = opt.get("manager_analysis", {}) or {}
+        return {
+            "intent": "budget_optimize",
+            "budget": opt.get("budget"),
+            "selected_count": opt.get("selected_count"),
+            "total_cost": opt.get("total_cost"),
+            "expected_total_saving": opt.get("expected_total_saving"),
+            "headline": analysis.get("headline"),
+            "recommended_policy": analysis.get("recommended_policy"),
+            "budget_usage_pct": analysis.get("budget_usage_pct"),
+        }
+
+    if intent == "filter":
+        df = load_cached_predictions(pred_path)
+        q = params.get("raw_question", "").lower()
+        mask = df["order_region"].notna()
+        for kw in ["east asia", "northern europe", "south asia", "north america", "latin america"]:
+            if kw in q:
+                mask = df["order_region"].str.lower().str.contains(kw, na=False)
+                break
+        else:
+            for kw in ["亞洲", "歐洲", "美洲", "非洲"]:
+                if kw in q:
+                    mask = df["order_region"].str.contains(kw, na=False)
+                    break
+        filtered = df[mask]
+        top10 = filtered.nlargest(10, "p_late")
+        orders = [
+            {
+                "display_id": display_order_id(str(row.get("order_id_hash", ""))),
+                "p_late": round(float(row.get("p_late", 0)), 3),
+                "order_region": row.get("order_region"),
+                "expected_penalty": round(float(row.get("expected_penalty", 0)), 2),
+            }
+            for _, row in top10.iterrows()
+        ]
+        return {"intent": "filter", "total": len(filtered), "orders": orders}
+
+    return {"intent": "general", "raw_question": params.get("raw_question", "")}
+
+
+def format_intent_card(intent: str, data: dict) -> str:
+    if intent == "risk_ranking":
+        total = data.get("total_high_risk", 0)
+        orders = data.get("orders", [])
+        lines = [f"【結論】目前高風險訂單共 {total:,} 筆（p≥0.5），建議優先處理前 {len(orders)} 筆：", "【清單】"]
+        for i, o in enumerate(orders, 1):
+            lines.append(
+                f"  {i}. {o['display_id']}  p={o['p_late']:.2f}  {o.get('order_region', '')}  "
+                f"罰款${o['expected_penalty']:,.0f}  → 建議升級"
+            )
+        remaining = total - len(orders)
+        if remaining > 0:
+            lines.append(f"  …（另有 {remaining:,} 筆未列）")
+        lines.append(f"【下一步】輸入預算可直接給最佳分配方案，或說「East Asia 前 5」篩選。")
+        return "\n".join(lines)
+
+    if intent == "order_lookup":
+        o = data.get("order")
+        if not o:
+            return "【結論】找不到該訂單，請確認 ORD- 格式是否正確。\n【下一步】試試直接貼上 ORD-XXXXXXXX 格式的編號。"
+        action = "建議升級" if float(o.get("upgrade_cost", 0)) < float(o.get("expected_penalty", 0)) else "暫不升級（升級成本較高）"
+        return (
+            f"【結論】{o['display_id']} 延遲機率 {float(o['p_late']) * 100:.1f}%，"
+            f"風險等級：{o.get('risk_bucket', '未知')}。\n"
+            f"【明細】地區：{o.get('order_region')}  運送：{o.get('shipping_mode')}\n"
+            f"        罰款預估 ${float(o.get('expected_penalty', 0)):,.0f}  "
+            f"升級成本 ${float(o.get('upgrade_cost', 0)):,.0f}  → {action}\n"
+            f"【下一步】點開該訂單 X 因子可看延遲主因，或詢問其他訂單。"
+        )
+
+    if intent == "budget_optimize":
+        return (
+            f"【結論】預算 ${float(data.get('budget') or 0):,.0f}，"
+            f"系統挑出 {data.get('selected_count', 0)} 筆可升級，"
+            f"預估淨效益 ${float(data.get('expected_total_saving') or 0):,.0f}。\n"
+            f"【明細】{data.get('headline', '')}\n"
+            f"【下一步】{data.get('recommended_policy', '可至最佳化頁調整預算看名單變化。')}"
+        )
+
+    if intent == "filter":
+        orders = data.get("orders", [])
+        total = data.get("total", 0)
+        lines = [f"【結論】共 {total:,} 筆符合條件，顯示前 {len(orders)} 筆：", "【清單】"]
+        for i, o in enumerate(orders, 1):
+            lines.append(
+                f"  {i}. {o['display_id']}  p={o['p_late']:.2f}  "
+                f"{o.get('order_region', '')}  罰款${o['expected_penalty']:,.0f}"
+            )
+        lines.append("【下一步】可進一步指定預算或其他條件縮小範圍。")
+        return "\n".join(lines)
+
+    return (
+        "【結論】我可以回答以下類型的問題：\n"
+        "【清單】\n"
+        "  1. 高風險排序：「前10筆最可能延遲的訂單」\n"
+        "  2. 預算最佳化：「預算有限時怎麼調度？」\n"
+        "  3. 訂單查詢：貼上 ORD-XXXXXXXX 格式編號\n"
+        "  4. 條件篩選：「East Asia 高風險訂單」\n"
+        "【下一步】請換一種方式描述，或直接貼訂單編號。"
+    )
+
 
 # ── 路由 ──────────────────────────────────────────────────────────────────────
 
@@ -1084,6 +1247,7 @@ class SingleOrderPredictRequest(BaseModel):
     customer_segment: str = "Consumer"        # Consumer / Corporate / Home Office
     department_name: str = "Fan Shop"         # 部門名稱（選填）
     market: str = "Europe"                    # Africa / Europe / LATAM / Pacific Asia / USCA
+    category_name: Optional[str] = None       # 品類名稱（選填，What-if 傳入）
     order_date: Optional[str] = None          # 訂單日期（YYYY-MM-DD，選填）
     order_item_discount_rate: Optional[float] = None   # 折扣率（0~1，選填）
     order_item_profit_ratio: Optional[float] = None    # 利潤率（選填）
@@ -1174,7 +1338,7 @@ def predict_single_order(
     # 3. Label Encoded 特徵
     label_cols_map = {
         "Order Region":   body.order_region,
-        "Category Name":  "Accessories",  # 以預設值填補（未在表單收集）
+        "Category Name":  body.category_name or "Accessories",
         "Order Country":  body.order_country,
     }
     for col, val in label_cols_map.items():
@@ -2065,57 +2229,77 @@ def generate_manager_llm_brief(
     authorization: Optional[str] = Header(default=None),
     x_session_id: Optional[str] = Header(default=None),
 ):
-    """
-    [Manager 限定] 以去識別化最佳化結果產生 LLM 主管摘要。
-
-    使用 Manager UI runtime 設定；若未設定則讀取 SLIDE_LLM_* 環境變數。
-    """
+    """[Manager 限定] 意圖路由 AI 助理：0 token 資料卡片 + 必要時才呼叫 LLM。"""
     role = get_role(x_role, authorization)
     require_manager(role)
 
-    pred_path = get_predictions_path(x_session_id)
-    optimization_result = build_optimization_result(request, pred_path, save_results=False)
-    order_context = find_order_context_for_question(request.question, pred_path)
-    safe_payload = build_llm_safe_payload(
-        optimization_result,
-        max_sample_orders=request.max_sample_orders,
-        order_context=order_context,
-    )
-    prompt = build_llm_prompt(safe_payload, language=request.language, question=request.question)
-    fallback_text = local_llm_fallback(safe_payload, request.question)
-    llm_result = call_configured_llm(prompt, fallback_text)
+    # 離題快速攔截（0 token）；ORD- 訂單查詢直接放行不做離題檢查
+    if not _ORD_RE.search(request.question) and not is_logistics_question(request.question):
+        return {
+            "role": role,
+            "brief_text": off_topic_llm_response(request.question),
+            "intent": "off_topic",
+            "llm": {"used_external_llm": False, "provider": "none", "configured_provider": "none",
+                    "model": "none", "response_id": None, "error": None},
+        }
 
-    return {
+    pred_path = get_predictions_path(x_session_id)
+
+    # 意圖分類
+    intent, params = route_assistant_intent(request.question)
+
+    # 快取命中（非 general/order_lookup 才快取）
+    cache_key = (intent, json.dumps(params, sort_keys=True), str(pred_path))
+    if intent not in ("order_lookup", "general") and cache_key in ASSISTANT_CACHE:
+        cached = dict(ASSISTANT_CACHE[cache_key])
+        cached["from_cache"] = True
+        cached["role"] = role
+        return cached
+
+    # 取最小資料
+    data = fetch_intent_payload(intent, params, pred_path, request)
+
+    # 格式化固定卡片
+    card = format_intent_card(intent, data)
+
+    # 只有 order_lookup 或 general 才呼叫 LLM 潤飾
+    needs_llm = intent in ("order_lookup", "general")
+    if needs_llm:
+        minimal_json = json.dumps(data, ensure_ascii=False, default=str)
+        prompt = (
+            "你是 EDIS 物流決策助理，只回答延遲風險、預算最佳化、升級調度。\n"
+            "規則：1.只用<資料>內容回答，禁止推算沒有的數字。"
+            "2.固定輸出：【結論】1句→【明細】按<資料>數字→【下一步】1句建議。"
+            "3.繁體中文，精簡，全文≤120字。4.數字直接引用，不自行計算或加總。\n"
+            f"<資料>{minimal_json}\n<問題>{request.question}"
+        )
+        llm_result = call_configured_llm(prompt, card, max_tokens=400)
+        brief_text = llm_result["brief_text"]
+    else:
+        llm_result = {
+            "used_external_llm": False, "provider": "card", "configured_provider": "card",
+            "model": "card", "response_id": None, "error": None,
+        }
+        brief_text = card
+
+    result = {
         "role": role,
-        "data_boundary": {
-            "de_identified_only": True,
-            "sent_fields": [
-                "order_id_hash",
-                "risk_bucket",
-                "p_late",
-                "recommended_action",
-                "expected_penalty",
-                "upgrade_cost",
-                "net_benefit",
-                "top_x_factors",
-                "aggregate_optimization_metrics",
-                "requested_order_when_user_names_order",
-            ],
-            "excluded_fields": safe_payload["data_policy"]["excluded_fields"],
-        },
+        "brief_text": brief_text,
+        "intent": intent,
         "llm": {
             "used_external_llm": llm_result["used_external_llm"],
-            "provider": llm_result["provider"],
-            "configured_provider": llm_result.get("configured_provider", llm_result["provider"]),
-            "model": llm_result["model"],
+            "provider": llm_result.get("provider"),
+            "configured_provider": llm_result.get("configured_provider", llm_result.get("provider")),
+            "model": llm_result.get("model"),
             "response_id": llm_result.get("response_id"),
-            "error": llm_result["error"],
+            "error": llm_result.get("error"),
         },
-        "brief_text": llm_result["brief_text"],
-        "safe_prompt": prompt,
-        "safe_payload": safe_payload,
-        "manager_analysis": optimization_result.get("manager_analysis", {}),
     }
+
+    if intent not in ("order_lookup", "general"):
+        ASSISTANT_CACHE[cache_key] = result
+
+    return result
 
 
 @app.get("/api/explain/{order_id_hash}")
@@ -3017,6 +3201,7 @@ def roi_whatif(
                 order_item_quantity=body.order_item_quantity,
                 customer_segment=body.customer_segment,
                 market=body.market,
+                category_name=body.category_name,
                 order_date=body.order_date,
                 order_item_discount_rate=disc,
             )
