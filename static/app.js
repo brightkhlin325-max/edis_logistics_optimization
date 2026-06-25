@@ -44,15 +44,18 @@ window.fetch = function (url, options) {
   
   // 注入當前角色請求標頭，支援 RBAC 權限控管
   if (!options.headers['X-Role']) {
-    options.headers['X-Role'] = window.edisState.currentRole === 'manager' ? 'Logistics_Manager' : 'Viewer';
+    options.headers['X-Role'] = window.edisState.currentRole === 'manager' 
+      ? 'Logistics_Manager' 
+      : (window.edisState.currentRole === 'engineer' ? 'Engineer' : 'Viewer');
   }
 
   return originalFetch(url, options).then(response => {
-    // 403 Forbidden 偵測：當 Manager 功能被 Viewer 存取或權限失效時攔截
-    if (response.status === 403 && window.edisState.currentRole === 'manager') {
-      showToast('❌ 登入逾期或權限不足，請重新登入管理員帳號。', 'error');
+    // 403 Forbidden 偵測：當 Manager/Engineer 功能被 Viewer 存取或權限失效時攔截
+    if (response.status === 403 && (window.edisState.currentRole === 'manager' || window.edisState.currentRole === 'engineer')) {
+      showToast('❌ 登入逾期或權限不足，請重新登入管理員/工程師帳號。', 'error');
       sessionStorage.removeItem('edis_token');
       window._managerAuthenticated = false;
+      window._engineerAuthenticated = false;
       setRole('viewer');
     }
     return response;

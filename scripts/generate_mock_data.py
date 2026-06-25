@@ -1,55 +1,97 @@
-import os
-import pandas as pd
-import numpy as np
+#!/usr/bin/env python
+"""
+generate_mock_data.py
+產生預估訂單與上一季實績 CSV 以進行功能驗證
+"""
+import csv
+import random
+import argparse
+from datetime import datetime, timedelta
 
-def generate_mock_dataset():
-    np.random.seed(42)
-    num_rows = 500
-    
-    order_ids = np.arange(10000, 10000 + num_rows)
-    shipping_modes = np.random.choice(["Standard Class", "First Class", "Second Class", "Same Day"], size=num_rows, p=[0.6, 0.2, 0.15, 0.05])
-    customer_segments = np.random.choice(["Consumer", "Corporate", "Home Office"], size=num_rows)
-    order_regions = np.random.choice(["Western Europe", "Central America", "South America", "Northern Europe", "Southern Europe", "Southeast Asia", "Eastern Asia"], size=num_rows)
-    
-    scheduled_days = np.random.choice([0, 1, 2, 4], size=num_rows)
-    product_prices = np.round(np.random.uniform(10.0, 350.0, size=num_rows), 2)
-    quantities = np.random.randint(1, 6, size=num_rows)
-    
-    # Simple logic for late delivery risk to make the model learn something
-    # Standard class and higher product price -> higher risk
-    p_late = 0.2 + 0.3 * (shipping_modes == "Standard Class") + 0.2 * (scheduled_days <= 1)
-    p_late = np.clip(p_late, 0.0, 1.0)
-    late_delivery_risk = np.random.binomial(1, p_late)
-    
-    # Dates
-    start_date = pd.to_datetime("2026-01-01")
-    date_offsets = np.random.randint(0, 150, size=num_rows)
-    order_dates = (start_date + pd.to_timedelta(date_offsets, unit='D') + pd.to_timedelta(np.random.randint(0, 24, size=num_rows), unit='h')).strftime("%m/%d/%Y %H:%M")
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--rows', type=int, default=100)
+    parser.add_argument('--output-predict', type=str, default='static/mock/predict_orders.csv')
+    parser.add_argument('--output-perf', type=str, default='static/mock/historical_perf.csv')
+    args = parser.parse_args()
 
-    df = pd.DataFrame({
-        "Order Id": order_ids,
-        "Customer Fname": [f"FirstName_{i}" for i in range(num_rows)],
-        "Customer Lname": [f"LastName_{i}" for i in range(num_rows)],
-        "Customer Street": [f"Street Address {i}" for i in range(num_rows)],
-        "Customer Zipcode": [f"{np.random.randint(10000, 99999)}" for _ in range(num_rows)],
-        "Customer Email": [f"user_{i}@example.com" for i in range(num_rows)],
-        "Customer Password": ["password_hash_here"] * num_rows,
-        "Days for shipment (scheduled)": scheduled_days,
-        "Product Price": product_prices,
-        "Order Item Quantity": quantities,
-        "Shipping Mode": shipping_modes,
-        "Customer Segment": customer_segments,
-        "Order Region": order_regions,
-        "order date (DateOrders)": order_dates,
-        "Late_delivery_risk": late_delivery_risk,
-        "Delivery Status": ["Shipping on time" if r == 0 else "Late delivery" for r in late_delivery_risk],
-        "Days for shipping (real)": scheduled_days + np.random.randint(0, 3, size=num_rows) * late_delivery_risk,
-        "Order Status": ["COMPLETE"] * num_rows
-    })
-    
-    os.makedirs("data/raw", exist_ok=True)
-    df.to_csv("data/raw/DataCoSupplyChainDataset.csv", index=False)
-    print(f"Mock dataset generated successfully with {num_rows} rows.")
+    shipping_modes = ['Standard Class', 'Second Class', 'First Class', 'Same Day']
+    regions = ['Western Europe', 'Central America', 'East of USA', 'South America', 'East Asia']
+    categories = ['Cardo', 'Water Sports', 'Apparel', 'Cleats']
+    segments = ['Consumer', 'Corporate', 'Home Office']
+    types = ['DEBIT', 'PAYMENT', 'TRANSFER', 'CASH']
+    markets = ['EU', 'LATAM', 'USCA', 'Pacific Asia', 'Africa']
 
-if __name__ == "__main__":
-    generate_mock_dataset()
+    headers = [
+        "Order Id", "order date (DateOrders)", "Shipping Mode", "Order Region",
+        "Days for shipment (scheduled)", "Product Price", "Order Item Quantity",
+        "Order Item Discount Rate", "Order Item Profit Ratio", "Order Profit Per Order",
+        "Category Name", "Order Country", "Customer Segment", "Type",
+        "Department Name", "Market", "Late_delivery_risk"
+    ]
+
+    base_id = 190000
+    start_date = datetime(2026, 6, 10, 12, 0)
+
+    # 產出 predict
+    with open(args.output_predict, 'w', newline='', encoding='utf-8') as f:
+        writer = csv.writer(f)
+        writer.writerow(headers)
+        for i in range(args.rows):
+            order_id = base_id + i
+            dt = start_date + timedelta(minutes=15 * i)
+            shipping = random.choice(shipping_modes)
+            region = random.choice(regions)
+            sched = random.choice([1, 2, 4])
+            price = round(random.uniform(20.0, 300.0), 2)
+            qty = random.randint(1, 5)
+            discount = random.choice([0.0, 0.05, 0.1, 0.2, 0.25])
+            profit_ratio = round(random.uniform(0.05, 0.40), 2)
+            profit = round(price * qty * profit_ratio, 2)
+            cat = random.choice(categories)
+            country = "United States" if "USA" in region else "GlobalRegion"
+            segment = random.choice(segments)
+            t = random.choice(types)
+            dept = "Apparel" if cat == "Apparel" else "Fan Shop"
+            market = random.choice(markets)
+            late = random.choice([0, 1])
+
+            writer.writerow([
+                order_id, dt.strftime("%m/%d/%Y %H:%M"), shipping, region,
+                sched, price, qty, discount, profit_ratio, profit,
+                cat, country, segment, t, dept, market, late
+            ])
+
+    # 產出 historical
+    with open(args.output_perf, 'w', newline='', encoding='utf-8') as f:
+        writer = csv.writer(f)
+        writer.writerow(headers)
+        for i in range(args.rows):
+            order_id = base_id + 10000 + i
+            dt = start_date - timedelta(days=90) + timedelta(minutes=15 * i)
+            shipping = random.choice(shipping_modes)
+            region = random.choice(regions)
+            sched = random.choice([1, 2, 4])
+            price = round(random.uniform(20.0, 300.0), 2)
+            qty = random.randint(1, 5)
+            discount = random.choice([0.0, 0.05, 0.1, 0.2, 0.25])
+            profit_ratio = round(random.uniform(0.05, 0.40), 2)
+            profit = round(price * qty * profit_ratio, 2)
+            cat = random.choice(categories)
+            country = "United States" if "USA" in region else "GlobalRegion"
+            segment = random.choice(segments)
+            t = random.choice(types)
+            dept = "Apparel" if cat == "Apparel" else "Fan Shop"
+            market = random.choice(markets)
+            late = random.choice([0, 1])
+
+            writer.writerow([
+                order_id, dt.strftime("%m/%d/%Y %H:%M"), shipping, region,
+                sched, price, qty, discount, profit_ratio, profit,
+                cat, country, segment, t, dept, market, late
+            ])
+
+    print(f"Successfully generated mock datasets!")
+
+if __name__ == '__main__':
+    main()
