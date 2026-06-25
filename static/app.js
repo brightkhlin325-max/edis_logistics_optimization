@@ -118,6 +118,7 @@ function showPage(pageId) {
     if (window.loadRegionalRisk) loadRegionalRisk();
   } else if (pageId === 'optimization') {
     if (window.loadMonthlyChart) loadMonthlyChart();
+    if (window.loadEmbeddedRoi) loadEmbeddedRoi();   // 項目4：ROI 真價值分析併入最佳化調度
   } else if (pageId === 'roi-simulator') {
     if (window.loadRoiSimulator) loadRoiSimulator();
   } else if (pageId === 'model-perf') {
@@ -505,12 +506,9 @@ async function setRole(role) {
   const navItems = {
     'nav-dashboard': true,
     'nav-optimization': true,
-    'nav-roi-simulator': true,
     'nav-risk-list': isMOrEng,
     'nav-ai-assistant': isMOrEng,
-    'nav-profit-prediction': isMOrEng,
     'nav-model-perf': isEng,
-    'nav-region-map': isEng,
     'nav-rbac': isEng,
     'nav-llm-settings': isMOrEng
   };
@@ -520,6 +518,9 @@ async function setRole(role) {
     if (el) el.style.display = visible ? 'flex' : 'none';
   }
 
+  // 注意：roi-simulator/profit-prediction/region-map 已從 sidebar 移除，
+  // 但頁面/區段保留（roi 將併入 optimization、profit 併入 model-perf 子頁、region 暫留），
+  // 故仍列入 allowedPages 以免直接導航時被踢回 dashboard。
   const allowedPages = {
     viewer: ['dashboard', 'optimization', 'roi-simulator'],
     manager: ['dashboard', 'optimization', 'roi-simulator', 'risk-list', 'ai-assistant', 'profit-prediction', 'llm-settings'],

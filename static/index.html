@@ -44,9 +44,6 @@
     <a class="nav-item" id="nav-optimization" onclick="showPage('optimization')">
       <i class="nav-icon">◉</i> 最佳化調度
     </a>
-    <a class="nav-item" id="nav-roi-simulator" onclick="showPage('roi-simulator')">
-      <i class="nav-icon">◎</i> 最佳化ROI模擬器
-    </a>
 
     <div class="nav-section" id="section-manager">Manager 營運工具</div>
     <a class="nav-item" id="nav-risk-list" onclick="showPage('risk-list')">
@@ -55,16 +52,10 @@
     <a class="nav-item" id="nav-ai-assistant" onclick="showPage('ai-assistant')">
       <i class="nav-icon">✦</i> AI 決策助理
     </a>
-    <a class="nav-item" id="nav-profit-prediction" onclick="showPage('profit-prediction')">
-      <i class="nav-icon">$</i> 收益預測
-    </a>
-    
+
     <div class="nav-section" id="section-engineer">Engineer 系統後台</div>
     <a class="nav-item" id="nav-model-perf" onclick="showPage('model-perf')">
       <i class="nav-icon">⚙</i> 模型診斷與重訓
-    </a>
-    <a class="nav-item" id="nav-region-map" onclick="showPage('region-map')">
-      <i class="nav-icon">◆</i> 區域風險地圖
     </a>
     <a class="nav-item" id="nav-rbac" onclick="showPage('rbac')">
       <i class="nav-icon">○</i> 權限管理
@@ -110,8 +101,7 @@
     <!-- 2. VIEWER — OPTIMIZATION PANEL -->
     <div class="page-section hidden" id="page-optimization" data-src="/static/components/optimization.html"></div>
 
-    <!-- 2b. VIEWER — 最佳化ROI模擬器 PANEL -->
-    <div class="page-section hidden" id="page-roi-simulator" data-src="/static/components/roi_simulator.html"></div>
+    <!-- 2b. 最佳化ROI模擬器：已併入最佳化調度頁的 ROI 真價值分析區（項目4），不再是獨立 page-section -->
 
     <!-- 3. MANAGER — RISK ORDER MANAGEMENT PANEL -->
     <div class="page-section hidden" id="page-risk-list" data-src="/static/components/risk_list.html"></div>
@@ -119,8 +109,7 @@
     <!-- 4. MANAGER — AI ASSISTANT PANEL -->
     <div class="page-section hidden" id="page-ai-assistant" data-src="/static/components/ai_assistant.html"></div>
 
-    <!-- 5. MANAGER — PROFIT PREDICTION PANEL -->
-    <div class="page-section hidden" id="page-profit-prediction" data-src="/static/components/profit_prediction.html"></div>
+    <!-- 5. 收益預測：已併入模型診斷與重訓的子頁（項目8），不再是獨立 page-section -->
 
     <!-- 6. ENGINEER — MODEL PERFORMANCE & RETRAINING PANEL -->
     <div class="page-section hidden" id="page-model-perf" data-src="/static/components/model_perf.html"></div>

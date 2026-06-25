@@ -3,25 +3,9 @@
   <div class="page-sub">匯入 CSV 推論資料、動態微調參數模擬、以及互動式地圖視覺化</div>
 </div>
 
-<!-- Threshold Slider (Manager Option) -->
-<div class="panel" style="padding:20px; display:flex; flex-wrap:wrap; gap:20px; align-items:center; justify-content:space-between;">
-  <div style="flex:1; min-width:300px; display:flex; flex-direction:column; gap:8px;">
-    <div style="display:flex; align-items:center; gap:16px; width:100%;">
-      <div style="flex-shrink:0; min-width:140px;">
-        <label class="field-label" style="font-weight:700;">預警判定門檻 (Threshold)</label>
-        <span style="font-size:20px; font-weight:700; color:var(--primary); font-family:monospace;" class="thresholdValDisplay">0.50</span>
-      </div>
-      <input type="range" class="thresholdSlider sim-slider" min="0.10" max="0.90" step="0.05" value="0.50" oninput="updateThreshold(this.value)">
-    </div>
-    <div style="display:flex; gap:10px; align-items:center; font-size:11px;">
-      <span style="color:var(--muted)">快速校準：</span>
-      <button onclick="applyThresholdRecommendation('f1')" style="padding:2px 6px; background:#ecfdf5; color:#047857; border:1px solid #a7f3d0; border-radius:4px; cursor:pointer;">⚖ 平衡模式 (F1)</button>
-      <button onclick="applyThresholdRecommendation('cost')" style="padding:2px 6px; background:#fffbeb; color:#b45309; border:1px solid #fde68a; border-radius:4px; cursor:pointer;">💰 成本最低模式</button>
-      <span class="sopStatusLockWrap" style="margin-left:auto;"></span>
-    </div>
-  </div>
-  
-  <!-- CSV Import/Export -->
+<!-- CSV Import/Export -->
+<div class="panel" style="padding:20px; display:flex; flex-wrap:wrap; gap:20px; align-items:center; justify-content:flex-end;">
+  <span class="sopStatusLockWrap"></span>
   <div style="display:flex; gap:10px; align-items:center;">
     <input type="file" id="csvFileInput" accept=".csv" style="display:none;" onchange="uploadTrainingCSV(this)">
     <a href="/static/template.csv" download="template.csv" class="run-btn" style="width:auto; padding:8px 16px; background:var(--muted); border-radius:6px; font-size:12px; text-decoration:none; color:white;">
@@ -34,31 +18,6 @@
       🔄 還原驗證集
     </button>
     <span id="lockedUploadBox" class="locked-box" style="font-size:11px; padding:6px 12px; border-radius:6px;">🔒 需 Manager 權限回填訓練資料</span>
-  </div>
-</div>
-
-<!-- Threshold Calibration Card -->
-<div class="panel thresholdTuningPanel" id="thresholdTuningPanel" style="padding: 20px; display:none;">
-  <div style="display:flex; justify-content:space-between; margin-bottom:12px; align-items:center;">
-    <div class="panel-title">門檻即時校正建議</div>
-    <span class="thresholdTuningNote" style="font-size:11px; color:var(--muted);"></span>
-  </div>
-  <div style="display:grid; grid-template-columns: repeat(3, 1fr); gap:12px;">
-    <div style="background:var(--slate-lt); padding:12px; border-radius:8px;">
-      <div style="font-size:10px; color:var(--muted);">目前門檻</div>
-      <div style="font-size:16px; font-weight:700;" class="tuneCurrentThreshold">—</div>
-      <div style="font-size:10px; color:var(--muted); margin-top:4px;" class="tuneCurrentMetrics"></div>
-    </div>
-    <div style="background:var(--slate-lt); padding:12px; border-radius:8px;">
-      <div style="font-size:10px; color:var(--muted);">最佳 F1-Score (平衡)</div>
-      <div style="font-size:16px; font-weight:700; color:var(--success);" class="tuneBestF1Threshold">—</div>
-      <div style="font-size:10px; color:var(--muted); margin-top:4px;" class="tuneBestF1Metrics"></div>
-    </div>
-    <div style="background:var(--slate-lt); padding:12px; border-radius:8px;">
-      <div style="font-size:10px; color:var(--muted);">最低預期損失成本</div>
-      <div style="font-size:16px; font-weight:700; color:var(--warning);" class="tuneBestCostThreshold">—</div>
-      <div style="font-size:10px; color:var(--muted); margin-top:4px;" class="tuneBestCostMetrics"></div>
-    </div>
   </div>
 </div>
 

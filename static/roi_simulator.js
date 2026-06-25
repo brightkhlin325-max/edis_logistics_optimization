@@ -6,6 +6,7 @@
 let _roiScatterChart = null;
 let _roiLoaded = false;
 let _roiViewMode = 'scatter';
+let _roiAtRiskPage = 1;
 
 function changeRoiViewMode(mode) {
   _roiViewMode = mode;
@@ -59,13 +60,41 @@ function closeRoiInfo(e) {
 
 function _roiPenalty() { return parseFloat(document.getElementById('roiPenalty')?.value) || 250; }
 
+function setRoiPenalty(v) {
+  const el = document.getElementById('roiPenalty');
+  if (!el) return;
+  el.value = v;
+  onRoiPenaltyChange();
+}
+window.setRoiPenalty = setRoiPenalty;
+
 async function loadRoiSimulator() {
-  syncRoiSimulatorRole();
+  // 項目2/6：ROI 最佳化求解與 What-if 前端已移除，相關呼叫停用（後端保留）。
   await loadRoiSummary();
   await loadRoiPortfolio();   // 也會在內部填客群/區域下拉
   loadRoiTrustMap();
-  populateWhatifRegions();
 }
+
+// 項目4：把 ROI 分析區動態載入「最佳化調度」頁的 #optRoiAnalysis（只載一次）
+async function loadEmbeddedRoi() {
+  const host = document.getElementById('optRoiAnalysis');
+  if (!host) return;
+  if (!host.dataset.loaded) {
+    try {
+      const r = await fetch('/static/components/roi_simulator.html');
+      host.innerHTML = await r.text();
+      // 移除內嵌 page-header（避免與最佳化調度頁標題重複）
+      const hdr = host.querySelector('.page-header');
+      if (hdr) hdr.remove();
+      host.dataset.loaded = '1';
+    } catch (e) {
+      host.innerHTML = `<div style="color:red;padding:20px;">ROI 分析載入失敗：${e.message}</div>`;
+      return;
+    }
+  }
+  loadRoiSimulator();
+}
+window.loadEmbeddedRoi = loadEmbeddedRoi;
 
 async function loadRoiSummary() {
   try {
@@ -93,7 +122,7 @@ async function loadRoiPortfolio() {
   const seg = document.getElementById('roiSegFilter').value;
   const region = document.getElementById('roiRegionFilter').value;
   const disc = document.getElementById('roiDiscFilter').value;
-  const qs = new URLSearchParams({ value_axis: vAxis, risk_axis: rAxis, penalty: _roiPenalty(), max_points: 1500 });
+  const qs = new URLSearchParams({ value_axis: vAxis, risk_axis: rAxis, penalty: _roiPenalty(), max_points: 1500, at_risk_page: _roiAtRiskPage, at_risk_limit: 50 });
   if (seg) qs.set('segment', seg);
   if (region) qs.set('region', region);
   if (disc) qs.set('discount_band', disc);
@@ -103,7 +132,7 @@ async function loadRoiPortfolio() {
     _populateOnce('roiSegFilter', d.filters?.segments || []);
     _populateOnce('roiRegionFilter', d.filters?.regions || []);
     renderRoiScatter(d, vAxis, rAxis);
-    renderAtRisk(d.at_risk_list || []);
+    renderAtRisk(d.at_risk_list || [], d);
     const note = document.getElementById('roiScatterNote');
     if (note) note.textContent = `符合篩選 ${d.total_filtered.toLocaleString()} 筆${d.truncated ? `，散點取樣顯示 ${d.points_returned} 筆（保護效能）` : ''}。`;
   } catch (e) { console.error('roi portfolio', e); }
@@ -214,19 +243,36 @@ function renderRoiScatter(d, vAxis, rAxis) {
   });
 }
 
-function renderAtRisk(list) {
-  document.getElementById('roiAtRiskCount').textContent = `${list.length} 筆`;
+function renderAtRisk(list, d) {
+  const total = d?.at_risk_total ?? list.length;
+  const page = d?.at_risk_page ?? 1;
+  const pages = d?.at_risk_pages ?? 1;
+  document.getElementById('roiAtRiskCount').textContent = `${total.toLocaleString()} 筆`;
   const body = document.getElementById('roiAtRiskBody');
-  if (!list.length) { body.innerHTML = `<tr><td colspan="5" style="text-align:center;padding:24px;color:var(--muted)">無資料</td></tr>`; return; }
-  body.innerHTML = list.map(o => `
-    <tr>
-      <td><span class="order-id">${o.id}</span></td>
-      <td style="font-weight:700;">${_fmtMoney(o.epar)}</td>
-      <td>${_fmtMoney(o.profit_actual)}</td>
-      <td>${_fmtPct(o.p_late)}</td>
-      <td>${o.segment}</td>
-    </tr>`).join('');
+  if (!list.length) { body.innerHTML = `<tr><td colspan="5" style="text-align:center;padding:24px;color:var(--muted)">無資料</td></tr>`; }
+  else {
+    body.innerHTML = list.map(o => `
+      <tr>
+        <td><span class="order-id">${o.id}</span></td>
+        <td style="font-weight:700;">${_fmtMoney(o.epar)}</td>
+        <td>${_fmtMoney(o.profit_actual)}</td>
+        <td>${_fmtPct(o.p_late)}</td>
+        <td>${o.segment}</td>
+      </tr>`).join('');
+  }
+  const ind = document.getElementById('roiAtRiskPageIndicator');
+  if (ind) ind.textContent = `第 ${page} / ${pages} 頁`;
+  const prev = document.getElementById('roiAtRiskPrev');
+  const next = document.getElementById('roiAtRiskNext');
+  if (prev) { prev.disabled = page <= 1; prev.style.opacity = page <= 1 ? 0.5 : 1; }
+  if (next) { next.disabled = page >= pages; next.style.opacity = page >= pages ? 0.5 : 1; }
 }
+
+function changeAtRiskPage(delta) {
+  _roiAtRiskPage = Math.max(1, _roiAtRiskPage + delta);
+  loadRoiPortfolio();
+}
+window.changeAtRiskPage = changeAtRiskPage;
 
 async function loadRoiTrustMap() {
   try {

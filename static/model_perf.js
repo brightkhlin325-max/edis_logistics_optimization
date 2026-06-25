@@ -442,3 +442,41 @@ async function loadLeakageAudit() {
 
 window.loadDeterioration = loadDeterioration;
 window.loadLeakageAudit = loadLeakageAudit;
+
+// 項目8：模型診斷子頁切換（延遲 / 收益）
+let _mpProfitLoaded = false;
+async function switchModelSubpage(which) {
+  const delayPane = document.getElementById('mpDelayPane');
+  const profitPane = document.getElementById('mpProfitPane');
+  const tabDelay = document.getElementById('mpTabDelay');
+  const tabProfit = document.getElementById('mpTabProfit');
+  if (!delayPane || !profitPane) return;
+
+  const setActive = (btn, active) => {
+    if (!btn) return;
+    btn.style.color = active ? 'var(--primary)' : 'var(--muted)';
+    btn.style.borderBottom = active ? '2px solid var(--primary)' : '2px solid transparent';
+  };
+
+  if (which === 'profit') {
+    delayPane.style.display = 'none';
+    profitPane.style.display = 'block';
+    setActive(tabProfit, true); setActive(tabDelay, false);
+    if (!_mpProfitLoaded) {
+      try {
+        const resp = await fetch('/static/components/profit_prediction.html');
+        profitPane.innerHTML = await resp.text();
+        _mpProfitLoaded = true;
+      } catch (e) {
+        profitPane.innerHTML = `<div style="color:red;padding:20px;">收益模型子頁載入失敗：${e.message}</div>`;
+        return;
+      }
+    }
+    if (window.loadProfitPrediction) loadProfitPrediction();
+  } else {
+    profitPane.style.display = 'none';
+    delayPane.style.display = 'block';
+    setActive(tabDelay, true); setActive(tabProfit, false);
+  }
+}
+window.switchModelSubpage = switchModelSubpage;

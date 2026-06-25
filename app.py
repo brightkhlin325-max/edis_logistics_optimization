@@ -2870,6 +2870,8 @@ async def roi_portfolio(
     discount_band: Optional[str] = None,
     penalty: float = 250.0,
     max_points: int = 1500,
+    at_risk_page: int = 1,
+    at_risk_limit: int = 50,
     x_role: Optional[str] = Header(default=None),
     authorization: Optional[str] = Header(default=None),
 ):
@@ -2894,7 +2896,13 @@ async def roi_portfolio(
         for r in sample.itertuples(index=False)
     ]
 
-    at_risk = df.sort_values("epar", ascending=False).head(50)
+    # 在險名單分頁（依 EPAR 由大到小）
+    at_risk_limit = max(1, min(int(at_risk_limit), 200))
+    at_risk_total = total
+    at_risk_pages = max(1, (at_risk_total + at_risk_limit - 1) // at_risk_limit)
+    at_risk_page = max(1, min(int(at_risk_page), at_risk_pages))
+    start_idx = (at_risk_page - 1) * at_risk_limit
+    at_risk = df.sort_values("epar", ascending=False).iloc[start_idx:start_idx + at_risk_limit]
     at_risk_list = [
         {
             "id": make_display_order_id(r.order_id_hash),
@@ -2917,6 +2925,10 @@ async def roi_portfolio(
         "truncated": total > max_points,
         "points": points,
         "at_risk_list": at_risk_list,
+        "at_risk_page": at_risk_page,
+        "at_risk_pages": at_risk_pages,
+        "at_risk_total": at_risk_total,
+        "at_risk_limit": at_risk_limit,
         "filters": {
             "segments": sorted(_load_decision_df()["customer_segment"].dropna().unique().tolist()),
             "regions": sorted(_load_decision_df()["order_region"].dropna().unique().tolist()),

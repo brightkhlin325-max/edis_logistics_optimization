@@ -3,6 +3,16 @@
   <div class="page-sub">系統效能監控與預警參數調校</div>
 </div>
 
+<!-- 子頁切換：延遲預測模型 / 收益預測模型 -->
+<div style="display:flex; gap:8px; margin-bottom:18px; border-bottom:1px solid var(--border);">
+  <button id="mpTabDelay" class="mp-subtab" onclick="switchModelSubpage('delay')"
+    style="padding:10px 18px; border:none; background:transparent; cursor:pointer; font-size:14px; font-weight:700; color:var(--primary); border-bottom:2px solid var(--primary);">延遲預測模型</button>
+  <button id="mpTabProfit" class="mp-subtab" onclick="switchModelSubpage('profit')"
+    style="padding:10px 18px; border:none; background:transparent; cursor:pointer; font-size:14px; font-weight:700; color:var(--muted); border-bottom:2px solid transparent;">收益預測模型</button>
+</div>
+
+<div id="mpDelayPane">
+
 <!-- Combined Performance Display & Retrain Panel -->
 <div class="grid-2">
   <div style="display:flex; flex-direction:column; gap:20px;">
@@ -207,4 +217,11 @@
     <span class="tag" id="leakGateTag">--</span>
   </div>
   <div style="padding:18px;" id="leakAuditBody">載入中...</div>
+</div>
+
+</div><!-- /mpDelayPane -->
+
+<!-- 收益預測模型子頁（切換時動態載入 profit_prediction.html） -->
+<div id="mpProfitPane" style="display:none;">
+  <div style="padding:40px; text-align:center; color:var(--muted);">載入收益預測模型中...</div>
 </div>

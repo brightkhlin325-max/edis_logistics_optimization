@@ -104,11 +104,10 @@ window.closeExplainModal = closeExplainModal;
 
 async function refreshDashboard() {
   try {
-    const [p, executive, scenarios, tuning] = await Promise.all([
+    const [p, executive, scenarios] = await Promise.all([
       fetchPredictions(window.edisState.currentPage, '', '', '', '', currentFlipperMonth()),
       fetchExecutiveSummary(),
-      fetchScenarioAnalysis(),
-      fetchThresholdTuning().catch(() => null)
+      fetchScenarioAnalysis()
     ]);
     if (p) {
       syncMonthFlipper(p.available_months);
@@ -119,7 +118,7 @@ async function refreshDashboard() {
     }
     if (executive) renderExecutiveSummary(executive);
     if (scenarios) renderBudgetScenarios(scenarios);
-    if (tuning) renderThresholdTuning(tuning);
+    // 項目5：門檻校正 UI 已移除，相關渲染呼叫一併移除（原為未定義函式）。
   } catch (e) {
     console.error('Failed to refresh dashboard', e);
   }

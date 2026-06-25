@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "slide",
+      "runtimeExecutable": "cmd",
+      "runtimeArgs": ["/c", "set KMP_DUPLICATE_LIB_OK=TRUE && set PYTHONUTF8=1 && .venv\\Scripts\\python.exe -m uvicorn app:app --port 8000"],
+      "port": 8000
+    }
+  ]
+}
