@@ -30,6 +30,15 @@ echo EDIS Setup and Run Script
 echo ==========================================
 echo [INFO] Project: %CD%
 
+:: 0. Initialize conda for this CMD session (needed when launched by double-click).
+if not defined CONDA_SHLVL (
+    if exist "%USERPROFILE%\anaconda3\Scripts\activate.bat" (
+        call "%USERPROFILE%\anaconda3\Scripts\activate.bat" "%USERPROFILE%\anaconda3"
+    ) else if exist "D:\anaconda3\Scripts\activate.bat" (
+        call "D:\anaconda3\Scripts\activate.bat" "D:\anaconda3"
+    )
+)
+
 :: 1. Check for local Python virtual environment (.venv) first, then fallback to Conda.
 set "USE_VENV=0"
 if exist ".venv\Scripts\python.exe" (
