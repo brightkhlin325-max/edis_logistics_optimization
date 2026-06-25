@@ -1,0 +1,12 @@
+{
+  "rows_orders": 22544,
+  "book_profit_total": 1649063.86,
+  "net_of_service_total": -1434186.14,
+  "service_erosion_total": 3083250.0,
+  "false_positive_value_orders": 7956,
+  "profit_positive_orders": 17565,
+  "false_positive_value_pct_of_profitable": 0.4529,
+  "epar_total": 848228.14,
+  "penalty_basis": 250.0,
+  "profit_r2_on_decision_set": 0.9893
+}
