@@ -5,6 +5,27 @@
 
 let _roiScatterChart = null;
 let _roiLoaded = false;
+let _roiViewMode = 'scatter';
+
+function changeRoiViewMode(mode) {
+  _roiViewMode = mode;
+  const scatterBtn = document.getElementById('roiViewModeScatter');
+  const quadBtn = document.getElementById('roiViewModeQuadrant');
+  if (scatterBtn && quadBtn) {
+    if (mode === 'scatter') {
+      scatterBtn.style.background = 'var(--primary)';
+      scatterBtn.style.color = 'white';
+      quadBtn.style.background = 'transparent';
+      quadBtn.style.color = 'var(--muted)';
+    } else {
+      quadBtn.style.background = 'var(--primary)';
+      quadBtn.style.color = 'white';
+      scatterBtn.style.background = 'transparent';
+      scatterBtn.style.color = 'var(--muted)';
+    }
+  }
+  loadRoiPortfolio();
+}
 
 const _fmtMoney = (v) => (v < 0 ? '-$' : '$') + Math.abs(Math.round(v)).toLocaleString();
 const _fmtPct = (v) => (v * 100).toFixed(1) + '%';
@@ -13,8 +34,8 @@ const ROI_INFO = {
   penalty: ['SLA 延遲罰金', '每筆訂單延遲時估計付出的代價（退費/賠償/商譽）。調整它會即時重算「真價值」與相關 KPI。預設 $250，對齊最佳化調度。'],
   nos: ['真價值 Net-of-Service', '真價值 = 帳載利潤 − 實際延遲 × 罰金。用驗證集的「實際是否延遲」回填，揭露帳面賺錢、實際卻因延遲賠錢的訂單。'],
   fp: ['假性賺錢比例', '帳載利潤為正、但扣掉延遲代價後真價值變負的訂單，占所有帳面賺錢訂單的比例。比例越高代表帳面數字越不可信。'],
-  epar: ['預期在險利潤 EPAR', 'EPAR = 帳載利潤 × 延遲機率 P(late)。代表「這筆利潤有多少暴露在延遲風險下」，數字越大越該優先介入。'],
-  trust: ['Trust Map 校準', '用模型沒看過的「樣本外」測試集，比對預測 vs 實際：延遲看 AUC（0.5=亂猜、1=完美）、收益看 R²。藉「已知」背書「預測」在哪些客群可信。'],
+  epar: ['預估風險暴露金額', '利潤暴露在延遲機率下的風險值，即 EPAR = 帳載利潤 × 延遲機率。代表「這筆利潤有多少暴露在延遲風險下」，數字越大越該優先介入。'],
+  trust: ['Trust Map 校準說明', '以模型未看過的測試集比對預測 vs 實際。將機器學習指標轉譯為白話的信心等級，綠色為「高度可信」，黃色為「中度可信」，紅色代表「需謹慎參考」。'],
 };
 
 function openRoiInfo(key, customTitle, customBody) {
@@ -99,26 +120,95 @@ function renderRoiScatter(d, vAxis, rAxis) {
   if (fb) fb.style.display = 'none';
   canvas.style.display = 'block';
   const pts = (d.points || []).map(p => ({ x: p.risk, y: p.value, _p: p }));
-  const colors = (d.points || []).map(p => p.fp ? 'rgba(192,57,43,0.65)' : 'rgba(67,112,150,0.5)');
-  if (_roiScatterChart) { _roiScatterChart.destroy(); _roiScatterChart = null; }   // 防止重疊/記憶體堆積
+
+  let colors;
+  let datasets = [];
+
+  if (_roiViewMode === 'quadrant') {
+    const minX = 0, maxX = 1;
+    const yValues = pts.map(p => p.y);
+    const minY = yValues.length ? Math.min(...yValues) : -500;
+    const maxY = yValues.length ? Math.max(...yValues) : 500;
+
+    colors = (d.points || []).map(p => {
+      const isHighRisk = p.risk >= 0.5;
+      const isHighProfit = p.value >= 0;
+      if (isHighProfit && isHighRisk) return 'rgba(230, 126, 34, 0.75)'; // Orange: High Profit, High Risk
+      if (!isHighProfit && isHighRisk) return 'rgba(192, 57, 43, 0.8)'; // Red: Low Profit, High Risk
+      if (isHighProfit && !isHighRisk) return 'rgba(46, 204, 113, 0.75)'; // Green: High Profit, Low Risk
+      return 'rgba(127, 140, 141, 0.65)'; // Gray: Low Profit, Low Risk
+    });
+
+    datasets.push({
+      label: '訂單',
+      data: pts,
+      pointRadius: 3.5,
+      pointHoverRadius: 6,
+      backgroundColor: colors
+    });
+
+    // Horizontal line at y=0
+    datasets.push({
+      label: '價值分界線',
+      data: [{ x: minX, y: 0 }, { x: maxX, y: 0 }],
+      borderColor: 'rgba(15, 23, 42, 0.45)',
+      borderWidth: 1.5,
+      borderDash: [5, 5],
+      pointRadius: 0,
+      showLine: true,
+      type: 'line'
+    });
+
+    // Vertical line at x=0.5
+    datasets.push({
+      label: '風險分界線',
+      data: [{ x: 0.5, y: minY }, { x: 0.5, y: maxY }],
+      borderColor: 'rgba(15, 23, 42, 0.45)',
+      borderWidth: 1.5,
+      borderDash: [5, 5],
+      pointRadius: 0,
+      showLine: true,
+      type: 'line'
+    });
+  } else {
+    colors = (d.points || []).map(p => p.fp ? 'rgba(192,57,43,0.65)' : 'rgba(67,112,150,0.5)');
+    datasets.push({
+      data: pts,
+      pointRadius: 3,
+      pointHoverRadius: 6,
+      backgroundColor: colors
+    });
+  }
+
+  if (_roiScatterChart) { _roiScatterChart.destroy(); _roiScatterChart = null; }
+
   _roiScatterChart = new Chart(canvas.getContext('2d'), {
     type: 'scatter',
-    data: { datasets: [{ data: pts, pointRadius: 3, pointHoverRadius: 6, backgroundColor: colors }] },
+    data: { datasets: datasets },
     options: {
       responsive: true, maintainAspectRatio: false,
       plugins: {
         legend: { display: false },
-        tooltip: { callbacks: { label: (c) => { const p = c.raw._p; return `${p.id} · 價值 ${_fmtMoney(p.value)} · 風險 ${p.risk}`; } } },
+        tooltip: {
+          callbacks: {
+            label: (c) => {
+              if (c.datasetIndex !== 0) return '';
+              const p = c.raw._p;
+              return `${p.id} · 價值 ${_fmtMoney(p.value)} · 風險 ${p.risk}`;
+            }
+          }
+        },
       },
       scales: {
-        x: { title: { display: true, text: rAxis === 'true_label' ? '實際延遲 (0/1)' : '延遲機率 P(late)' } },
+        x: { min: 0, max: 1, title: { display: true, text: rAxis === 'true_label' ? '實際延遲 (0/1)' : '延遲機率 P(late)' } },
         y: { title: { display: true, text: vAxis === 'profit_actual' ? '帳載利潤 $' : '真價值 Net-of-Service $' } },
       },
       onClick: (evt, els) => {
         if (!els || !els.length) return;
+        if (els[0].datasetIndex !== 0) return; // Only trigger click on order points dataset
         const p = pts[els[0].index]._p;
         openRoiInfo(null, `訂單 ${p.id}`,
-          `<div style="line-height:2;">客群：${p.segment}<br>區域：${p.region}<br>價值：<b>${_fmtMoney(p.value)}</b><br>風險：<b>${p.risk}</b><br>EPAR：${_fmtMoney(p.epar)}<br>${p.fp ? '<span style=\"color:#c0392b;font-weight:700;\">⚠ 假性賺錢：帳面賺、實際賠</span>' : '✅ 非假性賺錢'}</div>`);
+          `<div style="line-height:2;">客群：${p.segment}<br>區域：${p.region}<br>價值：<b>${_fmtMoney(p.value)}</b><br>風險：${p.risk}<br>在險利潤：${_fmtMoney(p.epar)}<br>${p.fp ? '<span style=\"color:#c0392b;font-weight:700;\">⚠ 假性賺錢：帳面賺、實際賠</span>' : '✅ 非假性賺錢'}</div>`);
       },
     },
   });
@@ -148,22 +238,45 @@ async function loadRoiTrustMap() {
   } catch (e) { console.error('trust map', e); }
 }
 
-function _heatColor(t) { // t in 0..1 → red→green
-  const r = Math.round(220 * (1 - t) + 39 * t), g = Math.round(64 * (1 - t) + 128 * t), b = 60;
-  return `rgba(${r},${g},${b},0.20)`;
-}
 function renderTrustRows(elId, rows, kind) {
   const el = document.getElementById(elId);
   if (!el) return;
   if (!rows.length) { el.innerHTML = '<div style="font-size:12px;color:var(--muted);">無資料</div>'; return; }
   el.innerHTML = rows.map(r => {
     const score = kind === 'delay' ? (r.auc ?? 0) : (r.r2 ?? 0);
-    const t = Math.max(0, Math.min(1, (score - 0.5) / 0.5));
+
+    // Determine semantic confidence status
+    let confidenceText = '高度可信 (Very Reliable)';
+    let borderStyle = '1px solid var(--success)';
+    let bg = 'rgba(46, 204, 113, 0.12)';
+
+    if (kind === 'delay') {
+      if (score < 0.70) {
+        confidenceText = '需謹慎參考 (Use Caution)';
+        borderStyle = '1px solid var(--danger)';
+        bg = 'rgba(231, 76, 60, 0.12)';
+      } else if (score < 0.80) {
+        confidenceText = '中度可信 (Reliable)';
+        borderStyle = '1px solid var(--warning)';
+        bg = 'rgba(241, 196, 15, 0.12)';
+      }
+    } else {
+      if (score < 0.40) {
+        confidenceText = '需謹慎參考 (Use Caution)';
+        borderStyle = '1px solid var(--danger)';
+        bg = 'rgba(231, 76, 60, 0.12)';
+      } else if (score < 0.60) {
+        confidenceText = '中度可信 (Reliable)';
+        borderStyle = '1px solid var(--warning)';
+        bg = 'rgba(241, 196, 15, 0.12)';
+      }
+    }
+
     const metric = kind === 'delay' ? `AUC ${r.auc ?? '—'}` : `R² ${r.r2 ?? '—'}`;
     const detail = kind === 'delay'
       ? `延遲率 ${_fmtPct(r.late_rate)}、平均預測 ${_fmtPct(r.mean_p_late)}`
       : `MAE ${r.mae}、RMSE ${r.rmse}`;
-    return `<div onclick="openRoiInfo('trust')" style="cursor:pointer; display:flex; justify-content:space-between; align-items:center; padding:9px 12px; border:1px solid var(--border); border-radius:8px; background:${_heatColor(t)};">
+    return `<div onclick="openRoiInfo('trust')" style="cursor:pointer; display:flex; justify-content:space-between; align-items:center; padding:9px 12px; border:${borderStyle}; border-radius:8px; background:${bg}; transition:all 0.2s;" onmouseover="this.style.transform='translateY(-1px)';" onmouseout="this.style.transform='none';">
       <div><div style="font-weight:700; font-size:13px;">${r.group}</div><div style="font-size:11px; color:var(--muted);">${detail} · n=${r.n.toLocaleString()}</div></div>
       <div style="font-weight:700; font-family:monospace;">${metric}</div></div>`;
   }).join('');
@@ -175,13 +288,32 @@ function onRoiPenaltyChange() {
   window._roiPenaltyTimer = setTimeout(() => { loadRoiSummary(); loadRoiPortfolio(); }, 350);
 }
 
+function jumpToOptimization() {
+  const budget = document.getElementById('roiBudget')?.value || 5000;
+  const penalty = document.getElementById('roiOptPenalty')?.value || 250;
+  const threshold = document.getElementById('roiRiskThreshold')?.value || 0.3;
+
+  // Set global state or simply update the DOM elements in optimization page
+  const optBudget = document.getElementById('optPageBudgetInput');
+  const optPenalty = document.getElementById('optPageDelayPenalty');
+  const optThreshold = document.getElementById('optPageRiskThreshold');
+
+  if (optBudget) optBudget.value = budget;
+  if (optPenalty) optPenalty.value = penalty;
+  if (optThreshold) optThreshold.value = threshold;
+
+  showPage('optimization');
+}
+
 function syncRoiSimulatorRole() {
   const role = window.edisState?.currentRole || 'viewer';
   const isMgr = role === 'manager' || role === 'engineer';
   const runBtn = document.getElementById('roiOptRunBtn');
+  const pubBtn = document.getElementById('roiOptPublishBtn');
   const lock = document.getElementById('roiOptLockedBox');
   const badge = document.getElementById('roiOptRoleBadge');
   if (runBtn) runBtn.classList.toggle('hidden', !isMgr);
+  if (pubBtn) pubBtn.classList.toggle('hidden', !isMgr);
   if (lock) lock.classList.toggle('hidden', isMgr);
   if (badge) { badge.className = isMgr ? 'role-badge badge-manager' : 'role-badge badge-viewer'; badge.textContent = role === 'engineer' ? 'Engineer' : (role === 'manager' ? 'Manager' : 'Viewer'); }
 }
@@ -210,7 +342,7 @@ async function runRoiOptimize() {
       <tr><td><span class="order-id">${c.customer}</span></td><td>${c.orders}</td><td style="font-weight:700;">${_fmtMoney(c.epar)}</td><td class="green">${_fmtMoney(c.net_benefit)}</td></tr>`).join('')
       || `<tr><td colspan="4" style="text-align:center;padding:16px;color:var(--muted)">無</td></tr>`;
     document.getElementById('roiSelOrdBody').innerHTML = (d.selected_orders || []).slice(0, 80).map(o => `
-      <tr><td><span class="order-id">${o.display_order_id || o.order_id_hash?.slice(0,8)}</span></td><td>${_fmtPct(o.p_late)}</td><td class="green">${_fmtMoney(o.net_benefit ?? o.expected_saving ?? 0)}</td><td>$${o.upgrade_cost}</td></tr>`).join('')
+      <tr><td><span class="order-id">${o.display_order_id || o.order_id_hash?.slice(0, 8)}</span></td><td>${_fmtPct(o.p_late)}</td><td class="green">${_fmtMoney(o.net_benefit ?? o.expected_saving ?? 0)}</td><td>$${o.upgrade_cost}</td></tr>`).join('')
       || `<tr><td colspan="4" style="text-align:center;padding:16px;color:var(--muted)">無</td></tr>`;
   } catch (e) {
     showToast('ROI 最佳化失敗：' + e.message, 'error');
@@ -254,6 +386,48 @@ async function runWhatif() {
     const good = (b.expected_net || 0) > 0;
     document.getElementById('wfBest').innerHTML =
       `<b>建議：${d.decision}</b><br>最佳組合：折扣 <b>${_fmtPct(b.discount_rate || 0)}</b> × <b>${b.shipping_mode}</b> → 預測收益 ${_fmtMoney(b.profit_pred || 0)}、延遲機率 ${_fmtPct(b.p_late || 0)}、<b style="color:${good ? '#15803d' : '#b91c1c'}">預期淨值 ${_fmtMoney(b.expected_net || 0)}</b>`;
+
+    // Generate Consultant Advisory Card
+    const card = document.getElementById('wfAdvisoryCard');
+    if (card) {
+      card.style.display = 'block';
+      let statusColor = 'var(--warning)';
+      let borderLeftColor = 'var(--warning)';
+      let background = 'linear-gradient(135deg, #fffcf5 0%, #fff6e0 100%)';
+      let fontColor = '#5c3e00';
+      let icon = '⚠️ 建議監控/升級';
+      let title = '顧問決策建議';
+
+      const nos = b.expected_net || 0;
+      const erosion = (b.profit_pred || 0) - nos;
+      const erosionPct = b.profit_pred > 0 ? (erosion / b.profit_pred * 100) : 0;
+
+      let advText = '';
+      if (nos < 0) {
+        statusColor = 'var(--danger)';
+        borderLeftColor = 'var(--danger)';
+        background = 'linear-gradient(135deg, #fdf2f2 0%, #fde8e8 100%)';
+        fontColor = '#9b1c1c';
+        icon = '❌ 建議拒單';
+        advText = `此折扣組合預期淨利潤為負 (${_fmtMoney(nos)})。主要是延遲機率高達 ${_fmtPct(b.p_late)}，預期服務代價侵蝕利潤達 ${_fmtMoney(erosion)} (${erosionPct.toFixed(1)}%)，嚴重破壞訂單價值。建議調整運送承諾或提高價格。`;
+      } else if (b.p_late > 0.40) {
+        icon = '⚠️ 建議監控/升級';
+        advText = `本單雖有淨值 (${_fmtMoney(nos)})，但延遲風險達 ${_fmtPct(b.p_late)}。此類合約在實務上隨時可能因罰金發生侵蝕。若要接單，建議在出貨時使用快捷物流，或將折扣降低 5-10% 以保留利潤安全邊際。`;
+      } else {
+        statusColor = 'var(--success)';
+        borderLeftColor = 'var(--success)';
+        background = 'linear-gradient(135deg, #f3faf7 0%, #e6f6f0 100%)';
+        fontColor = '#03543f';
+        icon = '✅ 建議接單';
+        advText = `本單具有良好的利潤結構，且預估延遲機率極低 (${_fmtPct(b.p_late)})。預估真價值達 ${_fmtMoney(nos)}。這屬於高回報、低風險的優質訂單，建議立即依此條件進行簽約與排產。`;
+      }
+
+      card.style.background = background;
+      card.style.borderLeft = `4px solid ${borderLeftColor}`;
+      card.style.color = fontColor;
+      card.innerHTML = `<div style="font-weight:700; font-size:14px; margin-bottom:4px;">${icon} - ${title}</div><div>${advText}</div>`;
+    }
+
     renderWhatifHeatmap(d);
   } catch (e) {
     showToast('What-if 失敗：' + e.message, 'error');
@@ -298,3 +472,4 @@ window.runWhatif = runWhatif;
 window.openRoiInfo = openRoiInfo;
 window.closeRoiInfo = closeRoiInfo;
 window.syncRoiSimulatorRole = syncRoiSimulatorRole;
+window.changeRoiViewMode = changeRoiViewMode;

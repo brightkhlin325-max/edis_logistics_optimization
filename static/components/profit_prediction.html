@@ -20,17 +20,17 @@
 <div id="profitContent">
   <div style="display:grid; grid-template-columns:repeat(4, minmax(0, 1fr)); gap:16px; margin-bottom:20px;">
     <div class="kpi-card">
-      <div class="kpi-label">RMSE</div>
+      <div class="kpi-label">RMSE <span class="roi-info" title="均方根誤差：衡量預測利潤與真實利潤的平均偏離程度。數字越小，代表模型預測越準確。">ⓘ</span></div>
       <div class="kpi-value" id="profitRmse">--</div>
       <div class="kpi-foot">平均平方誤差開根號</div>
     </div>
     <div class="kpi-card">
-      <div class="kpi-label">MAE</div>
+      <div class="kpi-label">MAE <span class="roi-info" title="平均絕對誤差：預測利潤與真實利潤在絕對金額上的平均差距。代表平均每筆訂單預測會差多少錢。數字越小越好。">ⓘ</span></div>
       <div class="kpi-value" id="profitMae">--</div>
       <div class="kpi-foot">平均絕對金額誤差</div>
     </div>
     <div class="kpi-card">
-      <div class="kpi-label">R2</div>
+      <div class="kpi-label">R2 <span class="roi-info" title="決定係數：衡量模型能解釋利潤變化的比例。越接近 1.0 代表預測能力極高，小於 0 代表模型比瞎猜還糟。">ⓘ</span></div>
       <div class="kpi-value" id="profitR2">--</div>
       <div class="kpi-foot">收益變異解釋力</div>
     </div>

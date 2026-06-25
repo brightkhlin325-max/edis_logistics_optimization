@@ -137,6 +137,36 @@ async function startManualRetrain() {
   }
 }
 
+async function uploadNewTrainingData(input) {
+  if (!input.files || input.files.length === 0) return;
+  const file = input.files[0];
+  const formData = new FormData();
+  formData.append('file', file);
+  
+  const status = document.getElementById('newTrainingStatus');
+  status.style.display = 'block';
+  status.style.color = 'var(--text)';
+  status.innerHTML = '<span class="spinner"></span> 正在上傳資料...';
+  
+  try {
+    const res = await fetch(`${API_BASE}/api/upload-training`, {
+      method: 'POST',
+      body: formData
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || '上傳失敗');
+    
+    status.style.color = 'var(--success)';
+    status.textContent = '資料上傳成功！請點擊下方的「啟動排除異常因素重訓」或直接啟動完整重訓，將新資料納入模型。';
+    showToast('新訓練資料已匯入', 'success');
+  } catch(e) {
+    status.style.color = 'var(--danger)';
+    status.textContent = '上傳失敗：' + e.message;
+    showToast('上傳失敗：' + e.message, 'error');
+  }
+  input.value = ''; // Reset input
+}
+
 function pollRetrainTask(taskId) {
   const status = document.getElementById('diagRetrainStatus');
   const manualStatus = document.getElementById('manualRetrainStatus');

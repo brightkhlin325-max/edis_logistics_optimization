@@ -2722,6 +2722,7 @@ def _apply_value_risk(df: pd.DataFrame, value_axis: str, risk_axis: str, penalty
     df["net_of_service"] = (df["profit_actual"] - df["true_label"] * penalty).round(4)
     df["value"] = df["net_of_service"] if value_axis == "net_of_service" else df["profit_actual"]
     df["risk"] = df["true_label"] if risk_axis == "true_label" else df["p_late"]
+    df["is_false_positive_value"] = ((df["profit_actual"] > 0) & (df["net_of_service"] < 0)).astype(int)
     return df
 
 

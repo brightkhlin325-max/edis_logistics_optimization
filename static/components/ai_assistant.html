@@ -11,6 +11,23 @@
   </div>
 
   <div class="ai-composer-wrap">
+    <div style="margin-bottom:12px;">
+      <div style="font-size:11px; font-weight:700; color:var(--muted); margin-bottom:6px; text-transform:uppercase; letter-spacing:0.5px;">💡 顧問推薦引導問題</div>
+      <div style="display:grid; grid-template-columns:repeat(3, 1fr); gap:10px; overflow-x:auto; padding-bottom:4px;">
+        <div style="border:1px solid var(--border); border-radius:8px; padding:10px; background:white; cursor:pointer; transition:all 0.2s;" onclick="document.getElementById('aiQuestionInput').value='目前哪一個區域的物流延遲率最高？其根本原因是什麼？'; document.getElementById('aiQuestionInput').focus();" onmouseover="this.style.borderColor='var(--primary)'; this.style.boxShadow='0 2px 6px rgba(0,0,0,0.05)';" onmouseout="this.style.borderColor='var(--border)'; this.style.boxShadow='none';">
+          <div style="font-size:11px; font-weight:700; color:var(--primary); margin-bottom:4px;">🔍 延遲診斷</div>
+          <div style="font-size:12px; color:var(--text); line-height:1.4;">分析哪一區延遲最高與原因</div>
+        </div>
+        <div style="border:1px solid var(--border); border-radius:8px; padding:10px; background:white; cursor:pointer; transition:all 0.2s;" onclick="document.getElementById('aiQuestionInput').value='在調度預算 $5000 下，建議優先升級哪些訂單以獲得最高 ROI？'; document.getElementById('aiQuestionInput').focus();" onmouseover="this.style.borderColor='var(--primary)'; this.style.boxShadow='0 2px 6px rgba(0,0,0,0.05)';" onmouseout="this.style.borderColor='var(--border)'; this.style.boxShadow='none';">
+          <div style="font-size:11px; font-weight:700; color:var(--success); margin-bottom:4px;">🎯 營運最佳化</div>
+          <div style="font-size:12px; color:var(--text); line-height:1.4;">最佳預算配置與升級建議</div>
+        </div>
+        <div style="border:1px solid var(--border); border-radius:8px; padding:10px; background:white; cursor:pointer; transition:all 0.2s;" onclick="document.getElementById('aiQuestionInput').value='如果每筆延遲罰金提高到 $500，對整體真價值 (Net-of-Service) 的侵蝕幅度有多大？'; document.getElementById('aiQuestionInput').focus();" onmouseover="this.style.borderColor='var(--primary)'; this.style.boxShadow='0 2px 6px rgba(0,0,0,0.05)';" onmouseout="this.style.borderColor='var(--border)'; this.style.boxShadow='none';">
+          <div style="font-size:11px; font-weight:700; color:var(--accent-warm); margin-bottom:4px;">⚖️ 合約校準</div>
+          <div style="font-size:12px; color:var(--text); line-height:1.4;">評估罰金提高對利潤之侵蝕</div>
+        </div>
+      </div>
+    </div>
     <div class="ai-composer">
       <textarea id="aiQuestionInput" rows="2" placeholder="請輸入提問...（例如：請幫我分析目前最容易延遲的地區與原因）"></textarea>
       <div class="ai-composer-actions">

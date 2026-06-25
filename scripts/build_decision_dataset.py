@@ -111,7 +111,7 @@ def score_profit(raw_items: pd.DataFrame) -> np.ndarray:
     X[numeric_cols] = X[numeric_cols].astype(float)
 
     booster = lgb.Booster(model_file=str(MODEL_PATH))
-    return booster.predict(X)
+    return booster.predict(X.values)
 
 
 def _profit_hash(order_id: str) -> str:

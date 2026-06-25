@@ -68,6 +68,22 @@
       </div>
     </div>
 
+    <!-- New Data Upload Panel -->
+    <div class="panel" style="padding: 20px;">
+      <div class="panel-head">
+        <div class="panel-title">📥 上傳最新實際歷史資料 (CSV)</div>
+      </div>
+      <div style="font-size: 11.5px; color: var(--muted); margin-top: 4px; margin-bottom: 12px; line-height: 1.5;">
+        上傳最新標記為實際延遲狀態的訂單資料以供後續模型重新訓練。
+      </div>
+      <input type="file" id="newTrainingCsvInput" accept=".csv" style="display:none;" onchange="uploadNewTrainingData(this)">
+      <button onclick="document.getElementById('newTrainingCsvInput').click()" class="run-btn" style="background: var(--primary); font-weight: 600;">
+        上傳最新訓練資料
+      </button>
+      <div id="newTrainingStatus" style="display:none; text-align:center; padding:10px; font-size:12px; color:var(--success); margin-top:8px;">
+      </div>
+    </div>
+
     <!-- Manual Model Retraining Panel -->
     <div class="panel" style="padding: 20px;">
       <div class="panel-head">

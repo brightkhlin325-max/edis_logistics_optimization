@@ -505,7 +505,7 @@ async function setRole(role) {
     'nav-roi-simulator': true,
     'nav-risk-list': isMOrEng,
     'nav-ai-assistant': isMOrEng,
-    'nav-profit-prediction': true,
+    'nav-profit-prediction': isMOrEng,
     'nav-model-perf': isEng,
     'nav-region-map': isEng,
     'nav-rbac': isEng,
@@ -518,7 +518,7 @@ async function setRole(role) {
   }
 
   const allowedPages = {
-    viewer: ['dashboard', 'optimization', 'roi-simulator', 'profit-prediction'],
+    viewer: ['dashboard', 'optimization', 'roi-simulator'],
     manager: ['dashboard', 'optimization', 'roi-simulator', 'risk-list', 'ai-assistant', 'profit-prediction', 'llm-settings'],
     engineer: ['dashboard', 'optimization', 'roi-simulator', 'risk-list', 'ai-assistant', 'profit-prediction', 'model-perf', 'region-map', 'rbac', 'llm-settings']
   };
