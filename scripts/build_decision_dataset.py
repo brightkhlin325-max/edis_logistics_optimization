@@ -102,15 +102,23 @@ def score_profit(raw_items: pd.DataFrame) -> np.ndarray:
     cat_codes = schema.get("categorical_codes", {})
 
     X = ready[feature_columns].copy()
-    # 與 ProfitModelPipeline._load_ready_frame 完全一致：整數碼 → 固定 categories 的 category dtype
-    for c in cat_cols:
-        if c in X.columns:
-            codes = cat_codes.get(c)
-            X[c] = pd.Categorical(X[c], categories=codes) if codes is not None else X[c].astype("category")
-    numeric_cols = [c for c in X.columns if c not in cat_cols]
-    X[numeric_cols] = X[numeric_cols].astype(float)
 
     booster = lgb.Booster(model_file=str(MODEL_PATH))
+
+    # 判斷模型是否有 categorical 設定（新版訓練後的模型可能沒有）
+    booster_cat_features = set(booster.feature_name()) & set(cat_cols)
+    if booster_cat_features:
+        # 舊式模型：套用 category dtype
+        for c in cat_cols:
+            if c in X.columns:
+                codes = cat_codes.get(c)
+                X[c] = pd.Categorical(X[c], categories=codes) if codes is not None else X[c].astype("category")
+        numeric_cols = [c for c in X.columns if c not in cat_cols]
+        X[numeric_cols] = X[numeric_cols].astype(float)
+    else:
+        # 新式模型：全部轉 float（已是整數碼，直接使用）
+        X = X.astype(float)
+
     return booster.predict(X)
 
 
