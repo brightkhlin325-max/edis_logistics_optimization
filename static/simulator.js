@@ -133,18 +133,35 @@ function renderPredictResult(data) {
   }
 }
 
+function setSimulatorSelectValue(id, value) {
+  const select = document.getElementById(id);
+  if (!select) return false;
+
+  const normalized = String(value || '');
+  if (normalized && !Array.from(select.options).some(option => option.value === normalized)) {
+    const option = new Option(normalized, normalized, true, true);
+    select.add(option);
+  }
+  if (normalized) select.value = normalized;
+  return true;
+}
+
 function loadOrderIntoSimulator(shippingMode, orderRegion, days, price, qty, segment, market, orderDate) {
   const simulator = document.getElementById('instantPredictPanel');
-  if (simulator) {
-    simulator.scrollIntoView({ behavior: 'smooth', block: 'center' });
-  }
+  const requiredIds = [
+    'pf-shipping-mode', 'pf-order-region', 'pf-days', 'pf-price', 'pf-qty',
+    'pf-segment', 'pf-market', 'pf-date', 'predictRunBtn'
+  ];
+  if (!simulator || requiredIds.some(id => !document.getElementById(id))) return false;
 
-  document.getElementById('pf-shipping-mode').value = shippingMode;
-  document.getElementById('pf-order-region').value = orderRegion;
+  simulator.scrollIntoView({ behavior: 'smooth', block: 'center' });
+
+  setSimulatorSelectValue('pf-shipping-mode', shippingMode);
+  setSimulatorSelectValue('pf-order-region', orderRegion);
   document.getElementById('pf-days').value = days;
   document.getElementById('pf-price').value = price;
   document.getElementById('pf-qty').value = qty;
-  document.getElementById('pf-segment').value = segment;
+  setSimulatorSelectValue('pf-segment', segment);
   document.getElementById('pf-market').value = market;
   if (orderDate) {
     document.getElementById('pf-date').value = orderDate.split(' ')[0];
@@ -153,6 +170,25 @@ function loadOrderIntoSimulator(shippingMode, orderRegion, days, price, qty, seg
   }
 
   runInstantPredict();
+  return true;
+}
+
+function openOrderSimulation(shippingMode, orderRegion, days, price, qty, segment, market, orderDate) {
+  const order = [shippingMode, orderRegion, days, price, qty, segment, market, orderDate];
+  let attempts = 0;
+
+  const applyWhenReady = () => {
+    if (loadOrderIntoSimulator(...order)) return;
+    attempts += 1;
+    if (attempts < 20) {
+      window.setTimeout(applyWhenReady, 50);
+    } else if (window.showToast) {
+      window.showToast('What-if 模擬器尚未載入完成，請重新點選模擬。', 'error');
+    }
+  };
+
+  if (window.showPage) window.showPage('risk-list');
+  window.requestAnimationFrame(applyWhenReady);
 }
 
 async function runGlobalSimulation(val) {
@@ -177,4 +213,5 @@ async function runGlobalSimulation(val) {
 window.runInstantPredict = runInstantPredict;
 window.renderPredictResult = renderPredictResult;
 window.loadOrderIntoSimulator = loadOrderIntoSimulator;
+window.openOrderSimulation = openOrderSimulation;
 window.runGlobalSimulation = runGlobalSimulation;

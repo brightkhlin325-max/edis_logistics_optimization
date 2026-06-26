@@ -54,11 +54,22 @@ try:
     from optimizer import ShippingOptimizer
     from preprocessor import predict_uploaded_csv, validate_upload_columns, UploadValidationError
     from training_store import append_training_csv, TrainingDataError
+    from risk_policy import risk_bucket_for_probability
 except ImportError:
     ShippingOptimizer = None
     predict_uploaded_csv = None
     validate_upload_columns = None
     append_training_csv = None
+    def risk_bucket_for_probability(value):
+        try:
+            probability = float(value)
+        except (TypeError, ValueError):
+            return "Low"
+        if probability >= 0.7:
+            return "High"
+        if probability >= 0.3:
+            return "Medium"
+        return "Low"
     class UploadValidationError(ValueError):
         pass
     class TrainingDataError(ValueError):
@@ -1222,12 +1233,7 @@ def predict_single_order(
     p_late = float(model.predict_proba(row_df)[:, 1][0])
 
     # ── 後處理 ───────────────────────────────────────────────────────
-    if p_late >= 0.7:
-        risk_bucket = "High"
-    elif p_late >= 0.4:
-        risk_bucket = "Medium"
-    else:
-        risk_bucket = "Low"
+    risk_bucket = risk_bucket_for_probability(p_late)
 
     delay_penalty   = 250.0
     expected_penalty = round(p_late * delay_penalty, 2)
@@ -1653,6 +1659,9 @@ def get_predictions(
         }
 
     df = load_cached_predictions(pred_path).reset_index(drop=True).copy()
+    if "p_late" in df.columns:
+        # Re-label legacy rows at read time, independent of the CSV's old policy.
+        df["risk_bucket"] = pd.to_numeric(df["p_late"], errors="coerce").map(risk_bucket_for_probability)
 
     # What-if simulator fields: these are input features, not answer/leakage fields.
     # predictions.csv is aligned row-by-row with test_ready.csv for the default validation set.
@@ -2749,21 +2758,33 @@ def _get_delay_xgb_model(model_path: Path):
 
 
 def _get_profit_runtime() -> dict:
-    """單例載入收益模型 runtime（pipeline 編碼 + LightGBM booster + schema）。"""
+    """單例載入收益模型 runtime（pipeline 編碼 + LightGBM booster + 部署特徵契約）。"""
     if not _PROFIT_RUNTIME:
         import lightgbm as lgb
         from profit_data_pipeline import ProfitDataPipeline
 
         artifacts_path = BASE_DIR / "models" / "profit" / "serving_artifacts.json"
-        schema_path = DATA_DIR / "profit_feature_schema.json"
         model_path = BASE_DIR / "models" / "profit_lightgbm_model.txt"
-        if not (artifacts_path.exists() and schema_path.exists() and model_path.exists()):
+        if not (artifacts_path.exists() and model_path.exists()):
             raise HTTPException(status_code=503, detail="收益模型尚未就緒，請先執行收益管線與訓練。")
 
         with open(artifacts_path, encoding="utf-8") as f:
             artifacts = json.load(f)
-        with open(schema_path, encoding="utf-8") as f:
-            schema = json.load(f)
+        manifest = _load_profit_manifest()
+        artifact_features = artifacts.get("feature_columns", [])
+        manifest_features = manifest.get("feature_columns", [])
+        if not artifact_features:
+            raise HTTPException(status_code=503, detail="收益 serving artifacts 缺少 feature_columns。")
+        if manifest_features and manifest_features != artifact_features:
+            raise HTTPException(status_code=503, detail="收益模型 manifest 與 serving artifacts 特徵契約不一致。")
+
+        # serving_artifacts 與模型一起產生，是單筆預測真正使用的特徵契約。
+        # 不讀取可能由舊版前處理留下的 profit_feature_schema.json，避免舊欄位重返推論。
+        schema = {
+            "feature_columns": artifact_features,
+            "categorical_columns": artifacts.get("categorical_columns", []),
+            "categorical_codes": artifacts.get("categorical_codes", {}),
+        }
         pipe = ProfitDataPipeline()
         pipe.artifacts = artifacts
         _PROFIT_RUNTIME.update(
@@ -2780,7 +2801,10 @@ def _load_decision_df() -> pd.DataFrame:
             status_code=404,
             detail="decision_dataset.csv 尚未產生，請先執行：python scripts/build_decision_dataset.py",
         )
-    return load_cached_predictions(DECISION_DATASET_PATH)
+    df = load_cached_predictions(DECISION_DATASET_PATH).copy()
+    if "p_late" in df.columns:
+        df["risk_bucket"] = pd.to_numeric(df["p_late"], errors="coerce").map(risk_bucket_for_probability)
+    return df
 
 
 def _apply_value_risk(df: pd.DataFrame, value_axis: str, risk_axis: str, penalty: float) -> pd.DataFrame:
@@ -3212,15 +3236,41 @@ async def profit_leakage_audit(
         LEAKAGE_COLUMNS, PII_COLUMNS, ID_COLUMNS, NOISE_COLUMNS = [], [], [], []
 
     manifest = _load_profit_manifest()
-    schema_path = DATA_DIR / "profit_feature_schema.json"
-    feature_cols = []
-    if schema_path.exists():
-        with open(schema_path, encoding="utf-8") as f:
-            feature_cols = json.load(f).get("feature_columns", [])
+    artifacts_path = BASE_DIR / "models" / "profit" / "serving_artifacts.json"
+    serving_artifacts = {}
+    if artifacts_path.exists():
+        try:
+            with open(artifacts_path, encoding="utf-8") as f:
+                serving_artifacts = json.load(f)
+        except Exception:
+            serving_artifacts = {}
 
-    leaked_in_features = [c for c in (list(LEAKAGE_COLUMNS) + list(PII_COLUMNS) + list(ID_COLUMNS)) if c in feature_cols]
+    manifest_features = manifest.get("feature_columns", [])
+    artifact_features = serving_artifacts.get("feature_columns", [])
+    contract_errors = []
+    if not manifest_features:
+        contract_errors.append("profit_feature_manifest.json 缺少 feature_columns")
+    if not artifact_features:
+        contract_errors.append("serving_artifacts.json 缺少 feature_columns")
+    if manifest_features and artifact_features and manifest_features != artifact_features:
+        contract_errors.append("profit_feature_manifest.json 與 serving_artifacts.json 特徵不一致")
+
+    # 守門檢查部署模型真正採用的特徵契約，而非可能殘留的舊版 processed schema。
+    feature_cols = manifest_features or artifact_features
+    schema_path = DATA_DIR / "profit_feature_schema.json"
+    legacy_schema_features = []
+    if schema_path.exists():
+        try:
+            with open(schema_path, encoding="utf-8") as f:
+                legacy_schema_features = json.load(f).get("feature_columns", [])
+        except Exception:
+            contract_errors.append("profit_feature_schema.json 無法解析")
+
+    blocked_features = list(LEAKAGE_COLUMNS) + list(PII_COLUMNS) + list(ID_COLUMNS)
+    leaked_in_features = [c for c in blocked_features if c in feature_cols]
+    legacy_schema_blocked = [c for c in blocked_features if c in legacy_schema_features]
     return {
-        "gate_status": "PASS" if not leaked_in_features else "FAIL",
+        "gate_status": "PASS" if not leaked_in_features and not contract_errors else "FAIL",
         "blocked": {
             "leakage": list(LEAKAGE_COLUMNS),
             "pii": list(PII_COLUMNS),
@@ -3236,6 +3286,12 @@ async def profit_leakage_audit(
         },
         "leaked_in_features": leaked_in_features,
         "feature_count": len(feature_cols),
+        "serving_contract": {
+            "source": "profit_feature_manifest.json + serving_artifacts.json",
+            "contract_errors": contract_errors,
+            "legacy_schema_blocked": legacy_schema_blocked,
+            "legacy_schema_status": "stale" if legacy_schema_blocked else "compatible",
+        },
         "column_labeling": {
             "profit_actual": "真利潤（驗證集回填的實際 Order Profit Per Order）",
             "profit_pred": "收益模型預測值（前瞻估計，非實際）",

@@ -6,6 +6,7 @@ from pathlib import Path
 # 將根目錄加入 sys.path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 from app import app
+from risk_policy import risk_bucket_for_probability
 
 client = TestClient(app)
 
@@ -93,6 +94,13 @@ def test_predict_sorted_by_urgency_desc():
     if len(data) >= 2:  # 示範資料可能不足，僅在有足量資料時驗證
         ps = [d["p_late"] for d in data]
         assert ps == sorted(ps, reverse=True), f"未依緊急程度降冪排序: {ps}"
+
+
+def test_predict_relabels_legacy_rows_with_shared_risk_policy():
+    response = client.get("/api/predict?limit=50&threshold=0.3")
+    assert response.status_code == 200, response.text
+    for row in response.json()["data"]:
+        assert row["risk_bucket"] == risk_bucket_for_probability(row["p_late"])
 
 
 def test_predict_exposes_available_months():
@@ -224,6 +232,41 @@ def test_profit_metrics_viewer_access():
     assert "is_trained" in data
 
 
+def test_profit_leakage_audit_uses_deployed_feature_contract():
+    """守門應檢查部署模型契約，不能被舊版 processed schema 誤判為 FAIL。"""
+    response = client.get("/api/profit/leakage-audit")
+    assert response.status_code == 200, response.text
+    data = response.json()
+
+    assert data["gate_status"] == "PASS"
+    assert data["leaked_in_features"] == []
+    assert data["feature_count"] == 33
+    assert data["serving_contract"]["contract_errors"] == []
+    assert data["serving_contract"]["legacy_schema_status"] == "stale"
+    assert set(data["serving_contract"]["legacy_schema_blocked"]) == {
+        "Days for shipping (real)",
+        "Delivery Status",
+        "Order Status",
+        "Late_delivery_risk",
+    }
+
+
+def test_profit_single_prediction_uses_serving_feature_contract():
+    """舊版 processed schema 不得影響部署中收益模型的單筆推論。"""
+    response = client.post(
+        "/api/profit/predict-single",
+        json={
+            "shipping_mode": "First Class",
+            "order_region": "Western Europe",
+            "product_price": 49.99,
+            "order_item_quantity": 3,
+            "days_for_shipment": 2,
+        },
+    )
+    assert response.status_code == 200, response.text
+    assert isinstance(response.json()["predicted_profit"], float)
+
+
 def test_profit_prediction_page_route():
     response = client.get("/profit-prediction")
     assert response.status_code == 200
@@ -273,10 +316,24 @@ def test_region_map_keeps_country_heatmap_without_bubble_fallback():
 
 
 def test_risk_list_simulator_button_uses_safe_arguments():
-    """風險訂單的模擬按鈕應安全帶入欄位，避免引號造成整頁渲染失敗。"""
+    """風險訂單的模擬按鈕應避免把 JSON 雙引號直接塞進 inline onclick。"""
     js = (Path(__file__).parent.parent / "static" / "risk_list.js").read_text(encoding="utf-8")
 
-    assert "JSON.stringify(String(value ?? fallback))" in js
-    assert "const simulatorArgs = [" in js
-    assert "onclick=\"loadOrderIntoSimulator(${simulatorArgs})\"" in js
-    assert "'${o.customer_segment||'Consumer'}'" not in js
+    assert "function encodeSimulatorOrder(order)" in js
+    assert "function bindSimulatorButtons(container)" in js
+    assert "data-simulator-order=\"${simulatorOrder}\"" in js
+    assert "JSON.parse(button.dataset.simulatorOrder || '{}')" in js
+    assert "onclick=\"window.openOrderSimulation(" not in js
+
+
+def test_all_simulation_entrypoints_use_shared_handoff():
+    """Dashboard 與風險名單必須共用可等待頁面載入的 What-if 入口。"""
+    root = Path(__file__).parent.parent / "static"
+    dashboard = (root / "dashboard.js").read_text(encoding="utf-8")
+    simulator = (root / "simulator.js").read_text(encoding="utf-8")
+
+    assert "window.openOrderSimulation(shippingMode, orderRegion, days, price, qty, segment, market, orderDate)" in dashboard
+    assert "window.openDashboardSimulator = openDashboardSimulator" in dashboard
+    assert "function openOrderSimulation(" in simulator
+    assert "window.openOrderSimulation = openOrderSimulation" in simulator
+    assert "setSimulatorSelectValue('pf-order-region', orderRegion)" in simulator

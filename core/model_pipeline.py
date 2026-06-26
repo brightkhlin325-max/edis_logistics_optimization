@@ -35,6 +35,8 @@ except ImportError:
 
 # ── 常數 ──────────────────────────────────────────────────────────────────────
 
+from risk_policy import RISK_THRESHOLDS, risk_bucket_for_probability
+
 TARGET_COLUMN = "Late_delivery_risk"
 DEFAULT_MODEL_PATH = "models/xgboost_model.json"
 
@@ -55,12 +57,6 @@ XGBOOST_PARAMS = {
 }
 
 # 延遲風險分桶閾值
-RISK_THRESHOLDS = {
-    "High": 0.5,
-    "Medium": 0.3,
-    "Low": 0.0,
-}
-
 # 預設升級成本（最佳化模組使用）
 DEFAULT_UPGRADE_COST = 80.0
 DEFAULT_DELAY_PENALTY = 250.0
@@ -299,11 +295,7 @@ class ModelPipeline:
             pred_df["order_region"] = "Unknown"
 
         # 風險分桶
-        pred_df["risk_bucket"] = pd.cut(
-            pred_df["p_late"],
-            bins=[-0.001, RISK_THRESHOLDS["Medium"], RISK_THRESHOLDS["High"], 1.001],
-            labels=["Low", "Medium", "High"],
-        )
+        pred_df["risk_bucket"] = pred_df["p_late"].map(risk_bucket_for_probability)
 
         # 最佳化所需欄位
         pred_df["expected_penalty"] = (pred_df["p_late"] * DEFAULT_DELAY_PENALTY).round(2)

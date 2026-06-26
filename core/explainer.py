@@ -15,6 +15,8 @@ from typing import Iterable
 
 import pandas as pd
 
+from risk_policy import risk_bucket_for_probability
+
 
 DEFAULT_TOP_FACTORS = [
     "Shipping Mode_Standard Class",
@@ -322,11 +324,7 @@ class ManagerExplainer:
         )
 
     def _risk_bucket(self, p_late: float) -> str:
-        if p_late >= 0.7:
-            return "High"
-        if p_late >= 0.4:
-            return "Medium"
-        return "Low"
+        return risk_bucket_for_probability(p_late)
 
     def _json_default(self, value):
         if hasattr(value, "item"):

@@ -4,6 +4,8 @@ import json
 from pathlib import Path
 import hashlib
 
+from risk_policy import risk_bucket_for_probability
+
 
 # ── 上傳資料驗證閘門（C）─────────────────────────────────────────────
 class UploadValidationError(ValueError):
@@ -205,11 +207,7 @@ def predict_uploaded_csv(file_path_or_buffer, mapping_path: Path, model_path: Pa
         # Fallback to pseudo ground truth
         active_df["true_label"] = (active_df["p_late"] >= 0.5).astype(int)
         
-    active_df["risk_bucket"] = pd.cut(
-        active_df["p_late"],
-        bins=[-0.001, 0.4, 0.7, 1.001],
-        labels=["Low", "Medium", "High"]
-    ).astype(str)
+    active_df["risk_bucket"] = active_df["p_late"].map(risk_bucket_for_probability)
     
     active_df["expected_penalty"] = (active_df["p_late"] * 250.0).round(2)
     

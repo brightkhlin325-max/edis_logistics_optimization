@@ -204,10 +204,10 @@ function renderExecutiveSummary(d) {
 
 function fillClass(p) {
   const num = typeof p === 'string' ? (p === 'High' ? 0.8 : p === 'Medium' ? 0.5 : 0.2) : p;
-  return num >= 0.7 ? 'fill-high' : num >= 0.4 ? 'fill-med' : 'fill-low';
+  return num >= 0.7 ? 'fill-high' : num >= 0.3 ? 'fill-med' : 'fill-low';
 }
 function pillClass(p) {
-  const str = typeof p === 'number' ? (p >= 0.7 ? 'High' : p >= 0.4 ? 'Medium' : 'Low') : p;
+  const str = typeof p === 'number' ? (p >= 0.7 ? 'High' : p >= 0.3 ? 'Medium' : 'Low') : p;
   return str === 'High' ? 'r-high' : str === 'Medium' ? 'r-med' : 'r-low';
 }
 
@@ -236,12 +236,9 @@ function getReasonText(o) {
 
 function openDashboardSimulator(shippingMode, orderRegion, days, price, qty, segment, market, orderDate) {
   if (window.edisState.currentRole === 'viewer') return;
-  showPage('risk-list');
-  setTimeout(() => {
-    if (window.loadOrderIntoSimulator) {
-      window.loadOrderIntoSimulator(shippingMode, orderRegion, days, price, qty, segment, market, orderDate);
-    }
-  }, 250);
+  if (window.openOrderSimulation) {
+    window.openOrderSimulation(shippingMode, orderRegion, days, price, qty, segment, market, orderDate);
+  }
 }
 
 function openRecommendedOptimization() {
@@ -376,6 +373,7 @@ window.fillClass = fillClass;
 window.pillClass = pillClass;
 window.getReasonText = getReasonText;
 window.getActionText = getActionText;
+window.openDashboardSimulator = openDashboardSimulator;
 window.openRecommendedOptimization = openRecommendedOptimization;
 window.renderBossTable = renderBossTable;
 window.toggleRowExplanation = toggleRowExplanation;

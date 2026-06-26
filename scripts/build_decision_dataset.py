@@ -36,6 +36,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(BASE_DIR))
 
 from core.profit_data_pipeline import ProfitDataPipeline, TARGET_COLUMN  # noqa: E402
+from core.risk_policy import risk_bucket_for_probability  # noqa: E402
 
 RAW_PATH = BASE_DIR / "data" / "raw" / "DataCoSupplyChainDataset.csv"
 PRED_PATH = BASE_DIR / "data" / "processed" / "predictions.csv"
@@ -55,7 +56,6 @@ PROFIT_HASH_SALT = "SLIDE_PROFIT_2026"   # 對齊 profit_data_pipeline（注意�
 
 DELAY_HASH_SALT = "EDIS_2026"          # 對齊 core/security_utils.DeIdentifier
 DEFAULT_PENALTY = 250.0                # 對齊 optimizer 的 delay_penalty 預設
-HIGH_T, MED_T = 0.5, 0.3               # 對齊 model_pipeline RISK_THRESHOLDS
 
 # 原始欄位名
 COL_ORDER_ID = "Order Id"
@@ -74,11 +74,7 @@ def _delay_hash(order_id: str) -> str:
 
 
 def _risk_bucket(p: float) -> str:
-    if p >= HIGH_T:
-        return "High"
-    if p >= MED_T:
-        return "Medium"
-    return "Low"
+    return risk_bucket_for_probability(p)
 
 
 def _require(path: Path, hint: str) -> None:

@@ -21,6 +21,8 @@ import pandas as pd
 from dataclasses import dataclass, field
 from typing import Optional
 
+from risk_policy import risk_bucket_for_probability
+
 try:
     import pulp
     PULP_AVAILABLE = True
@@ -209,6 +211,8 @@ class ShippingOptimizer:
 
     def _complete_fields(self, df: pd.DataFrame) -> pd.DataFrame:
         """補全缺失欄位的預設值。"""
+        df = df.copy()
+        df["risk_bucket"] = pd.to_numeric(df["p_late"], errors="coerce").map(risk_bucket_for_probability)
         # 1. 補全 expected_penalty：每次用當前 delay_penalty 覆寫以確保與最新參數對齊
         df["expected_penalty"] = df["p_late"] * self.delay_penalty
         

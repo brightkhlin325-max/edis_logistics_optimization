@@ -65,3 +65,11 @@ def test_order_specific_flags_are_honest():
     txn = _factor(factors, "訂單交易型態")
     if txn is not None:
         assert txn["order_specific"] is False
+
+
+def test_explainer_uses_shared_risk_boundaries():
+    explainer = _explainer()
+    assert explainer._risk_bucket(0.2999) == "Low"
+    assert explainer._risk_bucket(0.30) == "Medium"
+    assert explainer._risk_bucket(0.6999) == "Medium"
+    assert explainer._risk_bucket(0.70) == "High"
