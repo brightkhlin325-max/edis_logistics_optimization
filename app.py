@@ -54,11 +54,22 @@ try:
     from optimizer import ShippingOptimizer
     from preprocessor import predict_uploaded_csv, validate_upload_columns, UploadValidationError
     from training_store import append_training_csv, TrainingDataError
+    from risk_policy import risk_bucket_for_probability
 except ImportError:
     ShippingOptimizer = None
     predict_uploaded_csv = None
     validate_upload_columns = None
     append_training_csv = None
+    def risk_bucket_for_probability(value):
+        try:
+            probability = float(value)
+        except (TypeError, ValueError):
+            return "Low"
+        if probability >= 0.7:
+            return "High"
+        if probability >= 0.3:
+            return "Medium"
+        return "Low"
     class UploadValidationError(ValueError):
         pass
     class TrainingDataError(ValueError):
@@ -71,9 +82,12 @@ BASE_DIR = Path(__file__).parent
 DATA_DIR = BASE_DIR / "data" / "processed"
 METRICS_PATH = DATA_DIR / "model_metrics.json"
 PREDICTIONS_PATH = DATA_DIR / "predictions.csv"
+TEST_READY_PATH = DATA_DIR / "test_ready.csv"
 PROFIT_METRICS_PATH = DATA_DIR / "profit_model_metrics.json"
 PROFIT_PREDICTIONS_PATH = DATA_DIR / "profit_predictions.csv"
 PROFIT_MANIFEST_PATH = BASE_DIR / "models" / "profit_feature_manifest.json"
+PROFIT_MODEL_PATH = BASE_DIR / "models" / "profit_lightgbm_model.txt"
+PROFIT_SERVING_ARTIFACTS_PATH = BASE_DIR / "models" / "profit" / "serving_artifacts.json"
 LLM_RUNTIME_CONFIG_PATH = DATA_DIR / "llm_runtime_config.json"
 
 # DataFrame 快取機制
@@ -435,6 +449,8 @@ def build_optimization_result(request: OptimizeRequest, pred_path: Path, save_re
             "selected_count": 12,
             "total_cost": 960.0,
             "expected_total_saving": 2850.0,
+            "delay_penalty": request.delay_penalty,
+            "upgrade_cost": request.upgrade_cost,
             "selected_orders": [
                 {
                     "order_id_hash": "a8f3c2d1" * 8,
@@ -465,13 +481,17 @@ def build_optimization_result(request: OptimizeRequest, pred_path: Path, save_re
         upgrade_cost=request.upgrade_cost,
         delay_penalty=request.delay_penalty,
         risk_threshold=request.risk_threshold,
+        max_candidates=500,
     )
     result = optimizer.run(
         predictions_path_or_df=str(pred_path),
         output_dir=str(DATA_DIR),
         save_results=save_results,
     )
-    return attach_manager_analysis(result.to_dict(), pred_path)
+    result_dict = result.to_dict()
+    result_dict["delay_penalty"] = request.delay_penalty
+    result_dict["upgrade_cost"] = request.upgrade_cost
+    return attach_manager_analysis(result_dict, pred_path)
 
 
 def display_order_id(order_id_hash: str) -> str:
@@ -546,11 +566,12 @@ def build_llm_safe_payload(
         },
         "optimization": {
             "budget": optimization_result.get("budget"),
+            "delay_penalty": optimization_result.get("delay_penalty"),
+            "upgrade_cost": optimization_result.get("upgrade_cost"),
             "selected_count": optimization_result.get("selected_count"),
             "total_cost": optimization_result.get("total_cost"),
             "expected_total_saving": optimization_result.get("expected_total_saving"),
             "expected_total_penalty_avoided": optimization_result.get("expected_total_penalty_avoided"),
-            "solver": optimization_result.get("solver"),
         },
         "manager_analysis": {
             "headline": manager_analysis.get("headline"),
@@ -615,11 +636,13 @@ def local_llm_fallback(safe_payload: dict, question: str = "") -> str:
     opt = safe_payload.get("optimization", {})
     analysis = safe_payload.get("manager_analysis", {})
     requested_order = safe_payload.get("requested_order") or {}
+    samples = analysis.get("sample_order_explanations") or []
     q = (question or "").strip().lower()
     budget = float(opt.get("budget") or 0)
     selected_count = int(opt.get("selected_count") or 0)
     saving = float(opt.get("expected_total_saving") or 0)
     total_cost = float(opt.get("total_cost") or 0)
+    delay_penalty = float(opt.get("delay_penalty") or 0)
 
     if q in {"你好", "嗨", "hi", "hello", "哈囉"}:
         return (
@@ -640,19 +663,67 @@ def local_llm_fallback(safe_payload: dict, question: str = "") -> str:
         )
 
     if any(term in q for term in ["預算", "budget", "有限", "調度", "怎麼排", "怎麼調"]):
+        sample_text = ""
+        if samples:
+            lines = []
+            for item in samples[:3]:
+                p = float(item.get("p_late") or 0) * 100
+                net = float(item.get("net_benefit") or 0)
+                oid = display_order_id(item.get("order_id_hash") or "")
+                lines.append(f"{oid}：延遲機率約 {p:.0f}%，預估淨效益約 USD ${net:,.0f}")
+            sample_text = "\n可先抽查這幾筆：\n" + "\n".join(lines)
         return (
-            f"如果預算有限，我會先把錢放在「高延遲風險，而且升級後淨效益為正」的訂單上。"
-            f"以目前設定來看，預算大約 USD ${budget:,.0f}，系統挑出 {selected_count} 筆可升級訂單，"
-            f"會把預算用到約 USD ${total_cost:,.0f}，預估淨效益約 USD ${saving:,.0f}。\n\n"
-            f"實務上我會建議你先不要平均分配，而是照延遲機率、預估罰金、升級成本三個條件排序；"
-            f"如果預算再縮小，就從淨效益最低的訂單往後砍，保留最能保護 SLA 的那一批。"
+            "如果要做預算配置，我會先看三件事：延遲機率、可能被罰的金額、升級成本。"
+            "只有「預期延遲損失大於升級成本」的訂單才值得進入優先名單。\n\n"
+            f"目前這次試算的預算是 USD ${budget:,.0f}，系統建議升級 {selected_count} 筆，"
+            f"預估花費 USD ${total_cost:,.0f}，預估淨效益 USD ${saving:,.0f}。"
+            "如果你的真實預算不是這個數字，請到「最佳化調度」調整預算後再送出問題，答案會跟著改。"
+            f"{sample_text}"
+        )
+
+    if any(term in q for term in ["區域", "原因", "為什麼", "哪一", "集中", "延遲診斷"]):
+        if samples:
+            examples = []
+            for item in samples[:3]:
+                factors = item.get("top_x_factors") or []
+                factor_text = "、".join((f.get("label") or f.get("feature") or "風險因子") for f in factors[:2])
+                examples.append(
+                    f"{display_order_id(item.get('order_id_hash') or '')}："
+                    f"延遲機率約 {float(item.get('p_late') or 0) * 100:.0f}%"
+                    + (f"，主要可先看 {factor_text}" if factor_text else "")
+                )
+            return (
+                "我會先把這題拆成「集中在哪裡」與「哪些因素在拉高風險」。"
+                "目前可用的本機資料只能做聚合與樣本訂單判讀，不會把單一區域直接說成唯一原因。\n\n"
+                "建議先看 Dashboard 的高風險集中組合，再展開訂單的原因分析。"
+                "可優先檢查：\n" + "\n".join(examples)
+            )
+        return (
+            "這題建議先到 Dashboard 看「高風險集中組合」，再展開高風險訂單的原因分析。"
+            "如果只看到某區域或某配送方式集中，請把它解讀成統計關聯，不要直接當成唯一原因。"
+        )
+
+    if any(term in q for term in ["合約", "罰金", "roi", "真價值", "net-of-service", "侵蝕", "sla"]):
+        return (
+            "這題比較適合用「最佳化調度」底下的 ROI 真價值分析判讀，而不是只看一段文字摘要。"
+            "罰金假設會直接影響 Net-of-Service、被服務侵蝕金額與調度淨效益。\n\n"
+            f"目前這次 AI 摘要使用的單筆延遲罰金是 USD ${delay_penalty:,.0f}。"
+            "若你要比較 $250、$500 或其他 SLA 假設，請在 ROI 真價值分析的罰金欄位調整後觀察："
+            "真價值是否轉負、被服務侵蝕是否放大、以及最佳化調度的建議名單是否改變。"
+        )
+
+    if any(term in q for term in ["回填", "已知結果", "訓練", "重訓", "csv"]):
+        return (
+            "回填已知結果 CSV 不是立刻替換模型。它會先累積為後續重訓資料；"
+            "資料必須包含原本訂單特徵、真實是否延遲（Late_delivery_risk）與實際訂單利潤（Order Profit Per Order）。\n\n"
+            "匯入後，需要在模型診斷頁啟動重訓，並在新舊指標比較後採用新版模型，"
+            "Dashboard、風險清單與最佳化調度才會改用新版結果。"
         )
 
     return (
-        f"目前這批訂單的方向是：{analysis.get('headline') or '先處理高風險且淨效益為正的訂單'}。"
-        f"以 USD ${budget:,.0f} 的預算來看，系統會挑出 {selected_count} 筆訂單，"
-        f"預估淨效益約 USD ${saving:,.0f}。"
-        f"{analysis.get('recommended_policy') or '你可以接著到最佳化調度頁調整預算，看看少一點或多一點預算時名單怎麼變。'}"
+        f"目前可先採取的方向是：{analysis.get('headline') or '優先處理高風險且升級後有正淨效益的訂單'}。"
+        f"這次試算建議升級 {selected_count} 筆，預估淨效益約 USD ${saving:,.0f}。"
+        f"{analysis.get('recommended_policy') or '接著可以到最佳化調度頁調整預算、升級成本或罰金，確認名單是否仍穩定。'}"
     )
 
 
@@ -1082,6 +1153,7 @@ class SingleOrderPredictRequest(BaseModel):
     product_price: float = 59.99              # 商品單價（USD）
     order_item_quantity: int = 1               # 訂購數量
     customer_segment: str = "Consumer"        # Consumer / Corporate / Home Office
+    order_type: str = "PAYMENT"               # CASH / DEBIT / PAYMENT / TRANSFER
     department_name: str = "Fan Shop"         # 部門名稱（選填）
     market: str = "Europe"                    # Africa / Europe / LATAM / Pacific Asia / USCA
     order_date: Optional[str] = None          # 訂單日期（YYYY-MM-DD，選填）
@@ -1208,8 +1280,10 @@ def predict_single_order(
     if mkt_key in X:
         X[mkt_key] = 1
 
-    # Type — 用訓練中位數（預設 Type_PAYMENT=0 等全部為 0，一致）
-    # （表單未收集，保持全 0 or median）
+    # Type
+    type_key = f"Type_{body.order_type}"
+    if type_key in X:
+        X[type_key] = 1
 
     # ── 組成 DataFrame 並對齊特徵順序 ─────────────────────────────────
     import pandas as _pd
@@ -1220,12 +1294,7 @@ def predict_single_order(
     p_late = float(model.predict_proba(row_df)[:, 1][0])
 
     # ── 後處理 ───────────────────────────────────────────────────────
-    if p_late >= 0.7:
-        risk_bucket = "High"
-    elif p_late >= 0.4:
-        risk_bucket = "Medium"
-    else:
-        risk_bucket = "Low"
+    risk_bucket = risk_bucket_for_probability(p_late)
 
     delay_penalty   = 250.0
     expected_penalty = round(p_late * delay_penalty, 2)
@@ -1356,8 +1425,8 @@ async def upload_training_csv(
     authorization: Optional[str] = Header(default=None),
 ):
     """
-    [Manager 限定] 上傳『可進訓練』的訂單資料（乙）。
-    必須含真實標籤 Late_delivery_risk；通過 C 驗證後去除 PII，並『累積』到訓練資料庫，
+    [Manager 限定] 上傳可供後續重訓的已知結果資料（乙）。
+    必須含 Late_delivery_risk 與 Order Profit Per Order；通過 C 驗證後去除 PII，並『累積』到訓練資料庫，
     供日後重訓一併使用（仍走 adopt/discard 決定保留或捨棄）。
     """
     role = get_role(x_role, authorization)
@@ -1374,7 +1443,7 @@ async def upload_training_csv(
         result = append_training_csv(io.BytesIO(contents), store_path)
         return {
             "success": True,
-            "message": f"已累積 {result['added']} 筆訓練資料（總計 {result['total']} 筆）。下次重訓將一併使用。",
+            "message": f"已累積 {result['added']} 筆已知結果資料（總計 {result['total']} 筆）。重訓並採用新版模型後才會更新正式分析結果。",
             **result,
         }
     except HTTPException:
@@ -1382,7 +1451,7 @@ async def upload_training_csv(
     except (UploadValidationError, TrainingDataError) as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"訓練資料上傳失敗：{str(e)}")
+        raise HTTPException(status_code=500, detail=f"已知結果資料上傳失敗：{str(e)}")
 
 
 @app.post("/api/reset-orders")
@@ -1650,7 +1719,50 @@ def get_predictions(
             "note": "示範資料（請先執行 model_pipeline.py）",
         }
 
-    df = load_cached_predictions(pred_path)
+    df = load_cached_predictions(pred_path).reset_index(drop=True).copy()
+    if "p_late" in df.columns:
+        # Re-label legacy rows at read time, independent of the CSV's old policy.
+        df["risk_bucket"] = pd.to_numeric(df["p_late"], errors="coerce").map(risk_bucket_for_probability)
+
+    # What-if simulator fields: these are input features, not answer/leakage fields.
+    # predictions.csv is aligned row-by-row with test_ready.csv for the default validation set.
+    if pred_path == PREDICTIONS_PATH and TEST_READY_PATH.exists():
+        whatif_cols = {
+            "Days for shipment (scheduled)": "days_for_shipment",
+            "Product Price": "product_price",
+            "Order Item Quantity": "order_item_quantity",
+            "Order Item Discount Rate": "order_item_discount_rate",
+            "Order Item Profit Ratio": "order_item_profit_ratio",
+            "Order Profit Per Order": "order_profit_per_order",
+            "order_hour": "order_hour",
+        }
+        one_hot_groups = {
+            "Shipping Mode_": "shipping_mode",
+            "Customer Segment_": "customer_segment",
+            "Type_": "order_type",
+            "Market_": "market",
+        }
+        try:
+            ready_header = pd.read_csv(TEST_READY_PATH, nrows=0).columns.tolist()
+            detail_cols = list(whatif_cols.keys())
+            for prefix in one_hot_groups:
+                detail_cols.extend([col for col in ready_header if col.startswith(prefix)])
+            detail_cols = [col for col in dict.fromkeys(detail_cols) if col in ready_header]
+            details = pd.read_csv(TEST_READY_PATH, usecols=detail_cols)
+            if len(details) == len(df):
+                for src, dst in whatif_cols.items():
+                    if src in details.columns and dst not in df.columns:
+                        df[dst] = pd.to_numeric(details[src], errors="coerce")
+                for prefix, dst in one_hot_groups.items():
+                    if dst in df.columns:
+                        continue
+                    group_cols = [col for col in details.columns if col.startswith(prefix)]
+                    if not group_cols:
+                        continue
+                    active = details[group_cols].apply(pd.to_numeric, errors="coerce").fillna(0)
+                    df[dst] = active.idxmax(axis=1).str.replace(prefix, "", regex=False)
+        except Exception:
+            pass
 
 
     # 動態計算 predicted_late、actual_late 和 is_correct
@@ -1743,10 +1855,21 @@ def get_predictions(
             "display_order_id": make_display_order_id(rec.get("order_id_hash")),
             "shipping_mode": rec.get("shipping_mode"),
             "order_region": rec.get("order_region"),
+            "customer_segment": rec.get("customer_segment"),
+            "order_type": rec.get("order_type"),
+            "market": rec.get("market"),
+            "order_date": rec.get("order_date"),
+            "order_hour": rec.get("order_hour"),
             "p_late": rec.get("p_late"),
             "risk_bucket": rec.get("risk_bucket"),
             "upgrade_cost": rec.get("upgrade_cost"),
             "expected_penalty": rec.get("expected_penalty"),
+            "days_for_shipment": rec.get("days_for_shipment"),
+            "product_price": rec.get("product_price"),
+            "order_item_quantity": rec.get("order_item_quantity"),
+            "order_item_discount_rate": rec.get("order_item_discount_rate"),
+            "order_item_profit_ratio": rec.get("order_item_profit_ratio"),
+            "order_profit_per_order": rec.get("order_profit_per_order"),
             "actual_late": rec.get("actual_late"),
             "predicted_late": rec.get("predicted_late"),
             "is_correct": rec.get("is_correct"),
@@ -1822,6 +1945,12 @@ def get_executive_summary(
             "positive_roi_orders": positive_roi_orders,
             "recommended_budget": 80.0,
             "net_savings": 125.0,
+            "expected_penalty_avoided": 205.0,
+            "optimization_basis": "demo",
+            "optimization_max_candidates": 500,
+            "optimization_total_orders_considered": 1,
+            "optimization_total_cost": 80.0,
+            "optimization_expected_total_saving": 125.0,
             "recommended_action": "先升級高風險且 ROI 為正的訂單，避免延遲罰金擴大。",
             "top_regions": [{"label": "Western Europe", "count": 1, "avg_p_late": 0.82}],
             "top_shipping_modes": [{"label": "Standard Class", "count": 1, "avg_p_late": 0.82}],
@@ -1847,16 +1976,50 @@ def get_executive_summary(
     estimated_service_level = 1.0 - at_risk_rate
     exposure = float(at_risk["expected_penalty"].sum()) if not at_risk.empty else 0.0
 
-    at_risk["net_benefit"] = (
-        pd.to_numeric(at_risk["expected_penalty"], errors="coerce").fillna(0.0)
-        - pd.to_numeric(at_risk["upgrade_cost"], errors="coerce").fillna(upgrade_cost)
-    )
-    positive_roi = at_risk[at_risk["net_benefit"] > 0]
-    positive_roi_orders = int(len(positive_roi))
-    recommended_budget = float(positive_roi["upgrade_cost"].sum()) if not positive_roi.empty else 0.0
+    optimization_basis = "positive_roi_fallback"
+    optimization_max_candidates = 500
+    optimization_total_orders_considered = 0
+    positive_roi_orders = 0
+    recommended_budget = 0.0
+    net_savings = 0.0
+    expected_penalty_avoided = 0.0
+
+    if ShippingOptimizer is not None:
+        optimizer = ShippingOptimizer(
+            budget=1_000_000_000.0,
+            upgrade_cost=upgrade_cost,
+            delay_penalty=delay_penalty,
+            risk_threshold=threshold,
+            max_candidates=optimization_max_candidates,
+        )
+        optimization_result = optimizer.run(
+            predictions_path_or_df=working,
+            output_dir=str(DATA_DIR),
+            save_results=False,
+        ).to_dict()
+        optimization_basis = "ShippingOptimizer"
+        optimization_total_orders_considered = int(optimization_result.get("total_orders_considered", 0))
+        positive_roi_orders = int(optimization_result.get("selected_count", 0))
+        recommended_budget = float(optimization_result.get("total_cost", 0.0))
+        net_savings = float(optimization_result.get("expected_total_saving", 0.0))
+        expected_penalty_avoided = float(optimization_result.get("expected_total_penalty_avoided", 0.0))
+    else:
+        at_risk["net_benefit"] = (
+            pd.to_numeric(at_risk["expected_penalty"], errors="coerce").fillna(0.0)
+            - pd.to_numeric(at_risk["upgrade_cost"], errors="coerce").fillna(upgrade_cost)
+        )
+        positive_roi = (
+            at_risk[at_risk["net_benefit"] > 0]
+            .sort_values("net_benefit", ascending=False)
+            .head(optimization_max_candidates)
+        )
+        positive_roi_orders = int(len(positive_roi))
+        optimization_total_orders_considered = positive_roi_orders
+        recommended_budget = float(positive_roi["upgrade_cost"].sum()) if not positive_roi.empty else 0.0
+        net_savings = float(positive_roi["net_benefit"].sum()) if not positive_roi.empty else 0.0
+        expected_penalty_avoided = float(positive_roi["expected_penalty"].sum()) if not positive_roi.empty else 0.0
     # 真正的淨節省：只計入「值得升級」訂單的淨效益總和（expected_penalty - upgrade_cost），
     # 不可用「全部曝險 - 建議預算」概算，否則會把未升級訂單的罰金也誤算成節省。
-    net_savings = float(positive_roi["net_benefit"].sum()) if not positive_roi.empty else 0.0
 
     def top_breakdown(column: str) -> list[dict]:
         if column not in at_risk.columns or at_risk.empty:
@@ -1888,6 +2051,12 @@ def get_executive_summary(
         "positive_roi_orders": positive_roi_orders,
         "recommended_budget": round(recommended_budget, 2),
         "net_savings": round(net_savings, 2),
+        "expected_penalty_avoided": round(expected_penalty_avoided, 2),
+        "optimization_basis": optimization_basis,
+        "optimization_max_candidates": optimization_max_candidates,
+        "optimization_total_orders_considered": optimization_total_orders_considered,
+        "optimization_total_cost": round(recommended_budget, 2),
+        "optimization_expected_total_saving": round(net_savings, 2),
         "recommended_action": action,
         "top_regions": top_breakdown("order_region"),
         "top_shipping_modes": top_breakdown("shipping_mode"),
@@ -1905,7 +2074,7 @@ def get_scenario_analysis(
     """
     [公開] 預算情境比較。
 
-    使用與正式最佳化相同的 PuLP MILP solver，讓主管比較不同預算下
+    使用與正式最佳化調度相同的挑選邏輯，讓主管比較不同預算下
     可升級訂單數、預估淨效益、避免罰金與預算使用率。
     """
     pred_path = get_predictions_path(x_session_id)
@@ -1920,7 +2089,6 @@ def get_scenario_analysis(
                     "expected_total_saving": 1890.0,
                     "expected_total_penalty_avoided": 2850.0,
                     "budget_usage_pct": 96.0,
-                    "solver": "demo response",
                 }
             ],
             "recommended_budget": 1000.0,
@@ -1964,7 +2132,6 @@ def get_scenario_analysis(
             "expected_total_saving": round(float(result.get("expected_total_saving", 0.0)), 2),
             "expected_total_penalty_avoided": round(float(result.get("expected_total_penalty_avoided", 0.0)), 2),
             "budget_usage_pct": round((float(result.get("total_cost", 0.0)) / budget * 100.0) if budget else 0.0, 2),
-            "solver": result.get("solver", "PuLP MILP"),
         })
 
     positive = [s for s in scenarios if s["expected_total_saving"] > 0]
@@ -2535,13 +2702,66 @@ def _load_profit_manifest() -> dict:
         return {}
 
 
+def _load_profit_serving_artifacts() -> dict:
+    if not PROFIT_SERVING_ARTIFACTS_PATH.exists():
+        return {}
+    try:
+        with open(PROFIT_SERVING_ARTIFACTS_PATH, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except Exception:
+        return {}
+
+
+def _load_profit_model_feature_names() -> list[str]:
+    if not PROFIT_MODEL_PATH.exists():
+        return []
+    try:
+        with open(PROFIT_MODEL_PATH, "r", encoding="utf-8") as f:
+            for line in f:
+                if line.startswith("feature_names="):
+                    return [name for name in line.strip().split("=", 1)[1].split(" ") if name]
+    except Exception:
+        return []
+    return []
+
+
+def _profit_deployed_feature_contract() -> dict:
+    manifest = _load_profit_manifest()
+    artifacts = _load_profit_serving_artifacts()
+    manifest_features = list(manifest.get("feature_columns", []) or [])
+    artifact_features = list(artifacts.get("feature_columns", []) or [])
+    model_features = _load_profit_model_feature_names()
+
+    errors = []
+    if not manifest_features:
+        errors.append("profit_feature_manifest.json 缺少 feature_columns")
+    if not artifact_features:
+        errors.append("serving_artifacts.json 缺少 feature_columns")
+    if manifest_features and artifact_features and manifest_features != artifact_features:
+        errors.append("profit_feature_manifest.json 與 serving_artifacts.json 特徵不一致")
+    if model_features and manifest_features and len(model_features) != len(manifest_features):
+        errors.append("profit_lightgbm_model.txt 與 manifest 特徵數不一致")
+
+    feature_columns = manifest_features or artifact_features
+    return {
+        "manifest": manifest,
+        "artifacts": artifacts,
+        "feature_columns": feature_columns,
+        "feature_count": len(feature_columns),
+        "artifact_feature_count": len(artifact_features),
+        "model_feature_count": len(model_features),
+        "contract_errors": errors,
+    }
+
+
 @app.get("/api/profit/metrics")
 async def get_profit_metrics(
     x_role: Optional[str] = Header(default=None),
     authorization: Optional[str] = Header(default=None),
 ):
     metrics = _load_profit_metrics()
-    manifest = _load_profit_manifest()
+    contract = _profit_deployed_feature_contract()
+    manifest = contract["manifest"]
     if not metrics:
         return {
             "is_trained": False,
@@ -2553,14 +2773,27 @@ async def get_profit_metrics(
             ],
         }
 
+    metrics = dict(metrics)
+    metric_file_feature_count = int(metrics.get("feature_count") or 0)
+    deployed_feature_count = contract["feature_count"] or contract["model_feature_count"] or metric_file_feature_count
+    metrics["feature_count"] = deployed_feature_count
+    metrics["metric_file_feature_count"] = metric_file_feature_count
+    metrics["feature_count_basis"] = "deployed_contract"
+    if metric_file_feature_count and deployed_feature_count and metric_file_feature_count != deployed_feature_count:
+        metrics["metric_file_status"] = "stale_feature_count_overridden"
+
     return {
         "is_trained": True,
         "metrics": metrics,
         "manifest": {
             "target_column": manifest.get("target_column", metrics.get("target_column", "Order Profit Per Order")),
-            "feature_count": len(manifest.get("feature_columns", [])) or metrics.get("feature_count", 0),
-            "feature_columns": manifest.get("feature_columns", []),
+            "feature_count": deployed_feature_count,
+            "feature_columns": contract["feature_columns"],
             "model_path": manifest.get("model_path", "models/profit_lightgbm_model.txt"),
+            "artifact_feature_count": contract["artifact_feature_count"],
+            "model_feature_count": contract["model_feature_count"],
+            "metric_file_feature_count": metric_file_feature_count,
+            "contract_errors": contract["contract_errors"],
         },
     }
 
@@ -2571,15 +2804,32 @@ async def get_profit_feature_importance(
     authorization: Optional[str] = Header(default=None),
     limit: int = 20,
 ):
-    metrics = _load_profit_metrics()
-    importance = metrics.get("feature_importance") or {}
-    rows = [
-        {"feature": feature, "importance": float(value)}
-        for feature, value in importance.items()
-    ]
+    contract = _profit_deployed_feature_contract()
+    feature_columns = contract["feature_columns"]
+    rows = []
+
+    try:
+        import lightgbm as lgb
+        booster = lgb.Booster(model_file=str(PROFIT_MODEL_PATH))
+        importances = booster.feature_importance(importance_type="split")
+        for idx, value in enumerate(importances):
+            feature = feature_columns[idx] if idx < len(feature_columns) else booster.feature_name()[idx]
+            rows.append({"feature": feature, "importance": float(value)})
+    except Exception:
+        metrics = _load_profit_metrics()
+        importance = metrics.get("feature_importance") or {}
+        allowed = set(feature_columns)
+        rows = [
+            {"feature": feature, "importance": float(value)}
+            for feature, value in importance.items()
+            if not allowed or feature in allowed
+        ]
+
     rows.sort(key=lambda row: row["importance"], reverse=True)
     return {
-        "is_trained": bool(metrics),
+        "is_trained": bool(rows),
+        "source": "profit_lightgbm_model.txt",
+        "feature_count": contract["feature_count"],
         "data": rows[: max(1, min(limit, 100))],
     }
 
@@ -2681,21 +2931,33 @@ def _get_delay_xgb_model(model_path: Path):
 
 
 def _get_profit_runtime() -> dict:
-    """單例載入收益模型 runtime（pipeline 編碼 + LightGBM booster + schema）。"""
+    """單例載入收益模型 runtime（pipeline 編碼 + LightGBM booster + 部署特徵契約）。"""
     if not _PROFIT_RUNTIME:
         import lightgbm as lgb
         from profit_data_pipeline import ProfitDataPipeline
 
-        artifacts_path = BASE_DIR / "models" / "profit" / "serving_artifacts.json"
-        schema_path = DATA_DIR / "profit_feature_schema.json"
-        model_path = BASE_DIR / "models" / "profit_lightgbm_model.txt"
-        if not (artifacts_path.exists() and schema_path.exists() and model_path.exists()):
+        artifacts_path = PROFIT_SERVING_ARTIFACTS_PATH
+        model_path = PROFIT_MODEL_PATH
+        if not (artifacts_path.exists() and model_path.exists()):
             raise HTTPException(status_code=503, detail="收益模型尚未就緒，請先執行收益管線與訓練。")
 
         with open(artifacts_path, encoding="utf-8") as f:
             artifacts = json.load(f)
-        with open(schema_path, encoding="utf-8") as f:
-            schema = json.load(f)
+        manifest = _load_profit_manifest()
+        artifact_features = artifacts.get("feature_columns", [])
+        manifest_features = manifest.get("feature_columns", [])
+        if not artifact_features:
+            raise HTTPException(status_code=503, detail="收益 serving artifacts 缺少 feature_columns。")
+        if manifest_features and manifest_features != artifact_features:
+            raise HTTPException(status_code=503, detail="收益模型 manifest 與 serving artifacts 特徵契約不一致。")
+
+        # serving_artifacts 與模型一起產生，是單筆預測真正使用的特徵契約。
+        # 不讀取可能由舊版前處理留下的 profit_feature_schema.json，避免舊欄位重返推論。
+        schema = {
+            "feature_columns": artifact_features,
+            "categorical_columns": artifacts.get("categorical_columns", []),
+            "categorical_codes": artifacts.get("categorical_codes", {}),
+        }
         pipe = ProfitDataPipeline()
         pipe.artifacts = artifacts
         _PROFIT_RUNTIME.update(
@@ -2712,17 +2974,35 @@ def _load_decision_df() -> pd.DataFrame:
             status_code=404,
             detail="decision_dataset.csv 尚未產生，請先執行：python scripts/build_decision_dataset.py",
         )
-    return load_cached_predictions(DECISION_DATASET_PATH)
+    df = load_cached_predictions(DECISION_DATASET_PATH).copy()
+    if "p_late" in df.columns:
+        df["risk_bucket"] = pd.to_numeric(df["p_late"], errors="coerce").map(risk_bucket_for_probability)
+    return df
 
 
-def _apply_value_risk(df: pd.DataFrame, value_axis: str, risk_axis: str, penalty: float) -> pd.DataFrame:
+def _apply_value_risk(df: pd.DataFrame, value_axis: str, risk_axis: str, penalty: float, scope: dict) -> pd.DataFrame:
     """依使用者選的價值/風險軸與罰金，計算 value/risk 欄（不污染快取，操作於 copy）。"""
     df = df.copy()
-    # net_of_service 隨 penalty 重算（真延遲 true_label × 罰金）；profit_actual 不受罰金影響
-    df["net_of_service"] = (df["profit_actual"] - df["true_label"] * penalty).round(4)
-    df["value"] = df["net_of_service"] if value_axis == "net_of_service" else df["profit_actual"]
-    df["risk"] = df["true_label"] if risk_axis == "true_label" else df["p_late"]
-    df["is_false_positive_value"] = ((df["profit_actual"] > 0) & (df["net_of_service"] < 0)).astype(int)
+    profit_col = scope.get("profit_column", "profit_actual")
+    profit = pd.to_numeric(df[profit_col], errors="coerce").fillna(0.0)
+    if scope.get("delay_cost_basis") == "actual_late_label":
+        delay_charge = pd.to_numeric(df["true_label"], errors="coerce").fillna(0.0) * penalty
+    else:
+        delay_charge = pd.to_numeric(df["p_late"], errors="coerce").fillna(0.0) * penalty
+    df["net_of_service"] = (profit - delay_charge).round(4)
+    df["value"] = df["net_of_service"] if value_axis == "net_of_service" else profit
+    if risk_axis == "true_label" and not scope.get("has_ground_truth", False):
+        df["risk"] = pd.to_numeric(df["p_late"], errors="coerce").fillna(0.0)
+    else:
+        df["risk"] = (
+            pd.to_numeric(df["true_label"], errors="coerce").fillna(0.0)
+            if risk_axis == "true_label"
+            else pd.to_numeric(df["p_late"], errors="coerce").fillna(0.0)
+        )
+    if scope.get("false_positive_available", True):
+        df["is_false_positive_value"] = ((profit > 0) & (df["net_of_service"] < 0)).astype(int)
+    else:
+        df["is_false_positive_value"] = 0
     return df
 
 
@@ -2820,27 +3100,229 @@ def _predict_profit_single(features: dict) -> float:
     return float(rt["booster"].predict(X)[0])
 
 
+def _predict_profit_batch(feature_rows: list[dict]) -> list[float]:
+    """收益模型批次評分；供 ROI session 資料使用，避免逐筆重複載入模型。"""
+    if not feature_rows:
+        return []
+    rt = _get_profit_runtime()
+    raw = pd.concat([_build_profit_raw_row(row) for row in feature_rows], ignore_index=True)
+    ready = rt["pipe"].transform(raw)
+    cols = rt["schema"]["feature_columns"]
+    cat = rt["schema"].get("categorical_columns", [])
+    codes = rt["schema"].get("categorical_codes", {})
+    X = ready[cols].copy()
+    for c in cat:
+        if c in X.columns:
+            cc = codes.get(c)
+            X[c] = pd.Categorical(X[c], categories=cc) if cc is not None else X[c].astype("category")
+    numeric_cols = [c for c in X.columns if c not in cat]
+    X[numeric_cols] = X[numeric_cols].astype(float)
+    return [float(v) for v in rt["booster"].predict(X)]
+
+
+def _session_prediction_file(x_session_id: Optional[str]) -> Optional[Path]:
+    """只在 session 專屬預測檔存在時回傳；未上傳則回 None。"""
+    if not x_session_id:
+        return None
+    path = get_predictions_path(x_session_id)
+    if path != PREDICTIONS_PATH and path.exists():
+        return path
+    return None
+
+
+def _series_or_default(df: pd.DataFrame, col: str, default):
+    if col in df.columns:
+        return df[col]
+    return pd.Series([default] * len(df), index=df.index)
+
+
+def _clean_feature_value(value, default=None):
+    return default if pd.isna(value) else value
+
+
+def _empty_roi_session_df() -> pd.DataFrame:
+    return pd.DataFrame(columns=[
+        "order_id_hash", "customer_id_hash", "order_date", "customer_segment",
+        "order_region", "category_name", "shipping_mode", "discount_rate",
+        "p_late", "true_label", "risk_bucket", "profit_actual", "profit_pred",
+        "net_of_service", "epar", "profit_resid", "is_false_positive_value",
+        "upgrade_cost", "expected_penalty",
+    ])
+
+
+def _build_roi_session_df(pred_df: pd.DataFrame) -> tuple[pd.DataFrame, bool]:
+    """把本次上傳的延遲預測轉成 ROI 可用資料，不製造假真值。"""
+    if pred_df.empty:
+        return _empty_roi_session_df(), False
+
+    source = pred_df.copy()
+    source["order_id_hash"] = _series_or_default(source, "order_id_hash", "").astype(str)
+    missing_id = source["order_id_hash"].str.strip().eq("") | source["order_id_hash"].isna()
+    if missing_id.any():
+        source.loc[missing_id, "order_id_hash"] = [
+            hashlib.sha256(f"session_order_{i}".encode()).hexdigest()[:32]
+            for i in source.index[missing_id]
+        ]
+
+    defaults = {
+        "shipping_mode": "Standard Class",
+        "order_region": "Western Europe",
+        "customer_segment": "Unknown",
+        "category_name": "Unknown",
+        "market": "Unknown",
+        "order_date": pd.NaT,
+        "days_for_shipment": 4.0,
+        "product_price": 59.99,
+        "order_item_quantity": 1,
+        "discount_rate": 0.0,
+        "sales": pd.NA,
+        "upgrade_cost": 80.0,
+    }
+    for col, default in defaults.items():
+        source[col] = _series_or_default(source, col, default)
+
+    for col in ("p_late", "days_for_shipment", "product_price", "order_item_quantity", "discount_rate", "sales", "upgrade_cost"):
+        source[col] = pd.to_numeric(source[col], errors="coerce")
+    source["p_late"] = source["p_late"].fillna(0.0).clip(0.0, 1.0)
+    source["days_for_shipment"] = source["days_for_shipment"].fillna(4.0)
+    source["product_price"] = source["product_price"].fillna(59.99)
+    source["order_item_quantity"] = source["order_item_quantity"].fillna(1)
+    source["discount_rate"] = source["discount_rate"].fillna(0.0)
+    source["upgrade_cost"] = source["upgrade_cost"].fillna(80.0)
+
+    if "customer_id_hash" not in source.columns:
+        source["customer_id_hash"] = source["order_id_hash"].map(
+            lambda v: hashlib.sha256(f"session_customer_{v}".encode()).hexdigest()[:32]
+        )
+
+    true_series = pd.to_numeric(source["true_label"], errors="coerce") if "true_label" in source.columns else None
+    has_ground_truth = bool(true_series is not None and true_series.notna().all())
+    if has_ground_truth:
+        source["true_label"] = true_series.astype(int)
+
+    feature_rows = []
+    for row in source.to_dict(orient="records"):
+        feature_rows.append({
+            "shipping_mode": _clean_feature_value(row.get("shipping_mode"), "Standard Class"),
+            "order_region": _clean_feature_value(row.get("order_region"), "Western Europe"),
+            "category_name": _clean_feature_value(row.get("category_name"), "Unknown"),
+            "customer_segment": _clean_feature_value(row.get("customer_segment"), "Unknown"),
+            "market": _clean_feature_value(row.get("market"), "Unknown"),
+            "product_price": _clean_feature_value(row.get("product_price"), 59.99),
+            "order_item_quantity": _clean_feature_value(row.get("order_item_quantity"), 1),
+            "discount_rate": _clean_feature_value(row.get("discount_rate"), 0.0),
+            "days_for_shipment": _clean_feature_value(row.get("days_for_shipment"), 4.0),
+            "order_date": _clean_feature_value(row.get("order_date"), None),
+            "sales": _clean_feature_value(row.get("sales"), None),
+        })
+    source["profit_pred"] = _predict_profit_batch(feature_rows)
+
+    agg = {
+        "customer_id_hash": "first",
+        "order_date": "first",
+        "customer_segment": "first",
+        "order_region": "first",
+        "category_name": "first",
+        "shipping_mode": "first",
+        "discount_rate": "mean",
+        "p_late": "mean",
+        "profit_pred": "sum",
+        "upgrade_cost": "max",
+    }
+    if has_ground_truth:
+        agg["true_label"] = "max"
+
+    df = source.groupby("order_id_hash", dropna=False).agg(agg).reset_index()
+    if not has_ground_truth:
+        df["true_label"] = pd.NA
+    df["risk_bucket"] = pd.to_numeric(df["p_late"], errors="coerce").map(risk_bucket_for_probability)
+    df["profit_actual"] = df["profit_pred"]
+    df["profit_resid"] = 0.0
+    df["expected_penalty"] = (df["p_late"] * 250.0).round(4)
+    delay_charge = df["true_label"].astype(float) * 250.0 if has_ground_truth else df["p_late"].astype(float) * 250.0
+    df["net_of_service"] = (df["profit_pred"].astype(float) - delay_charge).round(4)
+    df["epar"] = (df["profit_pred"].astype(float) * df["p_late"].astype(float)).round(4)
+    df["is_false_positive_value"] = 0
+    return df, has_ground_truth
+
+
+def _roi_scope(source: str, df: pd.DataFrame, has_ground_truth: bool) -> dict:
+    rows = int(len(df))
+    if source == "session_upload":
+        delay_basis = "actual_late_label" if has_ground_truth else "expected_probability"
+        note = (
+            f"資料來源：本次上傳 {rows:,} 筆訂單；利潤以收益模型預測，"
+            + ("延遲代價使用檔案內真實延遲標籤。" if has_ground_truth else "延遲代價以延遲機率 × SLA 罰金估算。")
+        )
+        return {
+            "scope": source,
+            "rows_orders": rows,
+            "profit_basis": "predicted_profit",
+            "profit_column": "profit_pred",
+            "delay_cost_basis": delay_basis,
+            "has_ground_truth": has_ground_truth,
+            "false_positive_available": False,
+            "note": note,
+        }
+
+    return {
+        "scope": "historical_validation",
+        "rows_orders": rows,
+        "profit_basis": "actual_profit",
+        "profit_column": "profit_actual",
+        "delay_cost_basis": "actual_late_label",
+        "has_ground_truth": True,
+        "false_positive_available": True,
+        "note": f"資料來源：歷史驗證集 {rows:,} 筆訂單；利潤與實際延遲採驗證答案，罰金可動態重算。",
+    }
+
+
+def _load_roi_df(x_session_id: Optional[str] = None) -> tuple[pd.DataFrame, dict]:
+    session_path = _session_prediction_file(x_session_id)
+    if session_path is not None:
+        df, has_ground_truth = _build_roi_session_df(load_cached_predictions(session_path))
+        return df, _roi_scope("session_upload", df, has_ground_truth)
+
+    df = _load_decision_df()
+    return df, _roi_scope("historical_validation", df, True)
+
+
 @app.get("/api/roi/summary")
 async def roi_summary(
     penalty: float = 250.0,
     x_role: Optional[str] = Header(default=None),
     authorization: Optional[str] = Header(default=None),
+    x_session_id: Optional[str] = Header(default=None),
 ):
     """ROI 模擬器頂部 KPI：帳載利潤 vs 真價值(net-of-service)、被服務侵蝕、假性賺錢比例、EPAR。"""
-    df = _load_decision_df()
+    df, scope = _load_roi_df(x_session_id)
     penalty = max(0.0, float(penalty))
-    nos = df["profit_actual"] - df["true_label"] * penalty
-    fp = int(((df["profit_actual"] > 0) & (nos < 0)).sum())
-    profit_pos = int((df["profit_actual"] > 0).sum())
-    book = float(df["profit_actual"].sum())
+    profit_col = scope["profit_column"]
+    if scope["delay_cost_basis"] == "actual_late_label":
+        delay_charge = pd.to_numeric(df["true_label"], errors="coerce").fillna(0.0) * penalty
+    else:
+        delay_charge = pd.to_numeric(df["p_late"], errors="coerce").fillna(0.0) * penalty
+    nos = pd.to_numeric(df[profit_col], errors="coerce").fillna(0.0) - delay_charge
+    if scope["false_positive_available"]:
+        fp = int(((df[profit_col] > 0) & (nos < 0)).sum())
+        profit_pos = int((df[profit_col] > 0).sum())
+    else:
+        fp = 0
+        profit_pos = int((df[profit_col] > 0).sum())
+    book = float(pd.to_numeric(df[profit_col], errors="coerce").fillna(0.0).sum())
     nos_total = float(nos.sum())
     by_seg = []
     for seg, g in df.groupby("customer_segment"):
-        g_nos = g["profit_actual"] - g["true_label"] * penalty
+        if scope["delay_cost_basis"] == "actual_late_label":
+            g_delay = pd.to_numeric(g["true_label"], errors="coerce").fillna(0.0) * penalty
+        else:
+            g_delay = pd.to_numeric(g["p_late"], errors="coerce").fillna(0.0) * penalty
+        g_profit = pd.to_numeric(g[profit_col], errors="coerce").fillna(0.0)
+        g_nos = g_profit - g_delay
         by_seg.append({
             "segment": str(seg),
             "orders": int(len(g)),
-            "book_profit": round(float(g["profit_actual"].sum()), 2),
+            "book_profit": round(float(g_profit.sum()), 2),
             "net_of_service": round(float(g_nos.sum()), 2),
             "epar": round(float(g["epar"].sum()), 2),
         })
@@ -2853,8 +3335,10 @@ async def roi_summary(
         "service_erosion_total": round(book - nos_total, 2),
         "false_positive_value_orders": fp,
         "profit_positive_orders": profit_pos,
-        "false_positive_value_pct": round(fp / profit_pos, 4) if profit_pos else 0.0,
+        "false_positive_value_pct": round(fp / profit_pos, 4) if scope["false_positive_available"] and profit_pos else 0.0,
+        "false_positive_available": scope["false_positive_available"],
         "epar_total": round(float(df["epar"].sum()), 2),
+        "data_scope": scope,
         "by_segment": by_seg,
     }
 
@@ -2870,13 +3354,19 @@ async def roi_portfolio(
     discount_band: Optional[str] = None,
     penalty: float = 250.0,
     max_points: int = 1500,
+    at_risk_page: int = 1,
+    at_risk_limit: int = 50,
     x_role: Optional[str] = Header(default=None),
     authorization: Optional[str] = Header(default=None),
+    x_session_id: Optional[str] = Header(default=None),
 ):
     """真價值-風險散點 + 預期在險利潤(EPAR)名單；支援軸切換與 faceted 篩選。"""
-    df = _apply_value_risk(_load_decision_df(), value_axis, risk_axis, max(0.0, float(penalty)))
+    base_df, scope = _load_roi_df(x_session_id)
+    df = _apply_value_risk(base_df, value_axis, risk_axis, max(0.0, float(penalty)), scope)
     df = _filter_decision(df, segment, region, category, shipping, discount_band)
     total = int(len(df))
+    profit_col = scope["profit_column"]
+    risk_axis_effective = "p_late" if risk_axis == "true_label" and not scope.get("has_ground_truth", False) else risk_axis
 
     # 散點封頂取樣，避免巨量 payload 與前端卡頓（不是無效迴圈，是保護）
     max_points = max(100, min(int(max_points), 3000))
@@ -2894,12 +3384,18 @@ async def roi_portfolio(
         for r in sample.itertuples(index=False)
     ]
 
-    at_risk = df.sort_values("epar", ascending=False).head(50)
+    # 在險名單分頁（依 EPAR 由大到小）
+    at_risk_limit = max(1, min(int(at_risk_limit), 200))
+    at_risk_total = total
+    at_risk_pages = max(1, (at_risk_total + at_risk_limit - 1) // at_risk_limit)
+    at_risk_page = max(1, min(int(at_risk_page), at_risk_pages))
+    start_idx = (at_risk_page - 1) * at_risk_limit
+    at_risk = df.sort_values("epar", ascending=False).iloc[start_idx:start_idx + at_risk_limit]
     at_risk_list = [
         {
             "id": make_display_order_id(r.order_id_hash),
             "epar": round(float(r.epar), 2),
-            "profit_actual": round(float(r.profit_actual), 2),
+            "profit_actual": round(float(getattr(r, profit_col)), 2),
             "p_late": round(float(r.p_late), 4),
             "net_of_service": round(float(r.net_of_service), 2),
             "segment": str(r.customer_segment),
@@ -2912,15 +3408,21 @@ async def roi_portfolio(
     return {
         "value_axis": value_axis,
         "risk_axis": risk_axis,
+        "risk_axis_effective": risk_axis_effective,
         "total_filtered": total,
         "points_returned": len(points),
         "truncated": total > max_points,
         "points": points,
         "at_risk_list": at_risk_list,
+        "at_risk_page": at_risk_page,
+        "at_risk_pages": at_risk_pages,
+        "at_risk_total": at_risk_total,
+        "at_risk_limit": at_risk_limit,
         "filters": {
-            "segments": sorted(_load_decision_df()["customer_segment"].dropna().unique().tolist()),
-            "regions": sorted(_load_decision_df()["order_region"].dropna().unique().tolist()),
+            "segments": sorted(base_df["customer_segment"].dropna().unique().tolist()),
+            "regions": sorted(base_df["order_region"].dropna().unique().tolist()),
         },
+        "data_scope": scope,
     }
 
 
@@ -2929,6 +3431,7 @@ def roi_optimize(
     body: OptimizeRequest,
     x_role: Optional[str] = Header(default=None),
     authorization: Optional[str] = Header(default=None),
+    x_session_id: Optional[str] = Header(default=None),
 ):
     """[Manager] 在決策資料集上跑 ROI 最佳化（重用既有 ShippingOptimizer），附 EPAR 與客戶層彙整。"""
     role = get_role(x_role, authorization)
@@ -2936,7 +3439,7 @@ def roi_optimize(
     if ShippingOptimizer is None:
         raise HTTPException(status_code=500, detail="optimizer.py 載入失敗，請確認 core/ 目錄存在。")
 
-    df = _load_decision_df()
+    df, scope = _load_roi_df(x_session_id)
     optimizer = ShippingOptimizer(
         budget=body.budget,
         upgrade_cost=body.upgrade_cost,
@@ -2947,12 +3450,16 @@ def roi_optimize(
     res = result.to_dict()
 
     dmap = df.set_index("order_id_hash")
+    profit_col = scope["profit_column"]
     rollup: dict = {}
     for o in res.get("selected_orders", []):
         h = o.get("order_id_hash")
         if h in dmap.index:
             r = dmap.loc[h]
-            o["profit_actual"] = round(float(r["profit_actual"]), 2)
+            o["profit_actual"] = round(float(r[profit_col]), 2)
+            if "profit_pred" in r:
+                o["profit_pred"] = round(float(r["profit_pred"]), 2)
+            o["profit_basis"] = scope["profit_basis"]
             o["epar"] = round(float(r["epar"]), 2)
             o["customer_segment"] = str(r["customer_segment"])
             o["display_order_id"] = make_display_order_id(h)
@@ -2975,6 +3482,7 @@ def roi_optimize(
     res["role"] = role
     res["customer_rollup"] = customers
     res["candidate_pool"] = int((df["p_late"] >= body.risk_threshold).sum())
+    res["data_scope"] = scope
     return res
 
 
@@ -3058,7 +3566,107 @@ async def roi_trust_map(
             detail="decision_trust_map.json 尚未產生，請先執行 scripts/build_decision_dataset.py",
         )
     with open(DECISION_TRUST_PATH, encoding="utf-8") as f:
-        return json.load(f)
+        trust = json.load(f)
+    profit = trust.get("profit") or {}
+    if not profit.get("available"):
+        fallback = _build_profit_trust_from_ready()
+        if fallback.get("available"):
+            trust["profit"] = fallback
+            trust["note"] = (
+                f"{trust.get('note', '')} 收益可信度改用 profit_test_ready.csv 與 "
+                "profit_predictions.csv 依測試集列序回補分群。"
+            ).strip()
+    return trust
+
+
+def _build_profit_trust_from_ready() -> dict:
+    """profit_test_metadata 缺失時，用樣本外 ready/predictions 列序建立可信度分群。"""
+    ready_path = DATA_DIR / "profit_test_ready.csv"
+    if not PROFIT_PREDICTIONS_PATH.exists() or not ready_path.exists():
+        return {"by_segment": [], "by_region": [], "available": False, "reason": "profit_predictions 或 profit_test_ready 不存在"}
+    try:
+        import numpy as np
+
+        pred = pd.read_csv(PROFIT_PREDICTIONS_PATH)
+        ready_cols = ["Customer Segment", "Order Region"]
+        ready = pd.read_csv(ready_path, usecols=ready_cols)
+        if len(pred) != len(ready):
+            return {
+                "by_segment": [],
+                "by_region": [],
+                "available": False,
+                "reason": "profit_predictions 與 profit_test_ready 筆數不一致",
+            }
+        required = {"actual_profit", "predicted_profit"}
+        if not required.issubset(pred.columns):
+            return {
+                "by_segment": [],
+                "by_region": [],
+                "available": False,
+                "reason": "profit_predictions 缺少 actual_profit / predicted_profit",
+            }
+
+        def decode_categorical_labels(frame: pd.DataFrame) -> tuple[pd.DataFrame, str]:
+            mapping_path = BASE_DIR / "models" / "profit" / "serving_artifacts.json"
+            if not mapping_path.exists():
+                return frame, "profit_test_ready.csv + profit_predictions.csv"
+            try:
+                with open(mapping_path, encoding="utf-8") as mf:
+                    artifacts = json.load(mf)
+                mappings = artifacts.get("categorical_mappings", {}) or {}
+                decoded = frame.copy()
+                for col in ready_cols:
+                    inverse = {int(v): str(k) for k, v in (mappings.get(col) or {}).items()}
+                    if inverse and col in decoded.columns:
+                        decoded[col] = pd.to_numeric(decoded[col], errors="coerce").map(inverse).fillna(decoded[col])
+                return decoded, "profit_test_ready.csv + profit_predictions.csv + serving_artifacts mapping"
+            except Exception:
+                return frame, "profit_test_ready.csv + profit_predictions.csv"
+
+        ready, source = decode_categorical_labels(ready)
+        df = pred.reset_index(drop=True).join(ready.reset_index(drop=True))
+        df = df.rename(columns={"Customer Segment": "customer_segment", "Order Region": "order_region"})
+
+        def group_metrics(col: str, min_n: int = 30) -> list[dict]:
+            rows = []
+            for name, g in df.groupby(col):
+                n = int(len(g))
+                if n < min_n:
+                    continue
+                actual = pd.to_numeric(g["actual_profit"], errors="coerce")
+                predicted = pd.to_numeric(g["predicted_profit"], errors="coerce")
+                valid = pd.DataFrame({"actual": actual, "predicted": predicted}).dropna()
+                if len(valid) < min_n:
+                    continue
+                actual_values = valid["actual"].to_numpy(dtype=float)
+                predicted_values = valid["predicted"].to_numpy(dtype=float)
+                residual = actual_values - predicted_values
+                total_variance = float(np.sum((actual_values - actual_values.mean()) ** 2))
+                r2 = None
+                if total_variance > 1e-18:
+                    r2 = 1.0 - float(np.sum(residual ** 2)) / total_variance
+                rows.append({
+                    "group": str(name),
+                    "n": int(len(valid)),
+                    "mae": round(float(np.mean(np.abs(residual))), 2),
+                    "rmse": round(float(np.sqrt(np.mean(residual ** 2))), 2),
+                    "r2": round(r2, 4) if r2 is not None else None,
+                    "resid_mean": round(float(np.mean(residual)), 2),
+                })
+            rows.sort(key=lambda r: r["n"], reverse=True)
+            return rows
+
+        by_segment = group_metrics("customer_segment")
+        by_region = group_metrics("order_region")
+        return {
+            "by_segment": by_segment,
+            "by_region": by_region,
+            "available": bool(by_segment or by_region),
+            "rows": int(len(df)),
+            "source": source,
+        }
+    except Exception as exc:
+        return {"by_segment": [], "by_region": [], "available": False, "reason": str(exc)}
 
 
 @app.get("/api/diagnose/deterioration")
@@ -3131,16 +3739,25 @@ async def profit_leakage_audit(
     except Exception:
         LEAKAGE_COLUMNS, PII_COLUMNS, ID_COLUMNS, NOISE_COLUMNS = [], [], [], []
 
-    manifest = _load_profit_manifest()
-    schema_path = DATA_DIR / "profit_feature_schema.json"
-    feature_cols = []
-    if schema_path.exists():
-        with open(schema_path, encoding="utf-8") as f:
-            feature_cols = json.load(f).get("feature_columns", [])
+    contract = _profit_deployed_feature_contract()
+    contract_errors = list(contract["contract_errors"])
 
-    leaked_in_features = [c for c in (list(LEAKAGE_COLUMNS) + list(PII_COLUMNS) + list(ID_COLUMNS)) if c in feature_cols]
+    # 守門檢查部署模型真正採用的特徵契約，而非可能殘留的舊版 processed schema。
+    feature_cols = contract["feature_columns"]
+    schema_path = DATA_DIR / "profit_feature_schema.json"
+    legacy_schema_features = []
+    if schema_path.exists():
+        try:
+            with open(schema_path, encoding="utf-8") as f:
+                legacy_schema_features = json.load(f).get("feature_columns", [])
+        except Exception:
+            contract_errors.append("profit_feature_schema.json 無法解析")
+
+    blocked_features = list(LEAKAGE_COLUMNS) + list(PII_COLUMNS) + list(ID_COLUMNS)
+    leaked_in_features = [c for c in blocked_features if c in feature_cols]
+    legacy_schema_blocked = [c for c in blocked_features if c in legacy_schema_features]
     return {
-        "gate_status": "PASS" if not leaked_in_features else "FAIL",
+        "gate_status": "PASS" if not leaked_in_features and not contract_errors else "FAIL",
         "blocked": {
             "leakage": list(LEAKAGE_COLUMNS),
             "pii": list(PII_COLUMNS),
@@ -3156,11 +3773,27 @@ async def profit_leakage_audit(
         },
         "leaked_in_features": leaked_in_features,
         "feature_count": len(feature_cols),
+        "serving_contract": {
+            "source": "profit_feature_manifest.json + serving_artifacts.json",
+            "contract_errors": contract_errors,
+            "active_feature_count": len(feature_cols),
+            "model_feature_count": contract["model_feature_count"],
+            "artifact_feature_count": contract["artifact_feature_count"],
+            "legacy_schema_feature_count": len(legacy_schema_features),
+            "legacy_schema_blocked": legacy_schema_blocked,
+            "legacy_schema_status": "stale" if legacy_schema_blocked else "compatible",
+            "legacy_schema_ignored": bool(legacy_schema_blocked),
+            "legacy_schema_note": (
+                "舊 profit_feature_schema.json 為前處理殘留，不作為部署推論契約；"
+                "部署模型以 manifest + serving_artifacts + LightGBM 模型檔為準。"
+                if legacy_schema_blocked else "舊 schema 與部署契約相容。"
+            ),
+        },
         "column_labeling": {
             "profit_actual": "真利潤（驗證集回填的實際 Order Profit Per Order）",
             "profit_pred": "收益模型預測值（前瞻估計，非實際）",
             "true_label / late_actual": "驗證集實際是否延遲",
-            "p_late / late_pred": "延遲模型預測機率",
+            "p_late / late_pred": "延遲模型預測機率（供 ROI/診斷分析，不是收益模型訓練特徵）",
         },
         "note": "收益欄一律標 actual/pred，不混稱『預測收益』當前瞻賭注（SLIDE 落地點 4）。",
     }
@@ -3194,6 +3827,11 @@ if __name__ == "__main__":
 async def get_countries_geojson():
     """代理抓取 GeoJSON，解決前端 CORS 問題"""
     import httpx
+    local_geojson = BASE_DIR / "data" / "countries.geojson"
+    if local_geojson.exists():
+        with open(local_geojson, "r", encoding="utf-8") as f:
+            return JSONResponse(content=json.load(f))
+
     url = "https://raw.githubusercontent.com/datasets/geo-countries/master/data/countries.geojson"
     try:
         async with httpx.AsyncClient(timeout=30) as client:

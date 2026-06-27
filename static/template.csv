@@ -1,0 +1,2 @@
+Order Id,Shipping Mode,Order Region,order date (DateOrders),Days for shipment (scheduled),Product Price,Order Item Quantity,Order Item Discount Rate,Order Item Profit Ratio,Order Profit Per Order,Customer Segment,Category Name,Type,Department Name,Market,Order Country,Late_delivery_risk
+SAMPLE-001,Standard Class,Western Europe,2017-06-15 12:00,4,59.99,1,0.10,0.25,14.99,Consumer,Womens Apparel,TRANSFER,Apparel,Europe,France,1

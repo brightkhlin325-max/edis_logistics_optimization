@@ -1,4 +1,4 @@
-import json
+﻿import json
 
 import pandas as pd
 import pytest
@@ -98,16 +98,47 @@ def test_profit_model_pipeline_rejects_leakage_columns(tmp_path):
         pipeline._load_ready_frame(str(path))
 
 
+@pytest.mark.parametrize(
+    "forbidden_column",
+    [
+        "Days for shipping (real)",
+        "Delivery Status",
+        "Order Status",
+        "Late_delivery_risk",
+    ],
+)
+def test_profit_model_pipeline_rejects_post_outcome_columns(tmp_path, forbidden_column):
+    df = _ready_frame(8)
+    df[forbidden_column] = 1
+    path = tmp_path / "profit_train_ready.csv"
+    df.to_csv(path, index=False)
+
+    pipeline = ProfitModelPipeline(params=_model_params())
+    with pytest.raises(ValueError, match="forbidden columns"):
+        pipeline._load_ready_frame(str(path))
+
+
 def test_profit_model_pipeline_can_defensively_drop_leakage(tmp_path):
     df = _ready_frame(8)
     df["Benefit per order"] = df["Order Profit Per Order"]
+    df["Days for shipping (real)"] = 3
+    df["Delivery Status"] = 1
+    df["Order Status"] = 1
+    df["Late_delivery_risk"] = 1
     path = tmp_path / "profit_train_ready.csv"
     df.to_csv(path, index=False)
 
     pipeline = ProfitModelPipeline(params=_model_params(), leakage_policy="drop")
     X, y = pipeline._load_ready_frame(str(path))
 
-    assert "Benefit per order" not in X.columns
+    for forbidden_column in [
+        "Benefit per order",
+        "Days for shipping (real)",
+        "Delivery Status",
+        "Order Status",
+        "Late_delivery_risk",
+    ]:
+        assert forbidden_column not in X.columns
     assert y.name == "Order Profit Per Order"
 
 

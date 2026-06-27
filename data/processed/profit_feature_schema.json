@@ -1,10 +1,8 @@
 {
   "target_column": "Order Profit Per Order",
   "feature_columns": [
-    "Days for shipping (real)",
     "Days for shipment (scheduled)",
     "Sales per customer",
-    "Late_delivery_risk",
     "Latitude",
     "Longitude",
     "Order Item Discount",
@@ -17,7 +15,6 @@
     "Product Price",
     "Product Status",
     "Type",
-    "Delivery Status",
     "Category Name",
     "Customer City",
     "Customer Country",
@@ -29,7 +26,6 @@
     "Order Country",
     "Order Region",
     "Order State",
-    "Order Status",
     "Product Name",
     "Shipping Mode",
     "order_year",
@@ -41,7 +37,6 @@
   ],
   "categorical_columns": [
     "Type",
-    "Delivery Status",
     "Category Name",
     "Customer City",
     "Customer Country",
@@ -53,19 +48,11 @@
     "Order Country",
     "Order Region",
     "Order State",
-    "Order Status",
     "Product Name",
     "Shipping Mode"
   ],
   "categorical_codes": {
     "Type": [
-      0,
-      1,
-      2,
-      3,
-      4
-    ],
-    "Delivery Status": [
       0,
       1,
       2,
@@ -5543,18 +5530,6 @@
       1079,
       1080
     ],
-    "Order Status": [
-      0,
-      1,
-      2,
-      3,
-      4,
-      5,
-      6,
-      7,
-      8,
-      9
-    ],
     "Product Name": [
       0,
       1,
@@ -5621,10 +5596,8 @@
     ]
   },
   "numeric_columns": [
-    "Days for shipping (real)",
     "Days for shipment (scheduled)",
     "Sales per customer",
-    "Late_delivery_risk",
     "Latitude",
     "Longitude",
     "Order Item Discount",

@@ -1,9 +1,9 @@
 """
 training_store.py
-乙：上傳訓練資料的『累積儲存』與『合併供重訓』。
+乙：上傳已知結果資料的『累積儲存』與『合併供重訓』。
 
 設計重點：
-- 上傳『進訓練』的資料必須含真實標籤 Late_delivery_risk（否則無法學習）。
+- 上傳『進訓練』的資料必須含真實延遲 Late_delivery_risk 與實際利潤 Order Profit Per Order。
 - 入庫前先過 C 驗證閘門（重複欄/像不像訂單資料），並去除 PII（at-rest 安全）；
   Order Id 不在此雜湊，留待重訓時由 DataPipeline 統一去識別化，避免欄位衝突。
 - 採『append 累積』而非覆蓋，讓訓練資料隨真實案例增長。
@@ -18,6 +18,7 @@ from security_utils import DeIdentifier
 from preprocessor import validate_upload_columns  # 重用 C 驗證閘門
 
 TARGET_COLUMN = "Late_delivery_risk"
+PROFIT_TARGET_COLUMN = "Order Profit Per Order"
 
 
 class TrainingDataError(ValueError):
@@ -43,11 +44,17 @@ def append_training_csv(file_buffer, store_path: Path, hash_salt: str = "EDIS_20
     # 1) C 驗證閘門（重複欄 / 是否像訂單資料）
     validate_upload_columns(list(df.columns))
 
-    # 2) 進訓練必須有真實標籤
+    # 2) 進訓練必須有已知結果欄位；延遲與收益兩個模型都要能判讀這批回填資料。
     label = next((c for c in df.columns if c.lower() == TARGET_COLUMN.lower()), None)
     if label is None:
         raise TrainingDataError(
             f"訓練資料必須含標籤欄位 '{TARGET_COLUMN}'（真實是否延遲），否則無法用於訓練。"
+        )
+    profit_label = next((c for c in df.columns if c.lower() == PROFIT_TARGET_COLUMN.lower()), None)
+    if profit_label is None:
+        raise TrainingDataError(
+            f"已知結果資料必須含欄位 '{PROFIT_TARGET_COLUMN}'（實際訂單利潤），"
+            "否則無法供收益模型與 ROI 分析判讀。"
         )
 
     # 3) 去除 PII（at-rest 安全）；Order Id 留待重訓時統一雜湊

@@ -39,6 +39,10 @@ def test_narrative_uses_new_wording():
     })
     assert "可能導致延遲的主要因子" in r["manager_summary"]
     assert "主要 X 因子" not in r["manager_summary"]
+    assert "此訂單延遲風險為 HIGH（p_late=75.0%）" in r["manager_summary"]
+    assert "若升級運送，原罰款 USD $187" in r["manager_summary"]
+    assert "扣除升級成本 USD $80 後，可省下 USD $107的懲罰成本(淨效益)" in r["manager_summary"]
+    assert "預期可避免罰款" not in r["manager_summary"]
 
 
 def test_order_specific_flags_are_honest():
@@ -65,3 +69,11 @@ def test_order_specific_flags_are_honest():
     txn = _factor(factors, "訂單交易型態")
     if txn is not None:
         assert txn["order_specific"] is False
+
+
+def test_explainer_uses_shared_risk_boundaries():
+    explainer = _explainer()
+    assert explainer._risk_bucket(0.2999) == "Low"
+    assert explainer._risk_bucket(0.30) == "Medium"
+    assert explainer._risk_bucket(0.6999) == "Medium"
+    assert explainer._risk_bucket(0.70) == "High"

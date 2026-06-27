@@ -67,7 +67,7 @@ function renderProfitMetrics(payload) {
   if (rmse) rmse.textContent = formatProfitMoney(metrics.rmse);
   if (mae) mae.textContent = formatProfitMoney(metrics.mae);
   if (r2) r2.textContent = formatProfitMetric(metrics.r2, 3);
-  if (shape) shape.textContent = `${metrics.row_count || 0} / ${metrics.feature_count || manifest.feature_count || 0}`;
+  if (shape) shape.textContent = `${metrics.row_count || 0} / ${manifest.feature_count || metrics.feature_count || 0}`;
   if (target) target.textContent = `Target: ${manifest.target_column || metrics.target_column || 'Order Profit Per Order'}`;
 }
 

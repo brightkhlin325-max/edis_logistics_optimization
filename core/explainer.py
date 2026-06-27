@@ -15,6 +15,8 @@ from typing import Iterable
 
 import pandas as pd
 
+from risk_policy import risk_bucket_for_probability
+
 
 DEFAULT_TOP_FACTORS = [
     "Shipping Mode_Standard Class",
@@ -142,8 +144,6 @@ class ManagerExplainer:
         budget = float(optimization_result.get("budget", 0.0))
         total_cost = float(optimization_result.get("total_cost", 0.0))
         expected_total_saving = float(optimization_result.get("expected_total_saving", 0.0))
-        solver = optimization_result.get("solver", "PuLP MILP")
-
         explained_orders = [
             self.explain_order(self._hydrate_order(order))
             for order in selected_orders[:5]
@@ -153,7 +153,7 @@ class ManagerExplainer:
 
         summary = (
             f"建議主管核准本批調度：在預算 USD ${budget:,.0f} 下，"
-            f"使用 {solver} 選出 {selected_count} 筆升級訂單，"
+            f"系統挑選出 {selected_count} 筆建議升級訂單，"
             f"預估淨效益 USD ${expected_total_saving:,.0f}，預算使用率 {budget_usage:.0f}%。"
             f"主要調整方向是：{top_action}"
         )
@@ -161,7 +161,6 @@ class ManagerExplainer:
         return {
             "headline": summary,
             "recommended_policy": top_action,
-            "solver": solver,
             "budget_usage_pct": round(budget_usage, 2),
             "sample_order_explanations": explained_orders,
             "llm_ready_prompt": self._build_llm_prompt(optimization_result, explained_orders),
@@ -284,10 +283,10 @@ class ManagerExplainer:
     ) -> str:
         factor_text = "、".join(f"{f.label}（{f.evidence}）" for f in factors)
         return (
-            f"此訂單延遲風險為 {risk_bucket}（p_late={p_late:.0%}），"
+            f"此訂單延遲風險為 {risk_bucket.upper()}（p_late={p_late:.1%}），"
             f"目前運送模式為 {shipping_mode}，目的地為 {order_region or 'Unknown'}。"
-            f"若升級運送，預期可避免罰款 USD ${expected_penalty:,.0f}，"
-            f"扣除升級成本 USD ${upgrade_cost:,.0f} 後，淨效益約 USD ${net_benefit:,.0f}。"
+            f"若升級運送，原罰款 USD ${expected_penalty:,.0f}，"
+            f"扣除升級成本 USD ${upgrade_cost:,.0f} 後，可省下 USD ${net_benefit:,.0f}的懲罰成本(淨效益)。"
             f"可能導致延遲的主要因子為：{factor_text}。建議：{action}。"
         )
 
@@ -311,22 +310,17 @@ class ManagerExplainer:
                 "selected_count": optimization_result.get("selected_count"),
                 "total_cost": optimization_result.get("total_cost"),
                 "expected_total_saving": optimization_result.get("expected_total_saving"),
-                "solver": optimization_result.get("solver"),
             },
             "sample_explanations": explanations[:3],
         }
         return (
-            "請用物流主管能理解的語氣，根據以下 MILP 最佳化結果與 LIME-style X 因子，"
+            "請用物流主管能理解的語氣，根據以下最佳化調度結果與訂單風險因子，"
             "產出三句決策建議、風險原因與預算說明："
             f"{json.dumps(compact, ensure_ascii=False, default=self._json_default)}"
         )
 
     def _risk_bucket(self, p_late: float) -> str:
-        if p_late >= 0.7:
-            return "High"
-        if p_late >= 0.4:
-            return "Medium"
-        return "Low"
+        return risk_bucket_for_probability(p_late)
 
     def _json_default(self, value):
         if hasattr(value, "item"):

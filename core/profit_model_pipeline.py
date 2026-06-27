@@ -1,4 +1,4 @@
-"""
+﻿"""
 Profit regression model pipeline for the EDIS/DataCo project.
 
 This module intentionally owns only the model layer. It expects another
@@ -36,7 +36,11 @@ DEFAULT_MANIFEST_PATH = "models/profit_feature_manifest.json"
 
 LEAKAGE_COLUMNS = {
     "Benefit per order",
-    # Order Item Profit Ratio 依團隊決策視為「下單時已知 margin」→ 改列合法特徵（見 MD §11.6）。
+    "Days for shipping (real)",
+    "Delivery Status",
+    "Order Status",
+    "Late_delivery_risk",
+    # Order Item Profit Ratio is allowed only when treated as known order-time margin.
 }
 
 NON_MODEL_COLUMNS = {

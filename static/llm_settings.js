@@ -228,7 +228,7 @@ function updateLLMSettingsAccess() {
       badge.textContent = 'Viewer';
     }
   }
-  if (locked) locked.style.display = isMOrEng ? 'none' : 'block';
+  if (locked) locked.style.display = 'none';
   if (form) form.style.display = isMOrEng ? 'grid' : 'none';
 }
 
@@ -240,6 +240,18 @@ function appendAIMessage(type, text) {
   msg.textContent = text;
   log.appendChild(msg);
   log.scrollTop = log.scrollHeight;
+}
+
+function getCurrentOptimizationInputs() {
+  const numberFrom = (id, fallback) => {
+    const value = parseFloat(document.getElementById(id)?.value);
+    return Number.isFinite(value) ? value : fallback;
+  };
+  return {
+    budget: numberFrom('optPageBudgetInput', 5000),
+    upgrade_cost: numberFrom('optPageUpgradeCost', 80),
+    delay_penalty: numberFrom('optPageDelayPenalty', 250)
+  };
 }
 
 async function uploadPredictionCSV(input) {
@@ -337,13 +349,14 @@ async function generateAIBrief() {
   appendAIMessage('system', '正在整理去識別化預測結果與最佳化摘要...');
 
   try {
+    const optInputs = getCurrentOptimizationInputs();
     const res = await fetch(`${API_BASE}/api/llm/manager-brief`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        budget: parseFloat(document.getElementById('budgetInput')?.value) || 5000,
-        upgrade_cost: 80,
-        delay_penalty: 250,
+        budget: optInputs.budget,
+        upgrade_cost: optInputs.upgrade_cost,
+        delay_penalty: optInputs.delay_penalty,
         risk_threshold: window.edisState.threshold,
         question
       })
@@ -356,7 +369,7 @@ async function generateAIBrief() {
     if (mode) {
       mode.textContent = data.llm?.used_external_llm
         ? `${data.llm.configured_provider || data.llm.provider}: ${data.llm.model || 'external'}`
-        : 'local answer';
+        : '本機顧問回覆';
     }
     appendAIMessage('assistant', data.brief_text || '沒有產生摘要。');
     questionInput.value = '';
@@ -378,5 +391,6 @@ window.loadLLMSettings = loadLLMSettings;
 window.saveLLMSettings = saveLLMSettings;
 window.updateLLMSettingsAccess = updateLLMSettingsAccess;
 window.appendAIMessage = appendAIMessage;
+window.getCurrentOptimizationInputs = getCurrentOptimizationInputs;
 window.uploadPredictionCSV = uploadPredictionCSV;
 window.generateAIBrief = generateAIBrief;

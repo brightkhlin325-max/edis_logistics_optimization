@@ -6,6 +6,69 @@
 let _roiScatterChart = null;
 let _roiLoaded = false;
 let _roiViewMode = 'scatter';
+let _roiAtRiskPage = 1;
+const ROI_COMPONENT_VERSION = 'roi-kpi-vertical-v2';
+
+function normalizeRoiKpiCards() {
+  const row = document.getElementById('roiKpiRow');
+  if (!row) return;
+
+  if (!document.getElementById('roiKpiRuntimeStyle')) {
+    const style = document.createElement('style');
+    style.id = 'roiKpiRuntimeStyle';
+    style.textContent = `
+      #roiKpiRow {
+        display: grid !important;
+        grid-template-columns: repeat(5, minmax(0, 1fr)) !important;
+        gap: 14px !important;
+        margin-bottom: 18px !important;
+      }
+      #roiKpiRow > .kpi-card,
+      #roiKpiRow > .roi-kpi-card {
+        display: flex !important;
+        flex-direction: column !important;
+        align-items: flex-start !important;
+        justify-content: center !important;
+        gap: 0 !important;
+        min-height: 142px !important;
+        padding: 28px 30px !important;
+      }
+      #roiKpiRow .kpi-icon-wrap { display: none !important; }
+      #roiKpiRow .kpi-info,
+      #roiKpiRow .roi-kpi-info { width: 100% !important; min-width: 0 !important; }
+      #roiKpiRow .kpi-label,
+      #roiKpiRow .roi-kpi-label {
+        display: block !important;
+        margin: 0 0 8px 0 !important;
+        line-height: 1.35 !important;
+        font-size: 12px !important;
+        color: var(--muted) !important;
+      }
+      #roiKpiRow .kpi-value,
+      #roiKpiRow .roi-kpi-value {
+        display: block !important;
+        width: 100% !important;
+        margin: 0 !important;
+        font-size: clamp(22px, 1.9vw, 28px) !important;
+        line-height: 1.05 !important;
+        white-space: nowrap !important;
+      }
+      #roiKpiRow .kpi-foot,
+      #roiKpiRow .roi-kpi-foot {
+        display: block !important;
+        margin-top: 8px !important;
+        font-size: 11px !important;
+        line-height: 1.4 !important;
+        color: var(--muted) !important;
+      }
+    `;
+    document.head.appendChild(style);
+  }
+
+  row.querySelectorAll(':scope > .kpi-card').forEach(card => {
+    card.classList.add('roi-kpi-card');
+  });
+}
 
 function changeRoiViewMode(mode) {
   _roiViewMode = mode;
@@ -29,6 +92,16 @@ function changeRoiViewMode(mode) {
 
 const _fmtMoney = (v) => (v < 0 ? '-$' : '$') + Math.abs(Math.round(v)).toLocaleString();
 const _fmtPct = (v) => (v * 100).toFixed(1) + '%';
+function _numberFromInput(id, fallback) {
+  const n = parseFloat(document.getElementById(id)?.value);
+  return Number.isFinite(n) ? n : fallback;
+}
+
+function renderRoiScope(scope) {
+  const el = document.getElementById('roiDataScopeNote');
+  if (!el || !scope) return;
+  el.textContent = scope.note || '';
+}
 
 const ROI_INFO = {
   penalty: ['SLA 延遲罰金', '每筆訂單延遲時估計付出的代價（退費/賠償/商譽）。調整它會即時重算「真價值」與相關 KPI。預設 $250，對齊最佳化調度。'],
@@ -57,15 +130,46 @@ function closeRoiInfo(e) {
   if (modal) modal.style.display = 'none';
 }
 
-function _roiPenalty() { return parseFloat(document.getElementById('roiPenalty')?.value) || 250; }
+function _roiPenalty() { return _numberFromInput('roiPenalty', 250); }
+
+function setRoiPenalty(v) {
+  const el = document.getElementById('roiPenalty');
+  if (!el) return;
+  el.value = v;
+  onRoiPenaltyChange();
+}
+window.setRoiPenalty = setRoiPenalty;
 
 async function loadRoiSimulator() {
-  syncRoiSimulatorRole();
+  // 項目2/6：ROI 最佳化求解與 What-if 前端已移除，相關呼叫停用（後端保留）。
+  normalizeRoiKpiCards();
   await loadRoiSummary();
   await loadRoiPortfolio();   // 也會在內部填客群/區域下拉
   loadRoiTrustMap();
-  populateWhatifRegions();
 }
+
+// 項目4：把 ROI 分析區動態載入「最佳化調度」頁的 #optRoiAnalysis（只載一次）
+async function loadEmbeddedRoi() {
+  const host = document.getElementById('optRoiAnalysis');
+  if (!host) return;
+  if (!host.dataset.loaded || host.dataset.roiVersion !== ROI_COMPONENT_VERSION || host.querySelector('#roiKpiRow > .kpi-card')) {
+    try {
+      const r = await fetch(`/static/components/roi_simulator.html?v=${ROI_COMPONENT_VERSION}`, { cache: 'no-store' });
+      host.innerHTML = await r.text();
+      // 移除內嵌 page-header（避免與最佳化調度頁標題重複）
+      const hdr = host.querySelector('.page-header');
+      if (hdr) hdr.remove();
+      host.dataset.loaded = '1';
+      host.dataset.roiVersion = ROI_COMPONENT_VERSION;
+    } catch (e) {
+      host.innerHTML = `<div style="color:red;padding:20px;">ROI 分析載入失敗：${e.message}</div>`;
+      return;
+    }
+  }
+  normalizeRoiKpiCards();
+  loadRoiSimulator();
+}
+window.loadEmbeddedRoi = loadEmbeddedRoi;
 
 async function loadRoiSummary() {
   try {
@@ -75,16 +179,24 @@ async function loadRoiSummary() {
     nv.textContent = _fmtMoney(d.net_of_service_total);
     nv.style.color = d.net_of_service_total < 0 ? 'var(--danger)' : 'var(--success)';
     document.getElementById('roiErosion').textContent = _fmtMoney(d.service_erosion_total);
-    document.getElementById('roiFpPct').textContent = _fmtPct(d.false_positive_value_pct);
+    document.getElementById('roiFpPct').textContent = d.false_positive_available === false ? 'N/A' : _fmtPct(d.false_positive_value_pct);
     document.getElementById('roiEpar').textContent = _fmtMoney(d.epar_total);
+    renderRoiScope(d.data_scope);
   } catch (e) { console.error('roi summary', e); }
 }
 
 function _populateOnce(selectId, values) {
   const sel = document.getElementById(selectId);
-  if (!sel || sel.dataset.filled) return;
+  if (!sel) return;
+  const signature = JSON.stringify(values || []);
+  if (sel.dataset.signature === signature) return;
+  const current = sel.value;
+  const first = sel.options[0] ? sel.options[0].cloneNode(true) : null;
+  sel.innerHTML = '';
+  if (first) sel.appendChild(first);
   values.forEach(v => { const o = document.createElement('option'); o.value = v; o.textContent = v; sel.appendChild(o); });
-  sel.dataset.filled = '1';
+  sel.value = (values || []).includes(current) ? current : '';
+  sel.dataset.signature = signature;
 }
 
 async function loadRoiPortfolio() {
@@ -93,7 +205,7 @@ async function loadRoiPortfolio() {
   const seg = document.getElementById('roiSegFilter').value;
   const region = document.getElementById('roiRegionFilter').value;
   const disc = document.getElementById('roiDiscFilter').value;
-  const qs = new URLSearchParams({ value_axis: vAxis, risk_axis: rAxis, penalty: _roiPenalty(), max_points: 1500 });
+  const qs = new URLSearchParams({ value_axis: vAxis, risk_axis: rAxis, penalty: _roiPenalty(), max_points: 1500, at_risk_page: _roiAtRiskPage, at_risk_limit: 50 });
   if (seg) qs.set('segment', seg);
   if (region) qs.set('region', region);
   if (disc) qs.set('discount_band', disc);
@@ -102,10 +214,14 @@ async function loadRoiPortfolio() {
     const d = await fetch(`${API_BASE}/api/roi/portfolio?${qs.toString()}`).then(r => r.json());
     _populateOnce('roiSegFilter', d.filters?.segments || []);
     _populateOnce('roiRegionFilter', d.filters?.regions || []);
+    renderRoiScope(d.data_scope);
     renderRoiScatter(d, vAxis, rAxis);
-    renderAtRisk(d.at_risk_list || []);
+    renderAtRisk(d.at_risk_list || [], d);
     const note = document.getElementById('roiScatterNote');
-    if (note) note.textContent = `符合篩選 ${d.total_filtered.toLocaleString()} 筆${d.truncated ? `，散點取樣顯示 ${d.points_returned} 筆（保護效能）` : ''}。`;
+    if (note) {
+      const fallbackRisk = d.risk_axis !== d.risk_axis_effective ? '；此資料沒有實際延遲答案，風險軸已改用 P(late)' : '';
+      note.textContent = `符合篩選 ${d.total_filtered.toLocaleString()} 筆${d.truncated ? `，散點取樣顯示 ${d.points_returned} 筆（保護效能）` : ''}${fallbackRisk}。`;
+    }
   } catch (e) { console.error('roi portfolio', e); }
 }
 
@@ -182,6 +298,7 @@ function renderRoiScatter(d, vAxis, rAxis) {
 
   if (_roiScatterChart) { _roiScatterChart.destroy(); _roiScatterChart = null; }
 
+  const riskTitle = (d.risk_axis_effective || rAxis) === 'true_label' ? '實際延遲 (0/1)' : '延遲機率 P(late)';
   _roiScatterChart = new Chart(canvas.getContext('2d'), {
     type: 'scatter',
     data: { datasets: datasets },
@@ -200,7 +317,7 @@ function renderRoiScatter(d, vAxis, rAxis) {
         },
       },
       scales: {
-        x: { min: 0, max: 1, title: { display: true, text: rAxis === 'true_label' ? '實際延遲 (0/1)' : '延遲機率 P(late)' } },
+        x: { min: 0, max: 1, title: { display: true, text: riskTitle } },
         y: { title: { display: true, text: vAxis === 'profit_actual' ? '帳載利潤 $' : '真價值 Net-of-Service $' } },
       },
       onClick: (evt, els) => {
@@ -214,19 +331,36 @@ function renderRoiScatter(d, vAxis, rAxis) {
   });
 }
 
-function renderAtRisk(list) {
-  document.getElementById('roiAtRiskCount').textContent = `${list.length} 筆`;
+function renderAtRisk(list, d) {
+  const total = d?.at_risk_total ?? list.length;
+  const page = d?.at_risk_page ?? 1;
+  const pages = d?.at_risk_pages ?? 1;
+  document.getElementById('roiAtRiskCount').textContent = `${total.toLocaleString()} 筆`;
   const body = document.getElementById('roiAtRiskBody');
-  if (!list.length) { body.innerHTML = `<tr><td colspan="5" style="text-align:center;padding:24px;color:var(--muted)">無資料</td></tr>`; return; }
-  body.innerHTML = list.map(o => `
-    <tr>
-      <td><span class="order-id">${o.id}</span></td>
-      <td style="font-weight:700;">${_fmtMoney(o.epar)}</td>
-      <td>${_fmtMoney(o.profit_actual)}</td>
-      <td>${_fmtPct(o.p_late)}</td>
-      <td>${o.segment}</td>
-    </tr>`).join('');
+  if (!list.length) { body.innerHTML = `<tr><td colspan="5" style="text-align:center;padding:24px;color:var(--muted)">無資料</td></tr>`; }
+  else {
+    body.innerHTML = list.map(o => `
+      <tr>
+        <td><span class="order-id">${o.id}</span></td>
+        <td style="font-weight:700;">${_fmtMoney(o.epar)}</td>
+        <td>${_fmtMoney(o.profit_actual)}</td>
+        <td>${_fmtPct(o.p_late)}</td>
+        <td>${o.segment}</td>
+      </tr>`).join('');
+  }
+  const ind = document.getElementById('roiAtRiskPageIndicator');
+  if (ind) ind.textContent = `第 ${page} / ${pages} 頁`;
+  const prev = document.getElementById('roiAtRiskPrev');
+  const next = document.getElementById('roiAtRiskNext');
+  if (prev) { prev.disabled = page <= 1; prev.style.opacity = page <= 1 ? 0.5 : 1; }
+  if (next) { next.disabled = page >= pages; next.style.opacity = page >= pages ? 0.5 : 1; }
 }
+
+function changeAtRiskPage(delta) {
+  _roiAtRiskPage = Math.max(1, _roiAtRiskPage + delta);
+  loadRoiPortfolio();
+}
+window.changeAtRiskPage = changeAtRiskPage;
 
 async function loadRoiTrustMap() {
   try {
@@ -274,11 +408,11 @@ function renderTrustRows(elId, rows, kind) {
 
     const metric = kind === 'delay' ? `AUC ${r.auc ?? '—'}` : `R² ${r.r2 ?? '—'}`;
     const detail = kind === 'delay'
-      ? `延遲率 ${_fmtPct(r.late_rate)}、平均預測 ${_fmtPct(r.mean_p_late)}`
-      : `MAE ${r.mae}、RMSE ${r.rmse}`;
-    return `<div onclick="openRoiInfo('trust')" style="cursor:pointer; display:flex; justify-content:space-between; align-items:center; padding:9px 12px; border:${borderStyle}; border-radius:8px; background:${bg}; transition:all 0.2s;" onmouseover="this.style.transform='translateY(-1px)';" onmouseout="this.style.transform='none';">
-      <div><div style="font-weight:700; font-size:13px;">${r.group}</div><div style="font-size:11px; color:var(--muted);">${detail} · n=${r.n.toLocaleString()}</div></div>
-      <div style="font-weight:700; font-family:monospace;">${metric}</div></div>`;
+      ? `延遲率 ${_fmtPct(r.late_rate)} · 平均預測 ${_fmtPct(r.mean_p_late)} · n=${r.n.toLocaleString()}`
+      : `MAE ${r.mae} · RMSE ${r.rmse} · n=${r.n.toLocaleString()}`;
+    return `<div onclick="openRoiInfo('trust')" style="cursor:pointer; display:grid; grid-template-columns:minmax(0, 1fr) auto; gap:12px; align-items:center; min-height:64px; padding:10px 14px; border:${borderStyle}; border-radius:8px; background:${bg}; transition:all 0.2s;" onmouseover="this.style.transform='translateY(-1px)';" onmouseout="this.style.transform='none';">
+      <div style="min-width:0;"><div style="font-weight:700; font-size:13px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${r.group}</div><div style="font-size:11px; color:var(--muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${detail}</div></div>
+      <div style="font-weight:700; font-family:monospace; white-space:nowrap;">${metric}</div></div>`;
   }).join('');
 }
 
@@ -289,9 +423,9 @@ function onRoiPenaltyChange() {
 }
 
 function jumpToOptimization() {
-  const budget = document.getElementById('roiBudget')?.value || 5000;
-  const penalty = document.getElementById('roiOptPenalty')?.value || 250;
-  const threshold = document.getElementById('roiRiskThreshold')?.value || 0.3;
+  const budget = _numberFromInput('roiBudget', 5000);
+  const penalty = _numberFromInput('roiOptPenalty', 250);
+  const threshold = _numberFromInput('roiRiskThreshold', 0.3);
 
   // Set global state or simply update the DOM elements in optimization page
   const optBudget = document.getElementById('optPageBudgetInput');
@@ -314,17 +448,17 @@ function syncRoiSimulatorRole() {
   const badge = document.getElementById('roiOptRoleBadge');
   if (runBtn) runBtn.classList.toggle('hidden', !isMgr);
   if (pubBtn) pubBtn.classList.toggle('hidden', !isMgr);
-  if (lock) lock.classList.toggle('hidden', isMgr);
+  if (lock) lock.classList.add('hidden');
   if (badge) { badge.className = isMgr ? 'role-badge badge-manager' : 'role-badge badge-viewer'; badge.textContent = role === 'engineer' ? 'Engineer' : (role === 'manager' ? 'Manager' : 'Viewer'); }
 }
 
 async function runRoiOptimize() {
   const btn = document.getElementById('roiOptRunBtn');
   const payload = {
-    budget: parseFloat(document.getElementById('roiBudget').value) || 5000,
-    upgrade_cost: parseFloat(document.getElementById('roiUpgradeCost').value) || 80,
-    delay_penalty: parseFloat(document.getElementById('roiOptPenalty').value) || 250,
-    risk_threshold: parseFloat(document.getElementById('roiRiskThreshold').value) || 0.3,
+    budget: _numberFromInput('roiBudget', 5000),
+    upgrade_cost: _numberFromInput('roiUpgradeCost', 80),
+    delay_penalty: _numberFromInput('roiOptPenalty', 250),
+    risk_threshold: _numberFromInput('roiRiskThreshold', 0.3),
   };
   if (btn) { btn.disabled = true; btn.innerHTML = '<span class="spinner"></span>計算中...'; }
   try {

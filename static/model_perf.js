@@ -157,8 +157,8 @@ async function uploadNewTrainingData(input) {
     if (!res.ok) throw new Error(data.detail || '上傳失敗');
     
     status.style.color = 'var(--success)';
-    status.textContent = '資料上傳成功！請點擊下方的「啟動排除異常因素重訓」或直接啟動完整重訓，將新資料納入模型。';
-    showToast('新訓練資料已匯入', 'success');
+    status.textContent = `已匯入 ${data.added ?? 0} 筆已知結果，累積 ${data.total ?? 0} 筆；請啟動重訓並採用新版模型後，系統頁面才會改用新結果。`;
+    showToast('已知結果已累積，尚未取代現行模型', 'success');
   } catch(e) {
     status.style.color = 'var(--danger)';
     status.textContent = '上傳失敗：' + e.message;
@@ -419,6 +419,10 @@ async function loadLeakageAudit() {
     if (tag) { tag.textContent = d.gate_status === 'PASS' ? '✓ PASS' : '✗ FAIL';
       tag.style.background = d.gate_status === 'PASS' ? 'var(--success)' : 'var(--danger)'; tag.style.color = 'white'; }
     const lbl = d.column_labeling || {};
+    const contract = d.serving_contract || {};
+    const legacyText = contract.legacy_schema_ignored
+      ? `舊 schema ${contract.legacy_schema_feature_count || 0} 欄已忽略`
+      : `舊 schema：${contract.legacy_schema_status || '—'}`;
     const body = document.getElementById('leakAuditBody');
     if (body) body.innerHTML = `
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;">
@@ -435,6 +439,9 @@ async function loadLeakageAudit() {
           <div style="font-size:12px;font-weight:700;margin-bottom:6px;">欄位標示 (actual / pred)</div>
           ${Object.entries(lbl).map(([k, v]) => `<div style="font-size:11px;line-height:1.7;padding:6px 8px;background:var(--slate-lt);border-radius:6px;margin-bottom:5px;"><b>${k}</b><br><span style="color:var(--muted);">${v}</span></div>`).join('')}
           <div style="font-size:11px;color:var(--muted);margin-top:8px;">特徵數：${d.feature_count}；洩漏入侵：${(d.leaked_in_features || []).length === 0 ? '無' : d.leaked_in_features.join('、')}</div>
+          <div style="font-size:11px;color:var(--muted);margin-top:4px;">部署契約：${contract.source || '—'}；部署特徵 ${contract.active_feature_count || d.feature_count || 0} 欄；模型檔 ${contract.model_feature_count || '—'} 欄</div>
+          <div style="font-size:11px;color:var(--muted);margin-top:4px;">${legacyText}</div>
+          <div style="font-size:11px;color:var(--muted);margin-top:4px;">${contract.legacy_schema_note || ''}</div>
         </div>
       </div>`;
   } catch (e) { console.error('leakage audit', e); }
@@ -442,3 +449,43 @@ async function loadLeakageAudit() {
 
 window.loadDeterioration = loadDeterioration;
 window.loadLeakageAudit = loadLeakageAudit;
+
+// 項目8：模型診斷子頁切換（延遲 / 收益）
+let _mpProfitLoaded = false;
+async function switchModelSubpage(which) {
+  const delayPane = document.getElementById('mpDelayPane');
+  const profitPane = document.getElementById('mpProfitPane');
+  const tabDelay = document.getElementById('mpTabDelay');
+  const tabProfit = document.getElementById('mpTabProfit');
+  if (!delayPane || !profitPane) return;
+
+  const setActive = (btn, active) => {
+    if (!btn) return;
+    btn.style.color = active ? 'var(--primary)' : 'var(--muted)';
+    btn.style.borderBottom = active ? '2px solid var(--primary)' : '2px solid transparent';
+  };
+
+  if (which === 'profit') {
+    delayPane.style.display = 'none';
+    profitPane.style.display = 'block';
+    setActive(tabProfit, true); setActive(tabDelay, false);
+    if (!_mpProfitLoaded) {
+      try {
+        const resp = await fetch('/static/components/profit_prediction.html');
+        profitPane.innerHTML = await resp.text();
+        _mpProfitLoaded = true;
+      } catch (e) {
+        profitPane.innerHTML = `<div style="color:red;padding:20px;">收益模型子頁載入失敗：${e.message}</div>`;
+        return;
+      }
+    }
+    if (window.loadProfitPrediction) loadProfitPrediction();
+    if (window.loadDeterioration) loadDeterioration();
+    if (window.loadLeakageAudit) loadLeakageAudit();
+  } else {
+    profitPane.style.display = 'none';
+    delayPane.style.display = 'block';
+    setActive(tabDelay, true); setActive(tabProfit, false);
+  }
+}
+window.switchModelSubpage = switchModelSubpage;

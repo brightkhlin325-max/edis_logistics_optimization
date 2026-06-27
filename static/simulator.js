@@ -2,21 +2,111 @@
 // simulator.js — SLIDE What-if 模擬器控制與結果渲染邏輯
 // ==========================================
 
+const SIM_FEATURE_FALLBACK_ORDER = [
+  'shipping_mode',
+  'days_for_shipment',
+  'order_type',
+  'order_region',
+  'product_price',
+  'order_item_quantity'
+];
+
+const SIM_FEATURE_IMPORTANCE_MAP = {
+  'Shipping Mode': 'shipping_mode',
+  'Days for shipment (scheduled)': 'days_for_shipment',
+  'Type': 'order_type',
+  'order_hour': 'order_hour',
+  'Order Region': 'order_region',
+  'Product Price': 'product_price',
+  'Order Item Quantity': 'order_item_quantity',
+  'Customer Segment': 'customer_segment',
+  'Market': 'market',
+};
+
+const SIM_FULL_WIDTH_FEATURES = new Set(['shipping_mode', 'order_region']);
+const SIM_HIDDEN_UI_FEATURES = new Set(['order_hour']);
+
+let simulatorFeatureOrderLoaded = false;
+
+function groupedSimulatorFeatureKey(feature) {
+  const name = String(feature || '');
+  if (name.startsWith('Shipping Mode_')) return 'shipping_mode';
+  if (name.startsWith('Type_')) return 'order_type';
+  if (name.startsWith('Customer Segment_')) return 'customer_segment';
+  if (name.startsWith('Market_')) return 'market';
+  if (name.includes('Order Region')) return 'order_region';
+  const key = SIM_FEATURE_IMPORTANCE_MAP[name] || null;
+  return key && !SIM_HIDDEN_UI_FEATURES.has(key) ? key : null;
+}
+
+function applySimulatorFeatureOrder(order) {
+  const fields = Array.from(document.querySelectorAll('#instantPredictFields .sim-feature-field'));
+  if (!fields.length) return;
+  const ranked = Array.isArray(order) && order.length ? order : SIM_FEATURE_FALLBACK_ORDER;
+  const visualOrder = [
+    ...ranked.filter((key) => SIM_FULL_WIDTH_FEATURES.has(key)),
+    ...ranked.filter((key) => !SIM_FULL_WIDTH_FEATURES.has(key)),
+  ];
+  fields.forEach((field) => {
+    const key = field.dataset.featureKey;
+    const idx = visualOrder.indexOf(key);
+    field.style.order = String(idx >= 0 ? idx : visualOrder.length + 10);
+  });
+}
+
+async function loadSimulatorFeatureOrder() {
+  if (simulatorFeatureOrderLoaded) {
+    applySimulatorFeatureOrder(window.edisState?.simulatorFeatureOrder);
+    return;
+  }
+  simulatorFeatureOrderLoaded = true;
+  try {
+    const metrics = await fetchMetrics();
+    const importance = metrics.feature_importance || {};
+    const grouped = {};
+    Object.entries(importance).forEach(([feature, weight]) => {
+      const key = groupedSimulatorFeatureKey(feature);
+      if (!key) return;
+      grouped[key] = (grouped[key] || 0) + Number(weight || 0);
+    });
+    const ranked = Object.entries(grouped)
+      .sort((a, b) => b[1] - a[1])
+      .map(([key]) => key);
+    SIM_FEATURE_FALLBACK_ORDER.forEach((key) => {
+      if (!ranked.includes(key)) ranked.push(key);
+    });
+    window.edisState.simulatorFeatureOrder = ranked;
+    applySimulatorFeatureOrder(ranked);
+  } catch (error) {
+    applySimulatorFeatureOrder(SIM_FEATURE_FALLBACK_ORDER);
+  }
+}
+
+function orderDateWithHour(dateValue, hourValue) {
+  const hour = Math.max(0, Math.min(23, parseInt(hourValue, 10) || 0));
+  const hh = String(hour).padStart(2, '0');
+  const baseDate = dateValue || '2020-01-01';
+  return `${String(baseDate).split(' ')[0]} ${hh}:00:00`;
+}
+
 async function runInstantPredict() {
   const btn = document.getElementById('predictRunBtn');
   const btnIcon = document.getElementById('predictBtnIcon');
   const btnText = document.getElementById('predictBtnText');
   if (!btn) return;
 
+  const dateValue = document.getElementById('pf-date').value || '';
+  const hourValue = document.getElementById('pf-hour').value || 0;
   const payload = {
     shipping_mode:       document.getElementById('pf-shipping-mode').value,
     order_region:        document.getElementById('pf-order-region').value,
+    order_type:          document.getElementById('pf-order-type').value,
     days_for_shipment:   parseFloat(document.getElementById('pf-days').value)   || 4,
     product_price:       parseFloat(document.getElementById('pf-price').value)  || 59.99,
     order_item_quantity: parseInt(document.getElementById('pf-qty').value)       || 1,
     customer_segment:    document.getElementById('pf-segment').value,
     market:              document.getElementById('pf-market').value,
-    order_date:          document.getElementById('pf-date').value || null,
+    order_date:          orderDateWithHour(dateValue, hourValue),
   };
 
   if (payload.days_for_shipment < 1 || payload.days_for_shipment > 7) {
@@ -28,7 +118,6 @@ async function runInstantPredict() {
   if (payload.order_item_quantity < 1) {
     alert('訂購數量至少為 1。'); return;
   }
-
   btn.disabled = true;
   if (btnIcon) btnIcon.innerHTML = '<span class="spinner" style="border-color:rgba(255,255,255,0.3);border-top-color:white;"></span>';
   if (btnText) btnText.textContent = '計算預測中...';
@@ -63,13 +152,14 @@ async function runInstantPredict() {
   } finally {
     btn.disabled = false;
     if (btnIcon) { btnIcon.innerHTML = ''; btnIcon.textContent = '🔮'; }
-    if (btnText) btnText.textContent = '立即預測延遲機率';
+    if (btnText) btnText.textContent = '分析單筆訂單調度風險';
   }
 }
 
 function renderPredictResult(data) {
   const pLate = data.p_late || 0;
   const risk = data.risk_bucket || 'Low';
+  const riskUpper = String(risk).toUpperCase();
   const penalty = data.expected_penalty || 0;
   const upgCost = data.upgrade_cost || 0;
   const netBen = data.net_benefit_if_upgrade || 0;
@@ -105,7 +195,7 @@ function renderPredictResult(data) {
     const badgeCls = { High: 'prb-high', Medium: 'prb-med', Low: 'prb-low' };
     const badgeIcon = { High: '🔴', Medium: '🟡', Low: '🟢' };
     badgeEl.classList.add(badgeCls[risk] || 'prb-low');
-    badgeEl.textContent = `${badgeIcon[risk] || '○'} ${risk} 風險`;
+    badgeEl.textContent = `${badgeIcon[risk] || '○'} ${riskUpper}`;
   }
 
   document.getElementById('pdPenalty').textContent = `USD $${penalty.toFixed(2)}`;
@@ -133,26 +223,83 @@ function renderPredictResult(data) {
   }
 }
 
-function loadOrderIntoSimulator(shippingMode, orderRegion, days, price, qty, segment, market, orderDate) {
-  const simulator = document.getElementById('instantPredictPanel');
-  if (simulator) {
-    simulator.scrollIntoView({ behavior: 'smooth', block: 'center' });
-  }
+function setSimulatorSelectValue(id, value) {
+  const select = document.getElementById(id);
+  if (!select) return false;
 
-  document.getElementById('pf-shipping-mode').value = shippingMode;
-  document.getElementById('pf-order-region').value = orderRegion;
-  document.getElementById('pf-days').value = days;
-  document.getElementById('pf-price').value = price;
-  document.getElementById('pf-qty').value = qty;
-  document.getElementById('pf-segment').value = segment;
-  document.getElementById('pf-market').value = market;
-  if (orderDate) {
-    document.getElementById('pf-date').value = orderDate.split(' ')[0];
+  const normalized = String(value || '');
+  if (normalized && !Array.from(select.options).some(option => option.value === normalized)) {
+    const option = new Option(normalized, normalized, true, true);
+    select.add(option);
+  }
+  if (normalized) select.value = normalized;
+  return true;
+}
+
+function normalizeSimulationOrder(orderOrShippingMode, orderRegion, days, price, qty, segment, market, orderDate) {
+  if (orderOrShippingMode && typeof orderOrShippingMode === 'object' && !Array.isArray(orderOrShippingMode)) {
+    return orderOrShippingMode;
+  }
+  return {
+    shipping_mode: orderOrShippingMode,
+    order_region: orderRegion,
+    days_for_shipment: days,
+    product_price: price,
+    order_item_quantity: qty,
+    customer_segment: segment,
+    market,
+    order_date: orderDate,
+  };
+}
+
+function loadOrderIntoSimulator(orderOrShippingMode, orderRegion, days, price, qty, segment, market, orderDate) {
+  const order = normalizeSimulationOrder(orderOrShippingMode, orderRegion, days, price, qty, segment, market, orderDate);
+  const simulator = document.getElementById('instantPredictPanel');
+  const requiredIds = [
+    'pf-shipping-mode', 'pf-order-region', 'pf-days', 'pf-price', 'pf-qty',
+    'pf-segment', 'pf-market', 'pf-date', 'pf-order-type', 'pf-hour', 'predictRunBtn'
+  ];
+  if (!simulator || requiredIds.some(id => !document.getElementById(id))) return false;
+
+  loadSimulatorFeatureOrder();
+  simulator.scrollIntoView({ behavior: 'smooth', block: 'center' });
+
+  setSimulatorSelectValue('pf-shipping-mode', order.shipping_mode || order.shippingMode || 'Standard Class');
+  setSimulatorSelectValue('pf-order-region', order.order_region || order.orderRegion || 'Western Europe');
+  setSimulatorSelectValue('pf-order-type', order.order_type || order.orderType || 'PAYMENT');
+  document.getElementById('pf-days').value = order.days_for_shipment ?? order.days ?? 4;
+  document.getElementById('pf-price').value = order.product_price ?? order.price ?? 59.99;
+  document.getElementById('pf-qty').value = order.order_item_quantity ?? order.quantity ?? 1;
+  document.getElementById('pf-segment').value = order.customer_segment || order.segment || 'Consumer';
+  document.getElementById('pf-market').value = order.market || 'Europe';
+  const sourceDate = order.order_date || order.orderDate || '';
+  if (sourceDate) {
+    document.getElementById('pf-date').value = String(sourceDate).split(' ')[0];
   } else {
     document.getElementById('pf-date').value = '';
   }
+  document.getElementById('pf-hour').value = order.order_hour ?? order.orderHour ?? 11;
 
   runInstantPredict();
+  return true;
+}
+
+function openOrderSimulation(orderOrShippingMode, orderRegion, days, price, qty, segment, market, orderDate) {
+  const order = normalizeSimulationOrder(orderOrShippingMode, orderRegion, days, price, qty, segment, market, orderDate);
+  let attempts = 0;
+
+  const applyWhenReady = () => {
+    if (loadOrderIntoSimulator(order)) return;
+    attempts += 1;
+    if (attempts < 20) {
+      window.setTimeout(applyWhenReady, 50);
+    } else if (window.showToast) {
+      window.showToast('What-if 模擬器尚未載入完成，請重新點選模擬。', 'error');
+    }
+  };
+
+  if (window.showPage) window.showPage('risk-list');
+  window.requestAnimationFrame(applyWhenReady);
 }
 
 async function runGlobalSimulation(val) {
@@ -176,5 +323,7 @@ async function runGlobalSimulation(val) {
 // Bind to window
 window.runInstantPredict = runInstantPredict;
 window.renderPredictResult = renderPredictResult;
+window.loadSimulatorFeatureOrder = loadSimulatorFeatureOrder;
 window.loadOrderIntoSimulator = loadOrderIntoSimulator;
+window.openOrderSimulation = openOrderSimulation;
 window.runGlobalSimulation = runGlobalSimulation;

@@ -78,6 +78,40 @@ def test_run_filters_below_threshold_and_negative_roi():
     assert result.total_orders_considered == 1
 
 
+def test_complete_fields_relabels_legacy_risk_bucket_by_probability():
+    raw = pd.DataFrame({
+        "p_late": [0.2999, 0.30, 0.6999, 0.70],
+        "risk_bucket": ["High", "High", "Low", "Low"],
+    })
+    completed = ShippingOptimizer()._complete_fields(raw)
+    assert completed["risk_bucket"].tolist() == ["Low", "Medium", "Medium", "High"]
+
+
+def test_candidate_cap_keeps_highest_individual_net_benefits():
+    raw = pd.DataFrame({
+        "p_late": [0.9, 0.9, 0.9],
+        "expected_penalty": [300.0, 250.0, 200.0],
+        "upgrade_cost": [100.0, 100.0, 100.0],
+    })
+    candidates = ShippingOptimizer(
+        risk_threshold=0.3,
+        max_candidates=2,
+    )._filter_candidates(raw)
+    assert candidates["net_benefit"].tolist() == [200.0, 150.0]
+
+
+def test_selected_orders_are_reported_by_highest_net_benefit():
+    cands = _candidates([
+        {"order_id_hash": "low", "p_late": 0.95, "upgrade_cost": 100.0, "expected_penalty": 130.0},
+        {"order_id_hash": "high", "p_late": 0.80, "upgrade_cost": 100.0, "expected_penalty": 300.0},
+        {"order_id_hash": "mid", "p_late": 0.90, "upgrade_cost": 100.0, "expected_penalty": 250.0},
+    ])
+    result = ShippingOptimizer(budget=10_000).optimize(cands)
+
+    assert [order["order_id_hash"] for order in result.selected_orders] == ["high", "mid", "low"]
+    assert [order["net_benefit"] for order in result.selected_orders] == [200.0, 150.0, 30.0]
+
+
 def test_to_dict_structure_and_rounding():
     cands = _candidates([
         {"p_late": 0.91234, "upgrade_cost": 100.005, "expected_penalty": 300.567},

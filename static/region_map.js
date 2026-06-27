@@ -111,12 +111,12 @@ function computeUSCombined(regionLookup) {
 
 async function loadRegionalRisk() {
   const container = document.getElementById('regionRiskRankList');
-  container.innerHTML = '載入中...';
+  if (container) container.innerHTML = '載入中...';
 
   try {
     const data = await fetchRegions();
     if (!data || data.length === 0) {
-      container.innerHTML = '<div style="color:var(--muted); font-size:12px;">無區域延遲數據</div>';
+      if (container) container.innerHTML = '<div style="color:var(--muted); font-size:12px;">無區域延遲數據</div>';
       return;
     }
 
@@ -135,7 +135,7 @@ async function loadRegionalRisk() {
     if (usCombined) regionLookup['US_COMBINED'] = usCombined;
 
     // ── Render ranking list ──
-    container.innerHTML = data.map((r, i) => {
+    if (container) container.innerHTML = data.map((r, i) => {
       const pct = (r.p_late * 100).toFixed(1);
       const color = getRegionColor(r.p_late);
       const isHigh = r.p_late >= 0.56;
@@ -165,7 +165,11 @@ async function loadRegionalRisk() {
     await initRegionMap(regionLookup);
 
   } catch (e) {
-    container.innerHTML = `<div style="color:red; font-size:12px;">載入失敗: ${e.message}</div>`;
+    if (container) container.innerHTML = `<div style="color:red; font-size:12px;">載入失敗: ${e.message}</div>`;
+    const mapContainer = document.getElementById('regionMapContainer');
+    if (mapContainer) {
+      mapContainer.innerHTML = `<div style="display:flex;align-items:center;justify-content:center;height:100%;color:var(--muted);font-size:13px;">地圖資料載入失敗：${e.message}</div>`;
+    }
   }
 }
 
@@ -193,6 +197,7 @@ async function initRegionMap(regionLookup) {
 
   try {
     const geoRes = await fetch('/api/geojson/countries');
+    if (!geoRes.ok) throw new Error(`HTTP ${geoRes.status}`);
     const geoData = await geoRes.json();
 
     regionGeoLayer = L.geoJSON(geoData, {
