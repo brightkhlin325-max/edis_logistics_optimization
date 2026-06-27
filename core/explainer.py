@@ -144,8 +144,6 @@ class ManagerExplainer:
         budget = float(optimization_result.get("budget", 0.0))
         total_cost = float(optimization_result.get("total_cost", 0.0))
         expected_total_saving = float(optimization_result.get("expected_total_saving", 0.0))
-        solver = optimization_result.get("solver", "PuLP MILP")
-
         explained_orders = [
             self.explain_order(self._hydrate_order(order))
             for order in selected_orders[:5]
@@ -155,7 +153,7 @@ class ManagerExplainer:
 
         summary = (
             f"建議主管核准本批調度：在預算 USD ${budget:,.0f} 下，"
-            f"使用 {solver} 選出 {selected_count} 筆升級訂單，"
+            f"系統挑選出 {selected_count} 筆建議升級訂單，"
             f"預估淨效益 USD ${expected_total_saving:,.0f}，預算使用率 {budget_usage:.0f}%。"
             f"主要調整方向是：{top_action}"
         )
@@ -163,7 +161,6 @@ class ManagerExplainer:
         return {
             "headline": summary,
             "recommended_policy": top_action,
-            "solver": solver,
             "budget_usage_pct": round(budget_usage, 2),
             "sample_order_explanations": explained_orders,
             "llm_ready_prompt": self._build_llm_prompt(optimization_result, explained_orders),
@@ -313,12 +310,11 @@ class ManagerExplainer:
                 "selected_count": optimization_result.get("selected_count"),
                 "total_cost": optimization_result.get("total_cost"),
                 "expected_total_saving": optimization_result.get("expected_total_saving"),
-                "solver": optimization_result.get("solver"),
             },
             "sample_explanations": explanations[:3],
         }
         return (
-            "請用物流主管能理解的語氣，根據以下 MILP 最佳化結果與 LIME-style X 因子，"
+            "請用物流主管能理解的語氣，根據以下最佳化調度結果與訂單風險因子，"
             "產出三句決策建議、風險原因與預算說明："
             f"{json.dumps(compact, ensure_ascii=False, default=self._json_default)}"
         )

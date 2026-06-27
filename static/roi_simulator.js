@@ -35,6 +35,12 @@ function _numberFromInput(id, fallback) {
   return Number.isFinite(n) ? n : fallback;
 }
 
+function renderRoiScope(scope) {
+  const el = document.getElementById('roiDataScopeNote');
+  if (!el || !scope) return;
+  el.textContent = scope.note || '';
+}
+
 const ROI_INFO = {
   penalty: ['SLA 延遲罰金', '每筆訂單延遲時估計付出的代價（退費/賠償/商譽）。調整它會即時重算「真價值」與相關 KPI。預設 $250，對齊最佳化調度。'],
   nos: ['真價值 Net-of-Service', '真價值 = 帳載利潤 − 實際延遲 × 罰金。用驗證集的「實際是否延遲」回填，揭露帳面賺錢、實際卻因延遲賠錢的訂單。'],
@@ -108,16 +114,24 @@ async function loadRoiSummary() {
     nv.textContent = _fmtMoney(d.net_of_service_total);
     nv.style.color = d.net_of_service_total < 0 ? 'var(--danger)' : 'var(--success)';
     document.getElementById('roiErosion').textContent = _fmtMoney(d.service_erosion_total);
-    document.getElementById('roiFpPct').textContent = _fmtPct(d.false_positive_value_pct);
+    document.getElementById('roiFpPct').textContent = d.false_positive_available === false ? 'N/A' : _fmtPct(d.false_positive_value_pct);
     document.getElementById('roiEpar').textContent = _fmtMoney(d.epar_total);
+    renderRoiScope(d.data_scope);
   } catch (e) { console.error('roi summary', e); }
 }
 
 function _populateOnce(selectId, values) {
   const sel = document.getElementById(selectId);
-  if (!sel || sel.dataset.filled) return;
+  if (!sel) return;
+  const signature = JSON.stringify(values || []);
+  if (sel.dataset.signature === signature) return;
+  const current = sel.value;
+  const first = sel.options[0] ? sel.options[0].cloneNode(true) : null;
+  sel.innerHTML = '';
+  if (first) sel.appendChild(first);
   values.forEach(v => { const o = document.createElement('option'); o.value = v; o.textContent = v; sel.appendChild(o); });
-  sel.dataset.filled = '1';
+  sel.value = (values || []).includes(current) ? current : '';
+  sel.dataset.signature = signature;
 }
 
 async function loadRoiPortfolio() {
@@ -135,10 +149,14 @@ async function loadRoiPortfolio() {
     const d = await fetch(`${API_BASE}/api/roi/portfolio?${qs.toString()}`).then(r => r.json());
     _populateOnce('roiSegFilter', d.filters?.segments || []);
     _populateOnce('roiRegionFilter', d.filters?.regions || []);
+    renderRoiScope(d.data_scope);
     renderRoiScatter(d, vAxis, rAxis);
     renderAtRisk(d.at_risk_list || [], d);
     const note = document.getElementById('roiScatterNote');
-    if (note) note.textContent = `符合篩選 ${d.total_filtered.toLocaleString()} 筆${d.truncated ? `，散點取樣顯示 ${d.points_returned} 筆（保護效能）` : ''}。`;
+    if (note) {
+      const fallbackRisk = d.risk_axis !== d.risk_axis_effective ? '；此資料沒有實際延遲答案，風險軸已改用 P(late)' : '';
+      note.textContent = `符合篩選 ${d.total_filtered.toLocaleString()} 筆${d.truncated ? `，散點取樣顯示 ${d.points_returned} 筆（保護效能）` : ''}${fallbackRisk}。`;
+    }
   } catch (e) { console.error('roi portfolio', e); }
 }
 
@@ -215,6 +233,7 @@ function renderRoiScatter(d, vAxis, rAxis) {
 
   if (_roiScatterChart) { _roiScatterChart.destroy(); _roiScatterChart = null; }
 
+  const riskTitle = (d.risk_axis_effective || rAxis) === 'true_label' ? '實際延遲 (0/1)' : '延遲機率 P(late)';
   _roiScatterChart = new Chart(canvas.getContext('2d'), {
     type: 'scatter',
     data: { datasets: datasets },
@@ -233,7 +252,7 @@ function renderRoiScatter(d, vAxis, rAxis) {
         },
       },
       scales: {
-        x: { min: 0, max: 1, title: { display: true, text: rAxis === 'true_label' ? '實際延遲 (0/1)' : '延遲機率 P(late)' } },
+        x: { min: 0, max: 1, title: { display: true, text: riskTitle } },
         y: { title: { display: true, text: vAxis === 'profit_actual' ? '帳載利潤 $' : '真價值 Net-of-Service $' } },
       },
       onClick: (evt, els) => {
@@ -364,7 +383,7 @@ function syncRoiSimulatorRole() {
   const badge = document.getElementById('roiOptRoleBadge');
   if (runBtn) runBtn.classList.toggle('hidden', !isMgr);
   if (pubBtn) pubBtn.classList.toggle('hidden', !isMgr);
-  if (lock) lock.classList.toggle('hidden', isMgr);
+  if (lock) lock.classList.add('hidden');
   if (badge) { badge.className = isMgr ? 'role-badge badge-manager' : 'role-badge badge-viewer'; badge.textContent = role === 'engineer' ? 'Engineer' : (role === 'manager' ? 'Manager' : 'Viewer'); }
 }
 

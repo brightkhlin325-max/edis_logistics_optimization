@@ -359,7 +359,7 @@ async function uploadTrainingCSV(input) {
     const data = await res.json();
     showToast(data.message, 'success');
   } catch (e) {
-    alert('訓練資料回填失敗: ' + e.message);
+    alert('已知結果回填失敗: ' + e.message);
   } finally {
     uploadBtns.forEach(btn => {
       btn.disabled = false;
@@ -541,15 +541,18 @@ async function setRole(role) {
   const uploadCsvBtns = document.querySelectorAll('.uploadCsvBtn, .uploadPredictBtn');
   uploadCsvBtns.forEach(btn => btn.style.display = isMOrEng ? 'inline-flex' : 'none');
   const lockedUploadBoxes = document.querySelectorAll('.lockedUploadBox, .lockedPredictBox');
-  lockedUploadBoxes.forEach(box => box.style.display = isMOrEng ? 'none' : 'inline-flex');
+  lockedUploadBoxes.forEach(box => box.style.display = 'none');
   
   const aiUploadBtn = document.getElementById('aiUploadPredictBtn');
   const aiBriefBtn = document.getElementById('aiGenerateBriefBtn');
   const aiLockedBox = document.getElementById('aiLockedBox');
   const aiRoleBadge = document.getElementById('aiRoleBadge');
   if (aiUploadBtn) aiUploadBtn.style.display = isMOrEng ? 'inline-flex' : 'none';
-  if (aiBriefBtn) aiBriefBtn.disabled = !isMOrEng;
-  if (aiLockedBox) aiLockedBox.style.display = isMOrEng ? 'none' : 'inline-flex';
+  if (aiBriefBtn) {
+    aiBriefBtn.disabled = !isMOrEng;
+    aiBriefBtn.style.display = isMOrEng ? 'inline-flex' : 'none';
+  }
+  if (aiLockedBox) aiLockedBox.style.display = 'none';
   if (aiRoleBadge) {
     aiRoleBadge.className = isMOrEng ? 'role-badge badge-manager' : 'role-badge badge-viewer';
     aiRoleBadge.textContent = isEng ? 'Engineer' : (isM ? 'Manager' : 'Viewer');
@@ -584,14 +587,14 @@ async function setRole(role) {
   const runBtnOld = document.getElementById('runBtn');
   if (runBtnOld) runBtnOld.classList.toggle('hidden', !isMOrEng);
   const lockedBoxOld = document.getElementById('lockedBox');
-  if (lockedBoxOld) lockedBoxOld.classList.toggle('hidden', isMOrEng);
+  if (lockedBoxOld) lockedBoxOld.classList.add('hidden');
   const optResultOld = document.getElementById('optResult');
   if (optResultOld) optResultOld.classList.add('hidden');
   
   const optPageRunBtn = document.getElementById('optPageRunBtn');
   if (optPageRunBtn) optPageRunBtn.classList.toggle('hidden', !isMOrEng);
   const optPageLockedBox = document.getElementById('optPageLockedBox');
-  if (optPageLockedBox) optPageLockedBox.classList.toggle('hidden', isMOrEng);
+  if (optPageLockedBox) optPageLockedBox.classList.add('hidden');
   const optPageResult = document.getElementById('optPageResult');
   if (optPageResult) optPageResult.classList.add('hidden');
   const optPageResultPlaceholder = document.getElementById('optPageResultPlaceholder');

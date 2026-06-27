@@ -304,8 +304,8 @@ function renderBossTable(data) {
         <td style="white-space:nowrap;">
           ${getActionText(o)}
           ${window.edisState.currentRole === 'viewer'
-            ? `<button class="run-btn" disabled title="Viewer 權限不可使用模擬" style="width:auto; padding:2px 8px; font-size:10px; margin-left:6px; background:#eef2f7 !important; color:#334155 !important; border:1px solid var(--border);">🔒 模擬</button>`
-            : `<button class="run-btn" title="帶入 What-if 模擬器" style="width:auto; padding:2px 8px; font-size:10px; margin-left:6px; background:#dbeafe !important; color:#1e3a8a !important; border:1px solid #bfdbfe;" onclick="openDashboardSimulator('${sm}','${reg}',${days},${price},${qty},'${segment}','${market}','${date}')">🧪 模擬</button>`}
+            ? ``
+            : `<button class="run-btn" title="帶入 What-if 試算" style="width:auto; padding:2px 8px; font-size:10px; margin-left:6px; background:#dbeafe !important; color:#1e3a8a !important; border:1px solid #bfdbfe;" onclick="openDashboardSimulator('${sm}','${reg}',${days},${price},${qty},'${segment}','${market}','${date}')">🧪 What-if</button>`}
         </td>
       </tr>
       <tr id="explain-row-${hash}" class="hidden">

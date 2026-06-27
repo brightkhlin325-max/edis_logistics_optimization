@@ -90,6 +90,17 @@ def predict_uploaded_csv(file_path_or_buffer, mapping_path: Path, model_path: Pa
         "order date (DateOrders)": "order_date",
         "Order Date": "order_date",
         "order_date": "order_date",
+        "Customer Segment": "customer_segment",
+        "Category Name": "category_name",
+        "Market": "market",
+        "Days for shipment (scheduled)": "days_for_shipment",
+        "Product Price": "product_price",
+        "Order Item Product Price": "product_price",
+        "Order Item Quantity": "order_item_quantity",
+        "Order Item Discount Rate": "discount_rate",
+        "Sales": "sales",
+        "Order Item Total": "sales",
+        "Sales per customer": "sales",
     }
     
     meta_df = pd.DataFrame(index=df.index)
@@ -113,6 +124,22 @@ def predict_uploaded_csv(file_path_or_buffer, mapping_path: Path, model_path: Pa
     if "order_date" not in meta_df.columns:
         # 不捏造日期：缺日期就留空(NaT)，避免假月份污染月份統計
         meta_df["order_date"] = pd.NaT
+    if "customer_segment" not in meta_df.columns:
+        meta_df["customer_segment"] = "Unknown"
+    if "category_name" not in meta_df.columns:
+        meta_df["category_name"] = "Unknown"
+    if "market" not in meta_df.columns:
+        meta_df["market"] = "Unknown"
+    if "days_for_shipment" not in meta_df.columns:
+        meta_df["days_for_shipment"] = pd.NA
+    if "product_price" not in meta_df.columns:
+        meta_df["product_price"] = pd.NA
+    if "order_item_quantity" not in meta_df.columns:
+        meta_df["order_item_quantity"] = pd.NA
+    if "discount_rate" not in meta_df.columns:
+        meta_df["discount_rate"] = 0.0
+    if "sales" not in meta_df.columns:
+        meta_df["sales"] = pd.NA
         
     # Feature engineering for XGBoost
     X = pd.DataFrame(index=df.index)
@@ -203,9 +230,6 @@ def predict_uploaded_csv(file_path_or_buffer, mapping_path: Path, model_path: Pa
     target_match = next((c for c in df.columns if c.lower() == "late_delivery_risk"), None)
     if target_match:
         active_df["true_label"] = df[target_match].astype(int)
-    else:
-        # Fallback to pseudo ground truth
-        active_df["true_label"] = (active_df["p_late"] >= 0.5).astype(int)
         
     active_df["risk_bucket"] = active_df["p_late"].map(risk_bucket_for_probability)
     

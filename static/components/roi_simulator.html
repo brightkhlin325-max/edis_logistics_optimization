@@ -51,7 +51,8 @@
       <button class="roi-select" style="padding:4px 10px; font-size:11px;" onclick="setRoiPenalty(250)">標準 $250</button>
       <button class="roi-select" style="padding:4px 10px; font-size:11px;" onclick="setRoiPenalty(500)">嚴格 $500</button>
     </div>
-    <div style="font-size:12px; color:var(--muted);">真價值 (Net-of-Service) = 帳載利潤 − 實際延遲 × 罰金。建議依 SLA 合約設 $200–$500，預設 $250 對齊調度引擎。資料：驗證集 22,544 筆訂單。</div>
+    <div style="font-size:12px; color:var(--muted);">真價值 (Net-of-Service) = 利潤 − 延遲代價。建議依 SLA 合約設 $200–$500，預設 $250 對齊調度引擎。</div>
+    <div id="roiDataScopeNote" style="font-size:12px; color:var(--muted); flex-basis:100%;">資料來源載入中...</div>
   </div>
 </div>
 

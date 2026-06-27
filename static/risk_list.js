@@ -124,7 +124,7 @@ async function loadFilteredRiskList() {
           <td>${o.actual_late===1||o.actual_late===true?'<span style="padding:2px 8px;background:#fee2e2;color:#b91c1c;border-radius:12px;font-size:10px;font-weight:600;">延遲</span>':o.actual_late===0||o.actual_late===false?'<span style="padding:2px 8px;background:#dcfce7;color:#15803d;border-radius:12px;font-size:10px;font-weight:600;">準時</span>':'<span style="color:var(--muted);font-size:12px;">—</span>'}</td>
           <td style="white-space:nowrap;">
             ${o.is_correct===true?'<span style="padding:2px 8px;background:#dcfce7;color:#15803d;border-radius:12px;font-size:10px;font-weight:600;">✓ 正確</span>':o.is_correct===false?'<span style="padding:2px 8px;background:#fee2e2;color:#b91c1c;border-radius:12px;font-size:10px;font-weight:600;">✗ 錯誤</span>':'<span style="color:var(--muted);font-size:12px;">—</span>'}
-            <button class="run-btn" title="帶入 What-if 模擬器並立即試算" data-simulator-order="${simulatorOrder}" style="width:auto; padding:2px 8px; font-size:10px; margin-left:6px; background:#dbeafe !important; color:#1e3a8a !important; border:1px solid #bfdbfe;">🧪 模擬</button>
+            <button class="run-btn" title="帶入 What-if 試算" data-simulator-order="${simulatorOrder}" style="width:auto; padding:2px 8px; font-size:10px; margin-left:6px; background:#dbeafe !important; color:#1e3a8a !important; border:1px solid #bfdbfe;">🧪 What-if</button>
           </td>
         </tr>
       `;

@@ -157,8 +157,8 @@ async function uploadNewTrainingData(input) {
     if (!res.ok) throw new Error(data.detail || '上傳失敗');
     
     status.style.color = 'var(--success)';
-    status.textContent = '資料上傳成功！請點擊下方的「啟動排除異常因素重訓」或直接啟動完整重訓，將新資料納入模型。';
-    showToast('新訓練資料已匯入', 'success');
+    status.textContent = `已匯入 ${data.added ?? 0} 筆已知結果，累積 ${data.total ?? 0} 筆；請啟動重訓並採用新版模型後，系統頁面才會改用新結果。`;
+    showToast('已知結果已累積，尚未取代現行模型', 'success');
   } catch(e) {
     status.style.color = 'var(--danger)';
     status.textContent = '上傳失敗：' + e.message;

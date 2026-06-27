@@ -55,7 +55,7 @@ async function runPageOptimize() {
       <div class="ord-item" style="animation-delay:${i*0.03}s">
         <div>
           <div class="ord-id" title="${o.order_id_hash}">${o.display_order_id || displayOrderId(o.order_id_hash)}</div>
-          <div class="ord-sub">升級成本 $${o.upgrade_cost} · 延遲機率 ${(o.p_late*100).toFixed(0)}% · ${o.reason || 'positive net benefit'}</div>
+          <div class="ord-sub">升級成本 $${o.upgrade_cost} · 延遲機率 ${(o.p_late*100).toFixed(0)}% · 預估淨效益為正</div>
         </div>
         <div class="ord-saving">+$${(o.net_benefit ?? o.expected_saving).toLocaleString()}</div>
       </div>
@@ -92,7 +92,7 @@ function renderOptResult(d) {
       <div class="ord-item" style="animation-delay:${i*0.07}s">
         <div>
           <div class="ord-id" title="${o.order_id_hash}">${o.display_order_id || displayOrderId(o.order_id_hash)}</div>
-          <div class="ord-sub">升級成本 $${o.upgrade_cost} · 延遲率 ${(o.p_late*100).toFixed(0)}% · ${o.reason || 'positive net benefit'}</div>
+          <div class="ord-sub">升級成本 $${o.upgrade_cost} · 延遲率 ${(o.p_late*100).toFixed(0)}% · 預估淨效益為正</div>
         </div>
         <div class="ord-saving">+$${(o.net_benefit ?? o.expected_saving).toLocaleString()}</div>
       </div>

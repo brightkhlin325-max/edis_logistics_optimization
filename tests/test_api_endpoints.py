@@ -1,14 +1,24 @@
 import pytest
 from fastapi.testclient import TestClient
 import sys
+import io
+import pandas as pd
 from pathlib import Path
 
 # 將根目錄加入 sys.path
 sys.path.insert(0, str(Path(__file__).parent.parent))
-from app import app
+from app import app, DATA_DIR
 from risk_policy import risk_bucket_for_probability
+from training_store import append_training_csv, TrainingDataError
 
 client = TestClient(app)
+
+
+def _write_session_predictions(session_id: str, rows: list[dict]) -> Path:
+    path = DATA_DIR / f"predictions_session_{session_id}.csv"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    pd.DataFrame(rows).to_csv(path, index=False)
+    return path
 
 def test_public_metrics_endpoint():
     """驗證公開 metrics 端點正常運作且傳回基本 KPI。"""
@@ -285,6 +295,138 @@ def test_roi_summary_penalty_zero_is_not_treated_as_default():
     assert standard["service_erosion_total"] > zero["service_erosion_total"]
 
 
+def test_roi_summary_uses_session_upload_expected_value_without_ground_truth():
+    session_id = "pytest_roi_session_summary"
+    path = _write_session_predictions(session_id, [
+        {
+            "order_id_hash": "pytest-order-1",
+            "shipping_mode": "First Class",
+            "order_region": "Western Europe",
+            "customer_segment": "Consumer",
+            "category_name": "Cleats",
+            "market": "Europe",
+            "p_late": 0.91,
+            "days_for_shipment": 2,
+            "product_price": 59.99,
+            "order_item_quantity": 2,
+            "discount_rate": 0.1,
+            "upgrade_cost": 55.0,
+        },
+        {
+            "order_id_hash": "pytest-order-2",
+            "shipping_mode": "Standard Class",
+            "order_region": "South America",
+            "customer_segment": "Corporate",
+            "category_name": "Fishing",
+            "market": "LATAM",
+            "p_late": 0.22,
+            "days_for_shipment": 5,
+            "product_price": 120.0,
+            "order_item_quantity": 1,
+            "discount_rate": 0.0,
+            "upgrade_cost": 50.0,
+        },
+    ])
+    try:
+        response = client.get("/api/roi/summary?penalty=250", headers={"X-Session-ID": session_id})
+        assert response.status_code == 200, response.text
+        data = response.json()
+        assert data["rows_orders"] == 2
+        assert data["data_scope"]["scope"] == "session_upload"
+        assert data["data_scope"]["profit_basis"] == "predicted_profit"
+        assert data["data_scope"]["delay_cost_basis"] == "expected_probability"
+        assert data["data_scope"]["has_ground_truth"] is False
+        assert data["false_positive_available"] is False
+        assert data["false_positive_value_pct"] == 0.0
+        assert data["service_erosion_total"] == pytest.approx((0.91 + 0.22) * 250, abs=0.05)
+    finally:
+        path.unlink(missing_ok=True)
+
+
+def test_roi_portfolio_and_optimize_follow_session_upload_scope():
+    session_id = "pytest_roi_session_portfolio"
+    path = _write_session_predictions(session_id, [
+        {
+            "order_id_hash": "pytest-order-1",
+            "shipping_mode": "First Class",
+            "order_region": "Western Europe",
+            "customer_segment": "Consumer",
+            "category_name": "Cleats",
+            "market": "Europe",
+            "p_late": 0.91,
+            "days_for_shipment": 2,
+            "product_price": 59.99,
+            "order_item_quantity": 2,
+            "discount_rate": 0.1,
+            "upgrade_cost": 55.0,
+        },
+        {
+            "order_id_hash": "pytest-order-2",
+            "shipping_mode": "Standard Class",
+            "order_region": "South America",
+            "customer_segment": "Corporate",
+            "category_name": "Fishing",
+            "market": "LATAM",
+            "p_late": 0.22,
+            "days_for_shipment": 5,
+            "product_price": 120.0,
+            "order_item_quantity": 1,
+            "discount_rate": 0.0,
+            "upgrade_cost": 50.0,
+        },
+    ])
+    try:
+        portfolio = client.get(
+            "/api/roi/portfolio?risk_axis=true_label&max_points=100",
+            headers={"X-Session-ID": session_id},
+        )
+        assert portfolio.status_code == 200, portfolio.text
+        p_data = portfolio.json()
+        assert p_data["total_filtered"] == 2
+        assert p_data["risk_axis"] == "true_label"
+        assert p_data["risk_axis_effective"] == "p_late"
+        assert p_data["data_scope"]["scope"] == "session_upload"
+        assert len(p_data["points"]) == 2
+
+        optimize = client.post(
+            "/api/roi/optimize",
+            headers={"X-Role": "Logistics_Manager", "X-Session-ID": session_id},
+            json={"budget": 5000.0, "upgrade_cost": 80.0, "delay_penalty": 250.0, "risk_threshold": 0.3},
+        )
+        assert optimize.status_code == 200, optimize.text
+        o_data = optimize.json()
+        assert o_data["data_scope"]["scope"] == "session_upload"
+        assert o_data["candidate_pool"] == 1
+        assert o_data["total_orders_considered"] == 1
+        assert o_data["selected_count"] == 1
+        assert o_data["selected_orders"][0]["order_id_hash"] == "pytest-order-1"
+        assert o_data["selected_orders"][0]["profit_basis"] == "predicted_profit"
+    finally:
+        path.unlink(missing_ok=True)
+
+
+def test_upload_prediction_preserves_roi_fields_without_pseudo_ground_truth():
+    from preprocessor import predict_uploaded_csv
+
+    root = Path(__file__).parent.parent
+    csv_text = """Order Id,Shipping Mode,Order Region,order date (DateOrders),Days for shipment (scheduled),Product Price,Order Item Quantity,Order Item Discount Rate,Customer Segment,Category Name,Market,Type,Department Name,Order Country
+ABC-1,First Class,Western Europe,2017-06-15 12:00,2,59.99,2,0.1,Consumer,Cleats,Europe,TRANSFER,Fitness,France
+"""
+    result = predict_uploaded_csv(
+        io.StringIO(csv_text),
+        mapping_path=root / "models" / "feature_mapping.json",
+        model_path=root / "models" / "xgboost_model.json",
+    )
+
+    assert "true_label" not in result.columns
+    assert result.loc[0, "customer_segment"] == "Consumer"
+    assert result.loc[0, "category_name"] == "Cleats"
+    assert result.loc[0, "market"] == "Europe"
+    assert float(result.loc[0, "days_for_shipment"]) == 2.0
+    assert float(result.loc[0, "product_price"]) == 59.99
+    assert int(result.loc[0, "order_item_quantity"]) == 2
+
+
 def test_roi_frontend_preserves_zero_penalty_input():
     js = (Path(__file__).parent.parent / "static" / "roi_simulator.js").read_text(encoding="utf-8")
 
@@ -292,6 +434,17 @@ def test_roi_frontend_preserves_zero_penalty_input():
     assert "function _roiPenalty() { return _numberFromInput('roiPenalty', 250); }" in js
     assert "parseFloat(document.getElementById('roiPenalty')?.value) || 250" not in js
     assert "delay_penalty: _numberFromInput('roiOptPenalty', 250)" in js
+
+
+def test_roi_frontend_exposes_dynamic_data_scope():
+    root = Path(__file__).parent.parent / "static"
+    js = (root / "roi_simulator.js").read_text(encoding="utf-8")
+    html = (root / "components" / "roi_simulator.html").read_text(encoding="utf-8")
+
+    assert 'id="roiDataScopeNote"' in html
+    assert "function renderRoiScope(scope)" in js
+    assert "false_positive_available === false ? 'N/A'" in js
+    assert "risk_axis_effective" in js
 
 
 def test_geojson_endpoint_serves_country_feature_collection():
@@ -337,3 +490,91 @@ def test_all_simulation_entrypoints_use_shared_handoff():
     assert "function openOrderSimulation(" in simulator
     assert "window.openOrderSimulation = openOrderSimulation" in simulator
     assert "setSimulatorSelectValue('pf-order-region', orderRegion)" in simulator
+
+
+def test_known_results_upload_requires_delay_and_profit_outcomes():
+    """已知結果回填必須同時支援延遲與收益模型，缺實際利潤不可入庫。"""
+    csv = io.StringIO(
+        "Order Id,Shipping Mode,Order Region,Late_delivery_risk\n"
+        "O-1,Standard Class,Western Europe,1\n"
+    )
+
+    with pytest.raises(TrainingDataError, match="Order Profit Per Order"):
+        append_training_csv(csv, DATA_DIR / "_missing_profit_should_not_write.csv")
+
+
+def test_roi_trust_map_backfills_profit_reliability():
+    """Trust Map 的收益可信度應由現有樣本外收益預測檔回補，不可顯示成空資料。"""
+    response = client.get("/api/roi/trust-map")
+    assert response.status_code == 200, response.text
+    data = response.json()
+    profit = data["profit"]
+
+    assert profit["available"] is True
+    assert profit["by_segment"], profit
+    assert {"group", "n", "mae", "rmse", "r2"}.issubset(profit["by_segment"][0])
+    assert profit["source"] == "profit_test_ready.csv + profit_predictions.csv"
+
+
+def test_template_csv_exists_and_contains_required_outcomes():
+    """AI 助理下載範本必須存在，且包含兩個模型需要的已知結果欄位。"""
+    template = Path(__file__).parent.parent / "static" / "template.csv"
+    assert template.exists()
+    columns = pd.read_csv(template, nrows=0).columns.tolist()
+
+    assert "Late_delivery_risk" in columns
+    assert "Order Profit Per Order" in columns
+    assert len(set(columns)) == len(columns)
+
+
+def test_ui_hides_unauthorized_controls_instead_of_showing_locks():
+    """Viewer/Manager 無權限項目應直接隱藏，不再顯示鎖住的操作入口。"""
+    root = Path(__file__).parent.parent / "static"
+    app_js = (root / "app.js").read_text(encoding="utf-8")
+    roi_js = (root / "roi_simulator.js").read_text(encoding="utf-8")
+    llm_js = (root / "llm_settings.js").read_text(encoding="utf-8")
+
+    assert "lockedUploadBoxes.forEach(box => box.style.display = 'none')" in app_js
+    assert "aiBriefBtn.style.display = isMOrEng ? 'inline-flex' : 'none'" in app_js
+    assert "if (optPageLockedBox) optPageLockedBox.classList.add('hidden')" in app_js
+    assert "if (lock) lock.classList.add('hidden')" in roi_js
+    assert "if (locked) locked.style.display = 'none'" in llm_js
+
+
+def test_ai_assistant_prompts_avoid_fixed_budget_and_solver_jargon():
+    """AI 助理的預設問題與本機摘要不可綁死使用者情境或暴露內部求解器術語。"""
+    root = Path(__file__).parent.parent
+    ai_html = (root / "static" / "components" / "ai_assistant.html").read_text(encoding="utf-8")
+    rbac_html = (root / "static" / "components" / "rbac.html").read_text(encoding="utf-8")
+    explainer = (root / "core" / "explainer.py").read_text(encoding="utf-8")
+
+    assert "$5000" not in ai_html
+    assert "依目前最佳化調度頁的預算與成本設定" in ai_html
+    assert "PuLP" not in rbac_html
+    assert "MILP" not in rbac_html
+    assert "使用 {solver}" not in explainer
+    assert "MILP 最佳化結果" not in explainer
+
+
+def test_model_perf_known_results_upload_is_global_and_two_model_worded():
+    """已知結果 CSV 匯入應位於模型診斷頁標題旁，且文案不可只描述延遲標籤。"""
+    html = (Path(__file__).parent.parent / "static" / "components" / "model_perf.html").read_text(encoding="utf-8")
+
+    assert 'id="knownResultsUploadBox"' in html
+    assert "Late_delivery_risk 與 Order Profit Per Order" in html
+    assert "上傳最新標記為實際延遲狀態" not in html
+
+
+def test_optimization_layout_and_dashboard_cards_are_aligned():
+    """最佳化明細改為上下排版，Dashboard 兩張主管卡片維持等寬等高。"""
+    root = Path(__file__).parent.parent / "static" / "components"
+    optimization = (root / "optimization.html").read_text(encoding="utf-8")
+    dashboard = (root / "dashboard.html").read_text(encoding="utf-8")
+    opt_js = (Path(__file__).parent.parent / "static" / "optimization.js").read_text(encoding="utf-8")
+
+    assert 'class="optimization-stack"' in optimization
+    assert "flex-direction:column" in optimization
+    assert "max-height: 420px" in optimization
+    assert "positive net benefit" not in opt_js
+    assert "repeat(2, minmax(0, 1fr))" in dashboard
+    assert "min-height: 150px" in dashboard

@@ -1,6 +1,19 @@
-<div class="page-header">
-  <h1 class="page-title">模型診斷與重訓</h1>
-  <div class="page-sub">系統效能監控與預警參數調校</div>
+<div class="page-header" style="display:flex; justify-content:space-between; align-items:flex-start; gap:18px;">
+  <div>
+    <h1 class="page-title">模型診斷與重訓</h1>
+    <div class="page-sub">系統效能監控、預警參數調校與已知結果回填</div>
+  </div>
+  <div id="knownResultsUploadBox" style="min-width:320px; max-width:420px; background:white; border:1px solid var(--border); border-radius:8px; padding:12px; box-shadow:var(--shadow);">
+    <div style="font-weight:700; font-size:13px; margin-bottom:6px;">匯入已知結果 CSV</div>
+    <div style="font-size:11.5px; color:var(--muted); line-height:1.5; margin-bottom:10px;">
+      需包含訂單特徵、Late_delivery_risk 與 Order Profit Per Order。匯入後先累積為重訓資料，需重訓並採用新版模型後才會更新 Dashboard、最佳化與診斷結果。
+    </div>
+    <input type="file" id="newTrainingCsvInput" accept=".csv" style="display:none;" onchange="uploadNewTrainingData(this)">
+    <button onclick="document.getElementById('newTrainingCsvInput').click()" class="run-btn" style="background: var(--primary); font-weight: 600; padding:8px 12px; font-size:12px;">
+      匯入已知結果 CSV
+    </button>
+    <div id="newTrainingStatus" style="display:none; padding-top:8px; font-size:12px; color:var(--success);"></div>
+  </div>
 </div>
 
 <!-- 子頁切換：延遲預測模型 / 收益預測模型 -->
@@ -75,22 +88,6 @@
             <td style="padding:16px; background:#eaf4ea; border:1px solid var(--border); color:#27ae60; font-weight:700;" id="cm-tp">0</td>
           </tr>
         </table>
-      </div>
-    </div>
-
-    <!-- New Data Upload Panel -->
-    <div class="panel" style="padding: 20px;">
-      <div class="panel-head">
-        <div class="panel-title">📥 上傳最新實際歷史資料 (CSV)</div>
-      </div>
-      <div style="font-size: 11.5px; color: var(--muted); margin-top: 4px; margin-bottom: 12px; line-height: 1.5;">
-        上傳最新標記為實際延遲狀態的訂單資料以供後續模型重新訓練。
-      </div>
-      <input type="file" id="newTrainingCsvInput" accept=".csv" style="display:none;" onchange="uploadNewTrainingData(this)">
-      <button onclick="document.getElementById('newTrainingCsvInput').click()" class="run-btn" style="background: var(--primary); font-weight: 600;">
-        上傳最新訓練資料
-      </button>
-      <div id="newTrainingStatus" style="display:none; text-align:center; padding:10px; font-size:12px; color:var(--success); margin-top:8px;">
       </div>
     </div>
 

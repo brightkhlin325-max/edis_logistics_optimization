@@ -18,9 +18,9 @@
           <div style="font-size:11px; font-weight:700; color:var(--primary); margin-bottom:4px;">🔍 延遲診斷</div>
           <div style="font-size:12px; color:var(--text); line-height:1.4;">分析哪一區延遲最高與原因</div>
         </div>
-        <div style="border:1px solid var(--border); border-radius:8px; padding:10px; background:white; cursor:pointer; transition:all 0.2s;" onclick="document.getElementById('aiQuestionInput').value='在調度預算 $5000 下，建議優先升級哪些訂單以獲得最高 ROI？'; document.getElementById('aiQuestionInput').focus();" onmouseover="this.style.borderColor='var(--primary)'; this.style.boxShadow='0 2px 6px rgba(0,0,0,0.05)';" onmouseout="this.style.borderColor='var(--border)'; this.style.boxShadow='none';">
+        <div style="border:1px solid var(--border); border-radius:8px; padding:10px; background:white; cursor:pointer; transition:all 0.2s;" onclick="document.getElementById('aiQuestionInput').value='依目前最佳化調度頁的預算與成本設定，建議優先升級哪些訂單？'; document.getElementById('aiQuestionInput').focus();" onmouseover="this.style.borderColor='var(--primary)'; this.style.boxShadow='0 2px 6px rgba(0,0,0,0.05)';" onmouseout="this.style.borderColor='var(--border)'; this.style.boxShadow='none';">
           <div style="font-size:11px; font-weight:700; color:var(--success); margin-bottom:4px;">🎯 營運最佳化</div>
-          <div style="font-size:12px; color:var(--text); line-height:1.4;">最佳預算配置與升級建議</div>
+          <div style="font-size:12px; color:var(--text); line-height:1.4;">依目前參數產生升級建議</div>
         </div>
         <div style="border:1px solid var(--border); border-radius:8px; padding:10px; background:white; cursor:pointer; transition:all 0.2s;" onclick="document.getElementById('aiQuestionInput').value='如果每筆延遲罰金提高到 $500，對整體真價值 (Net-of-Service) 的侵蝕幅度有多大？'; document.getElementById('aiQuestionInput').focus();" onmouseover="this.style.borderColor='var(--primary)'; this.style.boxShadow='0 2px 6px rgba(0,0,0,0.05)';" onmouseout="this.style.borderColor='var(--border)'; this.style.boxShadow='none';">
           <div style="font-size:11px; font-weight:700; color:var(--accent-warm); margin-bottom:4px;">⚖️ 合約校準</div>
@@ -40,7 +40,7 @@
           <span style="width:1px; height:18px; background:var(--border);"></span>
           <input type="file" id="csvFileInput" accept=".csv" style="display:none;" onchange="uploadTrainingCSV(this)">
           <a href="/static/template.csv" download="template.csv" class="ai-file-chip" style="text-decoration:none;" title="下載回填範本">📥 範本</a>
-          <button class="ai-file-chip uploadCsvBtn" id="uploadCsvBtn" onclick="document.getElementById('csvFileInput').click()" style="border:none; cursor:pointer;" title="回填已知實際結果以供重訓">📤 回填已知結果 CSV</button>
+          <button class="ai-file-chip uploadCsvBtn" id="uploadCsvBtn" onclick="document.getElementById('csvFileInput').click()" style="border:none; cursor:pointer;" title="回填已知延遲與實際利潤，累積供後續重訓">📤 回填已知結果 CSV</button>
           <button class="ai-file-chip resetCsvBtn" id="resetCsvBtn" onclick="resetCSV()" style="display:none; border:none; background:transparent; cursor:pointer; color:var(--danger);">🔄 還原驗證集</button>
           <span id="lockedUploadBox" class="ai-file-chip lockedUploadBox" style="display:none;">🔒 需 Manager 權限回填</span>
         </div>
