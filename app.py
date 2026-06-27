@@ -447,6 +447,8 @@ def build_optimization_result(request: OptimizeRequest, pred_path: Path, save_re
             "selected_count": 12,
             "total_cost": 960.0,
             "expected_total_saving": 2850.0,
+            "delay_penalty": request.delay_penalty,
+            "upgrade_cost": request.upgrade_cost,
             "selected_orders": [
                 {
                     "order_id_hash": "a8f3c2d1" * 8,
@@ -484,7 +486,10 @@ def build_optimization_result(request: OptimizeRequest, pred_path: Path, save_re
         output_dir=str(DATA_DIR),
         save_results=save_results,
     )
-    return attach_manager_analysis(result.to_dict(), pred_path)
+    result_dict = result.to_dict()
+    result_dict["delay_penalty"] = request.delay_penalty
+    result_dict["upgrade_cost"] = request.upgrade_cost
+    return attach_manager_analysis(result_dict, pred_path)
 
 
 def display_order_id(order_id_hash: str) -> str:
@@ -559,6 +564,8 @@ def build_llm_safe_payload(
         },
         "optimization": {
             "budget": optimization_result.get("budget"),
+            "delay_penalty": optimization_result.get("delay_penalty"),
+            "upgrade_cost": optimization_result.get("upgrade_cost"),
             "selected_count": optimization_result.get("selected_count"),
             "total_cost": optimization_result.get("total_cost"),
             "expected_total_saving": optimization_result.get("expected_total_saving"),
@@ -633,6 +640,7 @@ def local_llm_fallback(safe_payload: dict, question: str = "") -> str:
     selected_count = int(opt.get("selected_count") or 0)
     saving = float(opt.get("expected_total_saving") or 0)
     total_cost = float(opt.get("total_cost") or 0)
+    delay_penalty = float(opt.get("delay_penalty") or 0)
 
     if q in {"你好", "嗨", "hi", "hello", "哈囉"}:
         return (
@@ -691,6 +699,15 @@ def local_llm_fallback(safe_payload: dict, question: str = "") -> str:
         return (
             "這題建議先到 Dashboard 看「高風險集中組合」，再展開高風險訂單的原因分析。"
             "如果只看到某區域或某配送方式集中，請把它解讀成統計關聯，不要直接當成唯一原因。"
+        )
+
+    if any(term in q for term in ["合約", "罰金", "roi", "真價值", "net-of-service", "侵蝕", "sla"]):
+        return (
+            "這題比較適合用「最佳化調度」底下的 ROI 真價值分析判讀，而不是只看一段文字摘要。"
+            "罰金假設會直接影響 Net-of-Service、被服務侵蝕金額與調度淨效益。\n\n"
+            f"目前這次 AI 摘要使用的單筆延遲罰金是 USD ${delay_penalty:,.0f}。"
+            "若你要比較 $250、$500 或其他 SLA 假設，請在 ROI 真價值分析的罰金欄位調整後觀察："
+            "真價值是否轉負、被服務侵蝕是否放大、以及最佳化調度的建議名單是否改變。"
         )
 
     if any(term in q for term in ["回填", "已知結果", "訓練", "重訓", "csv"]):
@@ -3471,6 +3488,24 @@ def _build_profit_trust_from_ready() -> dict:
                 "reason": "profit_predictions 缺少 actual_profit / predicted_profit",
             }
 
+        def decode_categorical_labels(frame: pd.DataFrame) -> tuple[pd.DataFrame, str]:
+            mapping_path = BASE_DIR / "models" / "profit" / "serving_artifacts.json"
+            if not mapping_path.exists():
+                return frame, "profit_test_ready.csv + profit_predictions.csv"
+            try:
+                with open(mapping_path, encoding="utf-8") as mf:
+                    artifacts = json.load(mf)
+                mappings = artifacts.get("categorical_mappings", {}) or {}
+                decoded = frame.copy()
+                for col in ready_cols:
+                    inverse = {int(v): str(k) for k, v in (mappings.get(col) or {}).items()}
+                    if inverse and col in decoded.columns:
+                        decoded[col] = pd.to_numeric(decoded[col], errors="coerce").map(inverse).fillna(decoded[col])
+                return decoded, "profit_test_ready.csv + profit_predictions.csv + serving_artifacts mapping"
+            except Exception:
+                return frame, "profit_test_ready.csv + profit_predictions.csv"
+
+        ready, source = decode_categorical_labels(ready)
         df = pred.reset_index(drop=True).join(ready.reset_index(drop=True))
         df = df.rename(columns={"Customer Segment": "customer_segment", "Order Region": "order_region"})
 
@@ -3506,7 +3541,7 @@ def _build_profit_trust_from_ready() -> dict:
             "by_region": by_region,
             "available": bool(by_segment or by_region),
             "rows": int(len(df)),
-            "source": "profit_test_ready.csv + profit_predictions.csv",
+            "source": source,
         }
     except Exception as exc:
         return {"by_segment": [], "by_region": [], "available": False, "reason": str(exc)}

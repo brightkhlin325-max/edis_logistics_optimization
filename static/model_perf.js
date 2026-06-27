@@ -474,6 +474,8 @@ async function switchModelSubpage(which) {
       }
     }
     if (window.loadProfitPrediction) loadProfitPrediction();
+    if (window.loadDeterioration) loadDeterioration();
+    if (window.loadLeakageAudit) loadLeakageAudit();
   } else {
     profitPane.style.display = 'none';
     delayPane.style.display = 'block';

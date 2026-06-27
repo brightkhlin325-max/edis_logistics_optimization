@@ -97,7 +97,21 @@
           <div id="optPageManagerAnalysisText"></div>
           <div id="optPageManagerAnalysisFactors" style="margin-top:10px; display:flex; flex-direction:column; gap:6px;"></div>
         </div>
-        <div class="ord-list" id="optPageOrdList" style="max-height: 420px; overflow-y:auto; display:flex; flex-direction:column; gap:6px;"></div>
+        <div class="table-scroll" style="max-height:420px; overflow-y:auto; border:1px solid var(--border); border-radius:8px;">
+          <table class="risk-table" style="margin:0;">
+            <thead>
+              <tr>
+                <th>訂單</th>
+                <th>延遲機率</th>
+                <th>升級成本</th>
+                <th>預估淨效益</th>
+              </tr>
+            </thead>
+            <tbody id="optPageOrdList">
+              <tr><td colspan="4" style="text-align:center;padding:18px;color:var(--muted)">尚無調度明細</td></tr>
+            </tbody>
+          </table>
+        </div>
       </div>
     </div>
   </div>

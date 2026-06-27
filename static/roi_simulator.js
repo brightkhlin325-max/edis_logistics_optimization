@@ -343,11 +343,11 @@ function renderTrustRows(elId, rows, kind) {
 
     const metric = kind === 'delay' ? `AUC ${r.auc ?? '—'}` : `R² ${r.r2 ?? '—'}`;
     const detail = kind === 'delay'
-      ? `延遲率 ${_fmtPct(r.late_rate)}、平均預測 ${_fmtPct(r.mean_p_late)}`
-      : `MAE ${r.mae}、RMSE ${r.rmse}`;
-    return `<div onclick="openRoiInfo('trust')" style="cursor:pointer; display:flex; justify-content:space-between; align-items:center; padding:9px 12px; border:${borderStyle}; border-radius:8px; background:${bg}; transition:all 0.2s;" onmouseover="this.style.transform='translateY(-1px)';" onmouseout="this.style.transform='none';">
-      <div><div style="font-weight:700; font-size:13px;">${r.group}</div><div style="font-size:11px; color:var(--muted);">${detail} · n=${r.n.toLocaleString()}</div></div>
-      <div style="font-weight:700; font-family:monospace;">${metric}</div></div>`;
+      ? `延遲率 ${_fmtPct(r.late_rate)} · 平均預測 ${_fmtPct(r.mean_p_late)} · n=${r.n.toLocaleString()}`
+      : `MAE ${r.mae} · RMSE ${r.rmse} · n=${r.n.toLocaleString()}`;
+    return `<div onclick="openRoiInfo('trust')" style="cursor:pointer; display:grid; grid-template-columns:minmax(0, 1fr) auto; gap:12px; align-items:center; min-height:64px; padding:10px 14px; border:${borderStyle}; border-radius:8px; background:${bg}; transition:all 0.2s;" onmouseover="this.style.transform='translateY(-1px)';" onmouseout="this.style.transform='none';">
+      <div style="min-width:0;"><div style="font-weight:700; font-size:13px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${r.group}</div><div style="font-size:11px; color:var(--muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${detail}</div></div>
+      <div style="font-weight:700; font-family:monospace; white-space:nowrap;">${metric}</div></div>`;
   }).join('');
 }
 

@@ -4,7 +4,7 @@
 
 ## 重點變更
 
-1. ROI 資料流已拆清楚：驗證集歷史 ROI 使用 `decision_dataset.csv` 真實標籤；使用者上傳待預測資料時，ROI 會改用 session 預測資料與收益模型預估利潤，不再混成同一種口徑。
+1. ROI 資料流已拆清楚：驗證集歷史 ROI 使用 `decision_dataset.csv` 真實標籤；使用者上傳待預測資料時，會先經延遲模型產生 session 預測結果（含 `p_late`），ROI 再結合這批 session 預測資料與收益模型預估利潤，不再混成同一種口徑。
 2. ROI 罰金參數已能影響上傳資料分析；無真實結果時會標示為目前上傳資料 ROI，不再顯示假性賺錢比例等需要真實答案的指標。
 3. Dashboard 與風險訂單管理的「模擬」入口統一改為 `What-if`，並共用安全的欄位帶入流程，避免一邊改好另一邊失效。
 4. 最佳化調度維持 500 筆候選上限，並依「預期延遲損失 - 升級成本 > 0」與預算挑選；頁面明細改成上下排版，主管摘要移除求解器術語。
@@ -14,11 +14,18 @@
 8. Trust Map 的收益模型可信度若原始 trust map 缺資料，會用 `profit_test_ready.csv` 與 `profit_predictions.csv` 回補分群 R2/MAE/RMSE，不再顯示無資料。
 9. AI 決策助理預設問題移除固定 `$5000` 情境，本機回答會讀取目前最佳化頁的預算、升級成本與罰金設定，並避免 PuLP/MILP 等內部術語。
 10. 權限 UI 改成無權限功能直接隱藏，不再顯示鎖住按鈕；權限管理表補齊 Viewer、Manager、Engineer 的實際可見功能。
+11. 最佳化調度的效益明細改為表格化列示，每筆訂單一列並加上分線；後端輸出的建議訂單依淨效益由高到低排列，AI「可先抽查」樣本也因此跟最佳化優先序一致。
+12. Trust Map 左右欄改為等寬，收益分群標籤由模型編碼回譯為 `Consumer`、`Corporate`、`Home Office` 等可讀名稱。
+13. `Account Deterioration` 與 `Leakage Gate` 移到收益預測模型分頁，避免被誤解為延遲模型診斷。
+14. 右下角問號導覽改為依 Viewer/Manager/Engineer 權限客製化，只介紹目前角色看得到的功能。
+15. AI 決策助理「合約校準」改名為 ROI 罰金檢查；回答會引導使用者到 ROI 真價值分析比較 SLA 罰金、真價值與被服務侵蝕，而不是固定回答某個 `$500` 假設。
 
 ## 驗證
 
 - `python -m pytest tests/test_api_endpoints.py -q --basetemp=tmp_pytest_strict_20260627a -p no:cacheprovider`：36 passed
 - `python -m pytest -q --basetemp=tmp_pytest_strict_20260627b -p no:cacheprovider`：62 passed
+- `python -m pytest tests/test_api_endpoints.py tests/test_optimizer.py -q --basetemp=tmp_pytest_strict_20260627c -p no:cacheprovider`：49 passed
+- `python -m pytest -q --basetemp=tmp_pytest_strict_20260627d -p no:cacheprovider`：68 passed
 - 本機網站已重啟於 `http://127.0.0.1:8001/static/index.html`，首頁可正常載入。
 
 ## 注意

@@ -51,15 +51,14 @@ async function runPageOptimize() {
     document.getElementById('optPageUsageFill').style.width = pct + '%';
     renderManagerAnalysis('optPageManagerAnalysisBox', 'optPageManagerAnalysisText', 'optPageManagerAnalysisFactors', data.manager_analysis);
 
-    document.getElementById('optPageOrdList').innerHTML = data.selected_orders.map((o, i) => `
-      <div class="ord-item" style="animation-delay:${i*0.03}s">
-        <div>
-          <div class="ord-id" title="${o.order_id_hash}">${o.display_order_id || displayOrderId(o.order_id_hash)}</div>
-          <div class="ord-sub">升級成本 $${o.upgrade_cost} · 延遲機率 ${(o.p_late*100).toFixed(0)}% · 預估淨效益為正</div>
-        </div>
-        <div class="ord-saving">+$${(o.net_benefit ?? o.expected_saving).toLocaleString()}</div>
-      </div>
-    `).join('');
+    document.getElementById('optPageOrdList').innerHTML = data.selected_orders.map(o => `
+      <tr>
+        <td><span class="order-id" title="${o.order_id_hash}">${o.display_order_id || displayOrderId(o.order_id_hash)}</span></td>
+        <td>${(o.p_late * 100).toFixed(0)}%</td>
+        <td>$${Number(o.upgrade_cost || 0).toLocaleString()}</td>
+        <td style="font-weight:700;color:#15803d;">+$${Number(o.net_benefit ?? o.expected_saving ?? 0).toLocaleString()}</td>
+      </tr>
+    `).join('') || `<tr><td colspan="4" style="text-align:center;padding:18px;color:var(--muted)">此參數下沒有建議升級訂單</td></tr>`;
     
   } catch (e) {
     alert(e.message);

@@ -317,6 +317,12 @@ class ShippingOptimizer:
     ) -> OptimizationResult:
         """將求解結果轉換為 OptimizationResult。"""
         selected_df = candidates.iloc[selected_indices] if selected_indices else pd.DataFrame()
+        if len(selected_df) > 0:
+            selected_df = selected_df.sort_values(
+                ["net_benefit", "p_late"],
+                ascending=[False, False],
+                kind="stable",
+            )
 
         total_cost = selected_df["upgrade_cost"].sum() if len(selected_df) > 0 else 0.0
         total_penalty_avoided = selected_df["expected_penalty"].sum() if len(selected_df) > 0 else 0.0

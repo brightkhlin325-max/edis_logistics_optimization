@@ -513,7 +513,9 @@ def test_roi_trust_map_backfills_profit_reliability():
     assert profit["available"] is True
     assert profit["by_segment"], profit
     assert {"group", "n", "mae", "rmse", "r2"}.issubset(profit["by_segment"][0])
-    assert profit["source"] == "profit_test_ready.csv + profit_predictions.csv"
+    groups = {row["group"] for row in profit["by_segment"]}
+    assert groups & {"Consumer", "Corporate", "Home Office"}
+    assert profit["source"].startswith("profit_test_ready.csv + profit_predictions.csv")
 
 
 def test_template_csv_exists_and_contains_required_outcomes():
@@ -550,6 +552,8 @@ def test_ai_assistant_prompts_avoid_fixed_budget_and_solver_jargon():
 
     assert "$5000" not in ai_html
     assert "依目前最佳化調度頁的預算與成本設定" in ai_html
+    assert "ROI 罰金檢查" in ai_html
+    assert "如果每筆延遲罰金提高到 $500" not in ai_html
     assert "PuLP" not in rbac_html
     assert "MILP" not in rbac_html
     assert "使用 {solver}" not in explainer
@@ -574,7 +578,107 @@ def test_optimization_layout_and_dashboard_cards_are_aligned():
 
     assert 'class="optimization-stack"' in optimization
     assert "flex-direction:column" in optimization
-    assert "max-height: 420px" in optimization
+    assert "max-height:420px" in optimization
+    assert '<tbody id="optPageOrdList">' in optimization
+    assert "<th>預估淨效益</th>" in optimization
+    assert "<tr>" in opt_js
     assert "positive net benefit" not in opt_js
     assert "repeat(2, minmax(0, 1fr))" in dashboard
     assert "min-height: 150px" in dashboard
+
+
+def test_profit_diagnostics_are_on_profit_model_tab():
+    """收益相關診斷應在收益模型分頁，不放在延遲模型分頁造成語意混淆。"""
+    root = Path(__file__).parent.parent / "static" / "components"
+    delay_html = (root / "model_perf.html").read_text(encoding="utf-8")
+    profit_html = (root / "profit_prediction.html").read_text(encoding="utf-8")
+    model_js = (Path(__file__).parent.parent / "static" / "model_perf.js").read_text(encoding="utf-8")
+
+    assert "帳戶劣化趨勢 (Account Deterioration)" not in delay_html
+    assert "洩漏守門狀態 (Leakage Gate)" not in delay_html
+    assert "帳戶劣化趨勢 (Account Deterioration)" in profit_html
+    assert "洩漏守門狀態 (Leakage Gate)" in profit_html
+    assert "loadProfitPrediction()" in model_js
+    assert "loadDeterioration()" in model_js
+    assert "loadLeakageAudit()" in model_js
+
+
+def test_trust_map_columns_are_balanced_and_profit_labels_are_decoded():
+    """Trust Map 左右欄應等寬，收益分群不可只顯示編碼數字。"""
+    root = Path(__file__).parent.parent / "static"
+    html = (root / "components" / "roi_simulator.html").read_text(encoding="utf-8")
+    js = (root / "roi_simulator.js").read_text(encoding="utf-8")
+    app_py = (Path(__file__).parent.parent / "app.py").read_text(encoding="utf-8")
+
+    assert 'class="trust-map-grid"' in html
+    assert "grid-template-columns:repeat(2, minmax(0, 1fr))" in html
+    assert "grid-template-columns:minmax(0, 1fr) auto" in js
+    assert "decode_categorical_labels" in app_py
+    assert "categorical_mappings" in app_py
+
+
+def test_role_specific_tour_filters_hidden_or_unauthorized_pages():
+    """右下角導覽應依角色顯示，不再介紹已隱藏或不存在的功能。"""
+    tour = (Path(__file__).parent.parent / "static" / "tour.js").read_text(encoding="utf-8")
+
+    assert "const TOUR_STEPS" in tour
+    assert "roles: ['manager', 'engineer']" in tour
+    assert "roles: ['engineer']" in tour
+    assert "function _currentTour()" in tour
+    assert "_roleAllowed(step)" in tour
+    assert "nav-roi-simulator" not in tour
+    assert "nav-region-map" not in tour
+
+
+def test_local_ai_contract_answer_points_user_to_roi_penalty_controls():
+    """合約/罰金問題應引導到 ROI 真價值分析，而不是固定回答某個假設。"""
+    from app import build_llm_safe_payload, local_llm_fallback
+
+    payload = build_llm_safe_payload({
+        "budget": 8000.0,
+        "delay_penalty": 500.0,
+        "upgrade_cost": 72.0,
+        "selected_count": 3,
+        "total_cost": 216.0,
+        "expected_total_saving": 1200.0,
+        "manager_analysis": {
+            "headline": "測試資料",
+            "recommended_policy": "測試資料",
+            "sample_order_explanations": [],
+        },
+    })
+    answer = local_llm_fallback(payload, "目前 ROI 罰金假設應該怎麼檢查？")
+
+    assert "ROI 真價值分析" in answer
+    assert "USD $500" in answer
+    assert "真價值" in answer
+    assert "被服務侵蝕" in answer
+
+
+def test_ai_sample_orders_are_not_fixed_when_cost_assumptions_change():
+    """AI 抽查樣本應來自最佳化結果，成本假設改變時淨效益也要跟著改。"""
+    from optimizer import ShippingOptimizer
+
+    raw = pd.DataFrame({
+        "order_id_hash": ["A", "B", "C"],
+        "p_late": [0.90, 0.88, 0.60],
+    })
+
+    low = ShippingOptimizer(
+        budget=500.0,
+        upgrade_cost=72.0,
+        delay_penalty=250.0,
+        risk_threshold=0.3,
+    ).run(raw, save_results=False).to_dict()
+    high = ShippingOptimizer(
+        budget=500.0,
+        upgrade_cost=180.0,
+        delay_penalty=250.0,
+        risk_threshold=0.3,
+    ).run(raw, save_results=False).to_dict()
+
+    low_benefits = [float(item["net_benefit"]) for item in low["selected_orders"]]
+    high_benefits = [float(item["net_benefit"]) for item in high["selected_orders"]]
+    assert low_benefits == sorted(low_benefits, reverse=True)
+    assert high_benefits == sorted(high_benefits, reverse=True)
+    assert low_benefits != high_benefits
