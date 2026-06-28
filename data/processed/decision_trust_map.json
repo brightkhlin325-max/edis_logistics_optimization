@@ -1,0 +1,189 @@
+{
+  "delay": {
+    "by_segment": [
+      {
+        "group": "Consumer",
+        "n": 5141,
+        "auc": 0.7712,
+        "late_rate": 0.552,
+        "mean_p_late": 0.5142
+      },
+      {
+        "group": "Corporate",
+        "n": 3004,
+        "auc": 0.7783,
+        "late_rate": 0.5429,
+        "mean_p_late": 0.5151
+      },
+      {
+        "group": "Home Office",
+        "n": 1718,
+        "auc": 0.7781,
+        "late_rate": 0.5547,
+        "mean_p_late": 0.5296
+      }
+    ],
+    "by_region": [
+      {
+        "group": "Western Europe",
+        "n": 1500,
+        "auc": 0.7804,
+        "late_rate": 0.5827,
+        "mean_p_late": 0.5214
+      },
+      {
+        "group": "Central America",
+        "n": 1405,
+        "auc": 0.7677,
+        "late_rate": 0.5459,
+        "mean_p_late": 0.5152
+      },
+      {
+        "group": "South America",
+        "n": 814,
+        "auc": 0.7503,
+        "late_rate": 0.5147,
+        "mean_p_late": 0.5004
+      },
+      {
+        "group": "Southeast Asia",
+        "n": 619,
+        "auc": 0.7394,
+        "late_rate": 0.5493,
+        "mean_p_late": 0.5073
+      },
+      {
+        "group": "Oceania",
+        "n": 599,
+        "auc": 0.7655,
+        "late_rate": 0.5376,
+        "mean_p_late": 0.5202
+      },
+      {
+        "group": "Southern Europe",
+        "n": 550,
+        "auc": 0.7881,
+        "late_rate": 0.5491,
+        "mean_p_late": 0.526
+      },
+      {
+        "group": "Northern Europe",
+        "n": 534,
+        "auc": 0.7921,
+        "late_rate": 0.5506,
+        "mean_p_late": 0.5086
+      },
+      {
+        "group": "Eastern Asia",
+        "n": 514,
+        "auc": 0.7757,
+        "late_rate": 0.5156,
+        "mean_p_late": 0.5111
+      },
+      {
+        "group": "South Asia",
+        "n": 508,
+        "auc": 0.754,
+        "late_rate": 0.5531,
+        "mean_p_late": 0.5201
+      },
+      {
+        "group": "Caribbean",
+        "n": 438,
+        "auc": 0.8096,
+        "late_rate": 0.5183,
+        "mean_p_late": 0.5096
+      },
+      {
+        "group": "West of USA ",
+        "n": 411,
+        "auc": 0.773,
+        "late_rate": 0.5523,
+        "mean_p_late": 0.5038
+      },
+      {
+        "group": "East of USA",
+        "n": 382,
+        "auc": 0.7777,
+        "late_rate": 0.5209,
+        "mean_p_late": 0.5278
+      },
+      {
+        "group": "US Center ",
+        "n": 301,
+        "auc": 0.7811,
+        "late_rate": 0.5449,
+        "mean_p_late": 0.5202
+      },
+      {
+        "group": "West Asia",
+        "n": 296,
+        "auc": 0.8349,
+        "late_rate": 0.5642,
+        "mean_p_late": 0.5459
+      },
+      {
+        "group": "South of  USA ",
+        "n": 194,
+        "auc": 0.7722,
+        "late_rate": 0.6443,
+        "mean_p_late": 0.5475
+      },
+      {
+        "group": "Eastern Europe",
+        "n": 182,
+        "auc": 0.7175,
+        "late_rate": 0.5385,
+        "mean_p_late": 0.5377
+      },
+      {
+        "group": "West Africa",
+        "n": 166,
+        "auc": 0.808,
+        "late_rate": 0.6024,
+        "mean_p_late": 0.5382
+      },
+      {
+        "group": "North Africa",
+        "n": 157,
+        "auc": 0.7664,
+        "late_rate": 0.5924,
+        "mean_p_late": 0.5056
+      },
+      {
+        "group": "East Africa",
+        "n": 94,
+        "auc": 0.814,
+        "late_rate": 0.5426,
+        "mean_p_late": 0.5107
+      },
+      {
+        "group": "Central Africa",
+        "n": 75,
+        "auc": 0.7764,
+        "late_rate": 0.5333,
+        "mean_p_late": 0.5391
+      },
+      {
+        "group": "Southern Africa",
+        "n": 55,
+        "auc": 0.72,
+        "late_rate": 0.5455,
+        "mean_p_late": 0.5039
+      },
+      {
+        "group": "Canada",
+        "n": 45,
+        "auc": 0.8075,
+        "late_rate": 0.4667,
+        "mean_p_late": 0.4834
+      }
+    ]
+  },
+  "profit": {
+    "by_segment": [],
+    "by_region": [],
+    "available": false
+  },
+  "note": "delay=樣本外(延遲隨機驗證集); profit=樣本外(收益時間測試集)。決策資料集內的 profit_pred 多為樣本內，不用於本 trust map。"
+}
