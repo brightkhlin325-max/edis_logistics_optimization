@@ -44,12 +44,14 @@ if exist ".venv\Scripts\python.exe" (
     echo [INFO] Local Python virtual environment venv detected.
 ) else (
     set "CONDA_CMD="
-    where conda.exe >nul 2>nul
-    if %errorlevel% equ 0 set "CONDA_CMD=conda.exe"
-    if not defined CONDA_CMD if exist "%USERPROFILE%\anaconda3\condabin\conda.bat" set "CONDA_CMD=%USERPROFILE%\anaconda3\condabin\conda.bat"
+    rem 先找標準安裝位置的 conda.bat(雙擊時 conda 不在 PATH 也能抓到；不依賴區塊內 errorlevel）
+    if exist "%USERPROFILE%\anaconda3\condabin\conda.bat" set "CONDA_CMD=%USERPROFILE%\anaconda3\condabin\conda.bat"
     if not defined CONDA_CMD if exist "%USERPROFILE%\miniconda3\condabin\conda.bat" set "CONDA_CMD=%USERPROFILE%\miniconda3\condabin\conda.bat"
     if not defined CONDA_CMD if exist "C:\ProgramData\anaconda3\condabin\conda.bat" set "CONDA_CMD=C:\ProgramData\anaconda3\condabin\conda.bat"
     if not defined CONDA_CMD if exist "C:\ProgramData\miniconda3\condabin\conda.bat" set "CONDA_CMD=C:\ProgramData\miniconda3\condabin\conda.bat"
+    rem 非標準安裝：用 PATH 搜尋 conda.bat / conda.exe，取「完整路徑」當備援(不會回歸到壞的 bare conda.exe）
+    if not defined CONDA_CMD for %%I in (conda.bat) do if not defined CONDA_CMD if not "%%~$PATH:I"=="" set "CONDA_CMD=%%~$PATH:I"
+    if not defined CONDA_CMD for %%I in (conda.exe) do if not defined CONDA_CMD if not "%%~$PATH:I"=="" set "CONDA_CMD=%%~$PATH:I"
 )
 
 if %USE_VENV% equ 0 (
